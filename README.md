@@ -7,10 +7,10 @@ composer i
 
 ### Run
 ```sh
-composer run dev
+docker-compose up -d
 ```
 ```sh
-docker-compose up -d
+composer run dev
 ```
 
 ### Requires
