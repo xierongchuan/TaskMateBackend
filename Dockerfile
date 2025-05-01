@@ -1,7 +1,9 @@
 FROM php:8.4-fpm
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -y
+
+RUN apt-get install -y \
     git \
     unzip \
     libzip-dev \
@@ -30,9 +32,9 @@ RUN composer install --optimize-autoloader --no-dev --no-scripts
 
 COPY ./ .
 
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# RUN php artisan config:cache \
+#     && php artisan route:cache \
+#     && php artisan view:cache
 
 EXPOSE 8000
 
