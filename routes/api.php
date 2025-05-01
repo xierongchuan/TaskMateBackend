@@ -1,5 +1,7 @@
 <?php
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Casts\Json;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
@@ -15,7 +17,7 @@ Route::post('/tokens/create', function (Request $request) {
     return ['token' => $token->plainTextToken];
 });
 
-Route::post('/sanctum/token', function (Request $request) {
+Route::post('/login', function (Request $request) {
     $request->validate([
         'email' => 'required|email',
         'password' => 'required',
@@ -30,5 +32,15 @@ Route::post('/sanctum/token', function (Request $request) {
         ]);
     }
 
-    return $user->createToken($request->device_name)->plainTextToken;
+    $newToken = $user->createToken($request->device_name);
+    $newToken->accessToken->expires_at = Carbon::now()->addMonths(6);
+    $newToken->accessToken->save();
+
+    $response = [
+        'user' => $user,
+        'token' => explode('|', $newToken->plainTextToken)[1],
+        'expires_at' => $newToken->accessToken->expires_at,
+    ];
+
+    return json_encode($response);
 });
