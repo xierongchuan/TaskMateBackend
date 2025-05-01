@@ -1,66 +1,74 @@
 version: '3.9'
 
 services:
-  # Valkey для очередей и кеша
-  valkey:
-    image: valkey/valkey:latest
-    container_name: taskmatebackend_valkey
-    ports:
-      - "6379:6379"
-    volumes:
-      - taskmatebackend_valkey_data:/data
-    environment:
-      - VALKEY_NODE_NAME=valkey-node-1
+    # Valkey для очередей и кеша
+    valkey:
+        image: valkey/valkey:latest
+        container_name: taskmatebackend_valkey
+        ports:
+            - "6379:6379"
+        volumes:
+            - valkey_data:/data
 
-  # MySQL для основного хранения данных
-  mysql:
-    image: mariadb:latest
-    container_name: taskmatebackend_mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: PASS
-      MYSQL_DATABASE: taskmate
-      MYSQL_USER: taskmate
-      MYSQL_PASSWORD: PASS
-    volumes:
-      - taskmatebackend_mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # MySQL для основного хранения данных
+    mysql:
+        image: mariadb:latest
+        container_name: taskmatebackend_mysql
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: 12513059
+            MYSQL_DATABASE: taskmate
+            MYSQL_USER: taskmate
+            MYSQL_PASSWORD: PASS
+        volumes:
+            - mysql_data:/var/lib/mysql
+        ports:
+            - "3306:3306"
+        command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
-  # Laravel API приложение
-  laravel-api:
-    build:
-      context: ./
-      dockerfile: Dockerfile
-    container_name: taskmatebackend_laravel-api
-    restart: always
-    environment:
-      - APP_ENV=production
-    ports:
-      - "8000:8000"
-    depends_on:
-      - mysql
-      - valkey
-    volumes:
-      - ./:/var/www/html
-      - ./.env:/var/www/html/.env
-      - ./wait-for-it.sh:/wait-for-it.sh
-    command: sh -c "/wait-for-it.sh mysql:3306 -- php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+    # Laravel API приложение
+    laravel-api:
+        build:
+            context: ./
+            dockerfile: Dockerfile
+        container_name: taskmatebackend_laravel-api
+        restart: always
+        environment:
+            - APP_ENV=production
+        ports:
+            - "8000:8000"
+        depends_on:
+            - mysql
+            - valkey
+        volumes:
+            - ./:/var/www/html
+            - ./.env:/var/www/html/.env
+            - ./wait-for-it.sh:/wait-for-it.sh
+        command: sh -c "/wait-for-it.sh mysql:3306 -- php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
 
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
-    container_name: taskmatebackend_phpmyadmin
-    restart: always
-    environment:
-      - PMA_HOST=mysql
-      - PMA_USER=taskmate
-      - PMA_PASSWORD=PASS
-    ports:
-      - "8080:80"
-    depends_on:
-      - mysql
+    phpmyadmin:
+        image: phpmyadmin/phpmyadmin:latest
+        container_name: taskmatebackend_phpmyadmin
+        restart: always
+        environment:
+            - PMA_HOST=mysql
+            - PMA_USER=taskmate
+            - PMA_PASSWORD=PASS
+        ports:
+            - "8080:80"
+        depends_on:
+            - mysql
+
+    portainer:
+        image: portainer/portainer-ce:latest  # Community Edition Portainer
+        container_name: taskmatebackend_portainer
+        ports:
+            - "9000:9000"  # Веб-интерфейс доступен по порту 9000
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock  # Подключение к Docker-демону хоста
+        restart: always
+        command: -H unix:///var/run/docker.sock  # Указание источника управления Docker
 
 volumes:
-  taskmatebackend_valkey_data:
-  taskmatebackend_mysql_data:
+    valkey_data:
+    mysql_data:
