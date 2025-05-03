@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
-use App\DataTransferObjects\TokenResponse;
+use App\Dto\TokenResponse;
 
 class TokenService
 {
