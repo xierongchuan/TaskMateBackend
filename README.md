@@ -7,15 +7,11 @@ composer i
 
 ### Run
 ```sh
-docker-compose up -d
-```
-```sh
-composer run dev
+docker-compose up -d --build
 ```
 
 ### Requires
 * php8.4
-* docker
-* docker-compose
+* Laravel 12
 
 License: Proprietary License
