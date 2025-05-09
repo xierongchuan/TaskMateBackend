@@ -6,7 +6,7 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-it('возвращает данные текущего пользователя', function () {
+test('возвращает данные текущего пользователя', function () {
     $user = User::factory()->create();
 
     Sanctum::actingAs($user);
