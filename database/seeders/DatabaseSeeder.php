@@ -28,7 +28,7 @@ class DatabaseSeeder extends Seeder
                 echo 'Введите пароль Администратора: ';
 
                 return Hash::make(trim(fgets(STDIN)));
-            }
+            },
         ]);
     }
 }

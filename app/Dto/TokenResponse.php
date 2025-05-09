@@ -15,7 +15,7 @@ class TokenResponse
     {
         return [
             'token' => $this->token,
-            'expires_at' => $this->expiresAt->toIso8601String()
+            'expires_at' => $this->expiresAt->toIso8601String(),
         ];
     }
 }

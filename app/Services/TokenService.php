@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use Carbon\Carbon;
 use App\Dto\TokenResponse;
+use Carbon\Carbon;
 
 class TokenService
 {

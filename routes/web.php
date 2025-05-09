@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return "OK 200";
+    return 'OK 200';
 });
 
 // Route::get('/set/{key}/{data}', function ($key, $data) {

@@ -3,17 +3,15 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\TokenService;
+use App\Services\UserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
-use Carbon\Carbon;
-use App\Services\UserService;
-use App\Services\TokenService;
 
 class SessionController extends Controller
 {
-
     protected $userService;
+
     protected $tokenService;
 
     public function __construct(UserService $userService, TokenService $tokenService)
@@ -41,7 +39,7 @@ class SessionController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'token' => $token->token,
-            'expires_at' => $token->expiresAt
+            'expires_at' => $token->expiresAt,
         ], 201);
     }
 
@@ -55,7 +53,7 @@ class SessionController extends Controller
 
         $user = $this->userService->withEmail($request->email);
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
@@ -65,7 +63,7 @@ class SessionController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'token' => $token->token,
-            'expires_at' => $token->expiresAt
+            'expires_at' => $token->expiresAt,
         ], 200);
     }
 
@@ -80,5 +78,4 @@ class SessionController extends Controller
             ]
         );
     }
-
 }
