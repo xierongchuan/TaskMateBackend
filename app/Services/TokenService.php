@@ -9,7 +9,7 @@ class TokenService
 {
     public function __construct()
     {
-        //
+        // ...
     }
 
     public function createUserToken($user, $deviceName): TokenResponse
