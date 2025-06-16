@@ -1,9 +1,7 @@
-FROM php:8.4-fpm
+FROM php:8.4.8-fpm
 
-# Install system dependencies
-RUN apt-get update -y
-
-RUN apt-get install -y \
+# Установка системных зависимостей
+RUN apt-get update -y && apt-get install -y \
     git \
     unzip \
     libzip-dev \
@@ -15,13 +13,16 @@ RUN apt-get install -y \
     libfreetype6-dev \
     libmemcached-tools
 
-# Install PHP extensions and Redis via PECL
+# Установка PHP-расширений
 RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install -j$(nproc) gd
+
+# Активация установки Redis через PECL
+RUN pecl install redis-6.2.0 && docker-php-ext-enable redis
+
+# Очистка кэша apt
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
@@ -31,10 +32,6 @@ COPY ./composer.json ./composer.lock ./
 RUN composer install --optimize-autoloader --no-dev --no-scripts
 
 COPY ./ .
-
-# RUN php artisan config:cache \
-#     && php artisan route:cache \
-#     && php artisan view:cache
 
 EXPOSE 8000
 

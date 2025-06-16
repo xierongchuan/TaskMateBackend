@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\FrontController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/webhook', [FrontController::class]);
 
 Route::prefix('v1')->group(function () {
 
