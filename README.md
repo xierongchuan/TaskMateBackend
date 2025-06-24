@@ -14,3 +14,7 @@ docker-compose up -d --build
 * php8.4
 
 License: Proprietary License
+
+---
+docker-compose exec src_laravel_api bash
+php artisan nutgram:run
