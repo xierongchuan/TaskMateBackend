@@ -8,7 +8,7 @@ Route::get('/', function () {
 });
 
 // Route::get('/set/{key}/{data}', function ($key, $data) {
-//     Cache::put($key, $data, 30); // 600 секунд = 10 минут
+//     Cache::put($key, $data, 120); // 600 секунд = 10 минут
 //     return "Data cached: $data";
 // });
 
