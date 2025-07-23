@@ -26,7 +26,7 @@ RUN pecl install redis-6.2.0 \
 # 4) Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html
+WORKDIR /var/www/src_telegram_bot_api
 
 # 5) Установка зависимостей приложения
 COPY composer.json composer.lock ./
@@ -34,5 +34,10 @@ RUN composer install --optimize-autoloader --no-dev --no-scripts
 
 COPY . .
 
-EXPOSE 8000
+# 6) Даём www-data право писать в storage и cache
+RUN \
+  chown -R www-data:www-data /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache && \
+  chmod -R 755 /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache
+
+EXPOSE 9000
 CMD ["php-fpm"]
