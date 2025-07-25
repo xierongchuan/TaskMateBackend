@@ -36,9 +36,8 @@ RUN composer install --optimize-autoloader --no-dev --no-scripts
 COPY . .
 
 # 7) Даём www-data право писать в storage и cache
-RUN \
-  chown -R www-data:www-data /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache && \
-  chmod -R 755 /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache
+RUN chown -R www-data:www-data storage storage/framework bootstrap/cache && \
+    chmod -R 755 storage storage/framework bootstrap/cache
 
 EXPOSE 9000
 CMD ["php-fpm"]
