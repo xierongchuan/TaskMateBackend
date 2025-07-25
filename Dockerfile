@@ -32,6 +32,7 @@ WORKDIR /var/www/src_laravel_api
 COPY composer.json composer.lock ./
 RUN composer install --optimize-autoloader --no-dev --no-scripts
 
+# 6) Копирование кодовой базы в контейнер
 COPY . .
 
 # 6) Даём www-data право писать в storage и cache
@@ -40,4 +41,4 @@ RUN \
   chmod -R 755 /var/www/src_laravel_api/storage /var/www/src_laravel_api/bootstrap/cache
 
 EXPOSE 9000
-CMD ["php-fpm"]   
+CMD ["php-fpm"]
