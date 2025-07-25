@@ -39,5 +39,8 @@ COPY . .
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache && \
     chmod -R 755 storage storage/framework bootstrap/cache
 
+# 8) Документирование порта
 EXPOSE 9000
-CMD ["php-fpm"]
+
+# 9) Миграция и запуск PHP-FPM
+CMD ["bash", "-lc", "/wait-for-it.sh postgres:5432 --timeout=30 --strict -- php artisan migrate && exec php-fpm"]
