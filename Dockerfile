@@ -32,9 +32,10 @@ WORKDIR /var/www/src_telegram_bot_api
 COPY composer.json composer.lock ./
 RUN composer install --optimize-autoloader --no-dev --no-scripts
 
+# 6) Копирование кодовой базы в контейнер
 COPY . .
 
-# 6) Даём www-data право писать в storage и cache
+# 7) Даём www-data право писать в storage и cache
 RUN \
   chown -R www-data:www-data /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache && \
   chmod -R 755 /var/www/src_telegram_bot_api/storage /var/www/src_telegram_bot_api/bootstrap/cache
