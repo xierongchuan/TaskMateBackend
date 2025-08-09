@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<ruleset name="MyProject">
+    <description>PSR-12 стандарт для проекта</description>
+
+    <!-- Подключаем готовый PSR-12 -->
+    <rule ref="PSR12"/>
+
+    <!-- Индикатор прогресса -->
+    <arg name="report" value="summary"/>
+    <!-- <arg name="report" value="progress"/> -->
+
+    <!-- Настройка табуляции -->
+    <arg name="tab-width" value="4"/>
+</ruleset>
