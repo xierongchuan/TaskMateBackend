@@ -1,14 +1,24 @@
 <?xml version="1.0"?>
 <ruleset name="MyProject">
-    <description>PSR-12 стандарт для проекта</description>
+  <description>PSR-12 стандарт с исключениями для tests</description>
 
-    <!-- Подключаем готовый PSR-12 -->
-    <rule ref="PSR12"/>
+  <file>app</file>
+  <file>routes</file>
+  <file>database</file>
+  <file>tests</file>
 
-    <!-- Индикатор прогресса -->
-    <arg name="report" value="summary"/>
-    <!-- <arg name="report" value="progress"/> -->
+  <rule ref="PSR12"/>
 
-    <!-- Настройка табуляции -->
-    <arg name="tab-width" value="4"/>
+  <arg name="report" value="summary"/>
+  <arg name="tab-width" value="4"/>
+
+  <!-- Отключаем CamelCaps метод/функции в тестах (несколько sniff'ов на всякий случай) -->
+  <rule ref="Generic.NamingConventions.CamelCapsFunctionName">
+    <exclude-pattern>*/tests/*</exclude-pattern>
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="PSR1.Methods.CamelCapsMethodName">
+    <exclude-pattern>*/tests/*</exclude-pattern>
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
 </ruleset>
