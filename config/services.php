@@ -1,7 +1,8 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+return [
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
@@ -35,4 +36,8 @@ return [
         ],
     ],
 
+    'vcrm' => [
+        'endpoint' => env('VCRM_ENDPOINT'),
+        'token' => env('VCRM_TOKEN'),
+    ],
 ];
