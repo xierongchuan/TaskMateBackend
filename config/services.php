@@ -37,7 +37,7 @@ return [
     ],
 
     'vcrm' => [
-        'endpoint' => env('VCRM_ENDPOINT'),
-        'token' => env('VCRM_TOKEN'),
+        'api_url' => env('VCRM_API_URL'),
+        'api_token' => env('VCRM_API_TOKEN'),
     ],
 ];
