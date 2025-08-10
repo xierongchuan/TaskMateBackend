@@ -15,7 +15,7 @@ return (new Config())
         '@PSR12'                 => true,
         'declare_strict_types'   => true,
         'strict_param'           => true,
-        // вот этот фикс убирает лишние пустые строки
+        // убирает лишние пустые строки
         'no_extra_blank_lines'   => [
             'tokens' => [
                 'curly_brace_block',
