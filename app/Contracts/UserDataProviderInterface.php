@@ -10,7 +10,7 @@ interface UserDataProviderInterface
      * Fetch user data from external provider by id.
      *
      * @param int|string $id
-     * @return array
+     * @return object
      */
-    public function fetchById(int|string $id): array;
+    public function fetchById(int|string $id): object;
 }
