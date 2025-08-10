@@ -5,64 +5,55 @@ declare(strict_types=1);
 namespace App\Http\Services\VCRMServices;
 
 use App\Contracts\UserDataProviderInterface;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class UserDataService implements UserDataProviderInterface
 {
     private string $apiUrl;
-    private string $token;
+    private ?string $defaultToken;
 
-    public function __construct()
+    public function __construct(?string $apiUrl = null, ?string $defaultToken = null)
     {
-        $this->apiUrl = rtrim(config('services.vcrm.api_url'));
-        $this->token = config('services.vcrm.api_token');
+        $this->apiUrl = rtrim($apiUrl ?? config('services.vcrm.api_url', ''), '/');
+        $this->defaultToken = $defaultToken ?? config('services.vcrm.api_token');
     }
 
     /**
-     * Fetch user data from VCRM by id.
-     *
      * @param int|string $userId
+     * @param string|null $sessionToken
      * @return object
      * @throws RequestException
      */
-    public function fetchById(int|string $userId): object
+    public function fetchById(int|string $userId, ?string $sessionToken = null): object
     {
-        if (empty($this->token)) {
-            Log::error('VCRM token is missing for fetchById', ['userId' => $userId]);
+        $token = $sessionToken ?? $this->defaultToken;
+        if (empty($token)) {
+            Log::error('VCRM token missing', ['userId' => $userId]);
+            throw new RuntimeException('VCRM token is required');
         }
 
         $url = "{$this->apiUrl}/user/{$userId}";
 
         try {
-            $response = Http::withToken($this->token)
+            $response = Http::withToken($token)
                 ->acceptJson()
                 ->timeout(10)
                 ->get($url);
 
             $response->throw();
 
-            $data = (object)((object)$response->json())->data;
+            $payload = data_get($response->json(), 'data', []);
 
-            return $data ?? [];
+            return (object) ($payload ?? []);
         } catch (ConnectionException $e) {
-            Log::error('VCRM connection failed', [
-                'url' => $url,
-                'userId' => $userId,
-                'message' => $e->getMessage(),
-            ]);
-
-            return [];
+            Log::error('VCRM connection failed', ['url' => $url, 'msg' => $e->getMessage()]);
+            return (object) [];
         } catch (RequestException $e) {
-            // здесь можно обработать 4xx/5xx отдельно
-            Log::error('VCRM request error', [
-                'url' => $url,
-                'status' => $e->response?->status(),
-                'body' => $e->response?->body(), // осторожно с логированием чувствительных данных
-            ]);
-
+            Log::error('VCRM request error', ['url' => $url, 'status' => $e->response?->status()]);
             throw $e;
         }
     }
