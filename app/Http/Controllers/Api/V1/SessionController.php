@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
@@ -28,7 +30,6 @@ class SessionController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
             'device_name' => 'required',
-
         ]);
 
         $user = $this->userService->createUserFromRequest($request);
