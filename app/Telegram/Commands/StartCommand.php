@@ -6,7 +6,7 @@ namespace App\Telegram\Commands;
 
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Handlers\Type\Command;
-use App\Http\Services\VCRMServices\UserDataService;
+use App\Http\Services\VCRM\UserDataService;
 
 class StartCommand extends Command
 {
