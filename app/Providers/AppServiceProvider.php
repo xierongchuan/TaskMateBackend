@@ -13,10 +13,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(
-            \App\Contracts\UserDataProviderInterface::class,
-            \App\Http\Services\VCRMServices\UserDataService::class
-        );
+        //
     }
 
     /**

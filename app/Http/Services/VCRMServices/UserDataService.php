@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
-class UserDataService implements UserDataProviderInterface
+class UserDataService
 {
     private string $apiUrl;
     private ?string $defaultToken;
