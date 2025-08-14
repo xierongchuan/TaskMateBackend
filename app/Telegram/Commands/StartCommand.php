@@ -6,7 +6,7 @@ namespace App\Telegram\Commands;
 
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Handlers\Type\Command;
-use App\Contracts\UserDataProviderInterface;
+use App\Http\Services\VCRMServices\UserDataService;
 
 class StartCommand extends Command
 {
@@ -16,7 +16,7 @@ class StartCommand extends Command
 
     public function handle(Nutgram $bot): void
     {
-        $users = app(UserDataProviderInterface::class);
+        $users = new UserDataService();
 
         $data = $users->fetchById(5);
 

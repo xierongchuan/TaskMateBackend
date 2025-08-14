@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Services\VCRMServices;
 
-use App\Contracts\UserDataProviderInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
