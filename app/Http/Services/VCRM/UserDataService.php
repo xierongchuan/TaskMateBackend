@@ -25,7 +25,7 @@ class UserDataService
      * @param int|string $userId
      * @param string|null $sessionToken
      * @return object
-     * @throws RequestException
+     * @throws ConnectionException|RequestException
      */
     public function fetchById(int|string $userId, ?string $sessionToken = null): object
     {
