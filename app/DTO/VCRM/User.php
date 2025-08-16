@@ -7,6 +7,7 @@ namespace App\DTO\VCRM;
 use App\DTO\VCRM\Company;
 use App\DTO\VCRM\Department;
 use App\DTO\VCRM\Post;
+use InvalidArgumentException;
 
 readonly class User
 {
@@ -25,6 +26,13 @@ readonly class User
 
     public static function fromArray(array $data): self
     {
+        // проверка обязательных полей
+        foreach (['id', 'login', 'role', 'status', 'full_name'] as $field) {
+            if (!array_key_exists($field, $data)) {
+                throw new InvalidArgumentException("Missing required field: {$field}");
+            }
+        }
+
         return new self(
             id: $data['id'],
             login: $data['login'],
