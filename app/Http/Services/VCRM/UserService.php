@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
-class UserDataService
+class UserService
 {
     private string $apiUrl;
     private ?string $defaultToken;
