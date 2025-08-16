@@ -9,6 +9,10 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use App\DTO\VCRM\User as VCRMUser;
+use App\DTO\VCRM\Company as VCRMCompany;
+use App\DTO\VCRM\Department as VCRMDepartment;
+use App\DTO\VCRM\Post as VCRMPost;
 
 class UserService
 {
@@ -45,9 +49,9 @@ class UserService
 
             $response->throw();
 
-            $payload = data_get($response->json(), 'data', []);
+            $payload = (array) data_get($response->json(), 'data', []);
 
-            return (object) ($payload ?? []);
+            return VCRMUser::fromArray($payload);
         } catch (ConnectionException $e) {
             Log::error('VCRM connection failed', ['url' => $url, 'msg' => $e->getMessage()]);
             return (object) [];
