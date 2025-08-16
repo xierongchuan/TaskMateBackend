@@ -18,7 +18,7 @@ class StartCommand extends Command
     {
         $users = new VCRMUserService();
 
-        $user = $users->fetchById(5);
+        $user = $users->fetchById(9);
 
         $bot->sendMessage(
             'This is a ' . $user->fullName . '\'s account.'
