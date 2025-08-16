@@ -6,7 +6,7 @@ namespace App\Telegram\Commands;
 
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Handlers\Type\Command;
-use App\Http\Services\VCRM\UserService;
+use App\Http\Services\VCRM\UserService as VCRMUserService;
 
 class StartCommand extends Command
 {
@@ -16,12 +16,12 @@ class StartCommand extends Command
 
     public function handle(Nutgram $bot): void
     {
-        $users = new UserService();
+        $users = new VCRMUserService();
 
-        $data = $users->fetchById(5);
+        $user = $users->fetchById(5);
 
         $bot->sendMessage(
-            'This is a ' . $data->full_name . '\'s account.'
+            'This is a ' . $user->fullName . '\'s account.'
         );
     }
 }
