@@ -10,9 +10,6 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use App\DTO\VCRM\User as VCRMUser;
-use App\DTO\VCRM\Company as VCRMCompany;
-use App\DTO\VCRM\Department as VCRMDepartment;
-use App\DTO\VCRM\Post as VCRMPost;
 
 class UserService
 {
