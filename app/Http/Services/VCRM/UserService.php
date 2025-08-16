@@ -39,7 +39,7 @@ class UserService
             throw new RuntimeException('VCRM token is required');
         }
 
-        $url = "{$this->apiUrl}/user/{$userId}";
+        $url = "{$this->apiUrl}/users/{$userId}";
 
         try {
             $response = Http::withToken($token)
