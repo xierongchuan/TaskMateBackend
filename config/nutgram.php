@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     // The Telegram BOT api token
     'token' => env('TELEGRAM_TOKEN'),
@@ -22,4 +24,10 @@ return [
 
     // Set log channel
     'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'null'),
+
+    // Cache conf
+    'cache' => cache()->store('redis'),
+
+    // Conversation cache lifetime
+    'conversationTtl' => 86400, // 24hrs
 ];
