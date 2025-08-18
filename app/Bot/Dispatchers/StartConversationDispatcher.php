@@ -42,13 +42,6 @@ class StartConversationDispatcher
             return;
         }
 
-        // Запускаем либо Conversation::begin, либо вызываем handler-метод
-        if (is_subclass_of($target, \SergiX44\Nutgram\Conversations\Conversation::class)) {
-            $target::begin($bot); // Nutgram: begin запускает Conversation
-            return;
-        }
-
-        // Если это обычный handler класс с __invoke
-        (new $target())($bot);
+        $target::begin($bot); // Nutgram: begin запускает Conversation
     }
 }
