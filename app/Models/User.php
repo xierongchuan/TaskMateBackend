@@ -11,5 +11,12 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    //
+    protected $fillable = [
+        'login',
+        'full_name',
+        'telegram_id',
+        'phone',
+        'role',
+        'company_id',
+    ];
 }
