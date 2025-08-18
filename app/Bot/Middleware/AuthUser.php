@@ -17,7 +17,7 @@ class AuthUser
             return;
         }
 
-        $user = User::where('telegram_id', $tgId)->with('role')->first();
+        $user = User::where('telegram_id', $tgId)->first();
         if (!$user) {
             $bot->sendMessage(
                 'Ваш аккаунт не зарегистрирован в системе — обратитесь к администратору.'

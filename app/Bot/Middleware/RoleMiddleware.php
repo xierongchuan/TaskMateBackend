@@ -27,7 +27,7 @@ class RoleMiddleware
     public function __invoke(Nutgram $bot, $next)
     {
         // Найдём локального пользователя по telegram_id
-        $user = User::where('telegram_id', $bot->user()->id)->with('role')->first();
+        $user = User::where('telegram_id', $bot->user()->id)->first();
 
         // Если роли переданы пустые — разрешаем всем залогиненным пользователям
         if (!empty($this->allowed)) {
