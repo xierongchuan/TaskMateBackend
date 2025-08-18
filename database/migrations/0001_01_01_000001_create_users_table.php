@@ -16,15 +16,23 @@ return new class () extends Migration {
             $table->bigIncrements('id'); // BIGSERIAL
             $table->string('login', 100)->unique();
             $table->string('full_name', 2557);
+            $table->bigInteger('telegram_id');
             $table->string('email', 255)->nullable();
-            $table->string('phone', 50)->nullable();
-            $table->unsignedSmallInteger('role_id'); // matches roles.id
+            $table->string('phone', 50);
+            $table->string('role', 50)->default('user');
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();
-
-            // FK
-            $table->foreign('role_id')->references('id')->on('roles');
         });
+
+        DB::statement(
+            "ALTER TABLE users ALTER COLUMN role DROP DEFAULT;"
+        );
+        DB::statement(
+            "ALTER TABLE users ALTER COLUMN role TYPE roles_enum USING role::roles_enum;"
+        );
+        DB::statement(
+            "ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';"
+        );
     }
 
     /**
@@ -32,9 +40,6 @@ return new class () extends Migration {
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['role_id']);
-        });
         Schema::dropIfExists('users');
     }
 };

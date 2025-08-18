@@ -12,10 +12,13 @@ return new class () extends Migration {
      */
     public function up(): void
     {
-        Schema::create('roles', function (Blueprint $table) {
-            $table->smallIncrements('id'); // SMALLINT PK
-            $table->string('name', 50)->unique();
-        });
+        DB::statement("
+        CREATE TYPE roles_enum AS ENUM (
+            'user',
+            'accountant',
+            'director'
+        );
+    ");
     }
 
     /**
@@ -23,6 +26,6 @@ return new class () extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('roles');
+        DB::statement('DROP TYPE IF EXISTS roles_enum;');
     }
 };

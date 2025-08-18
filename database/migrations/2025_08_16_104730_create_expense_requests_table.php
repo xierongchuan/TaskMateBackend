@@ -33,7 +33,6 @@ return new class () extends Migration {
             $table->foreign('accountant_id')->references('id')->on('users');
         });
 
-        // затем меняем тип колонки на Postgres enum и устанавливаем default
         DB::statement(
             "ALTER TABLE expense_requests ALTER COLUMN status DROP DEFAULT;"
         );
