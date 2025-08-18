@@ -10,6 +10,7 @@ use App\Conversations\ApproveExpenseConversation;
 use App\Conversations\IssueExpenseConversation;
 use Psr\Log\LoggerInterface;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class StartConversationDispatcher
 {
@@ -22,12 +23,12 @@ class StartConversationDispatcher
 
     public function __invoke(Nutgram $bot)
     {
-        $tgId = $bot->user()?->id ?? $bot->from()?->id ?? null;
-        if ($tgId) {
-            $user = User::where('telegram_id', $tgId)->with('role')->first();
+        $telegramUserId = $bot->user()->id ?? null;
+        if ($telegramUserId) {
+            $user = User::where('telegram_id', $telegramUserId)->first();
         }
 
-        $role = $user->role->name ?? $user->role_name ?? 'guest';
+        $role = $user->role ?? 'guest';
 
         // Маппинг ролей -> классы
         $map = [
