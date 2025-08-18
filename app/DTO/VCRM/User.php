@@ -17,7 +17,7 @@ readonly class User
         public string $role,
         public string $status,
         public string $fullName,
-        public ?string $phoneNumber,
+        public string $phoneNumber,
         public ?Company $company,
         public ?Department $department,
         public ?Post $post,
@@ -27,7 +27,7 @@ readonly class User
     public static function fromArray(array $data): self
     {
         // проверка обязательных полей
-        foreach (['id', 'login', 'role', 'status', 'full_name'] as $field) {
+        foreach (['id', 'login', 'role', 'status', 'full_name', 'phone_number'] as $field) {
             if (!array_key_exists($field, $data)) {
                 throw new InvalidArgumentException("Missing required field: {$field}");
             }
@@ -39,7 +39,7 @@ readonly class User
             role: $data['role'],
             status: $data['status'],
             fullName: $data['full_name'],
-            phoneNumber: $data['phone_number'] ?? null,
+            phoneNumber: $data['phone_number'],
             company: isset($data['company'])
                 ? Company::fromArray($data['company'])
                 : null,
