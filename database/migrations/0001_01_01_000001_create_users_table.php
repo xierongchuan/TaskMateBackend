@@ -17,9 +17,9 @@ return new class () extends Migration {
             $table->string('login', 100)->unique();
             $table->string('full_name', 2557);
             $table->bigInteger('telegram_id');
-            $table->string('email', 255)->nullable();
             $table->string('phone', 50);
             $table->string('role', 50)->default('user');
+            $table->bigInteger('company_id');
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();
         });
