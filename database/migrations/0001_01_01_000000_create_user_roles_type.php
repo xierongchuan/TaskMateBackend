@@ -13,12 +13,12 @@ return new class () extends Migration {
     public function up(): void
     {
         DB::statement("
-        CREATE TYPE roles_enum AS ENUM (
-            'user',
-            'accountant',
-            'director'
-        );
-    ");
+            CREATE TYPE user_roles AS ENUM (
+              'user',
+              'accountant',
+              'director'
+            );
+        ");
     }
 
     /**
@@ -26,6 +26,6 @@ return new class () extends Migration {
      */
     public function down(): void
     {
-        DB::statement('DROP TYPE IF EXISTS roles_enum;');
+        DB::statement("DROP TYPE IF EXISTS user_roles;");
     }
 };

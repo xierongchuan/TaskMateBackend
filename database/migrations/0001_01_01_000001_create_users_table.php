@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use App\Enums\Roles;
 
 return new class () extends Migration {
     /**
@@ -18,7 +19,7 @@ return new class () extends Migration {
             $table->string('full_name', 2557);
             $table->bigInteger('telegram_id');
             $table->string('phone', 50);
-            $table->string('role', 50)->default('user');
+            $table->string('role', 50)->default(Roles::USER->value);
             $table->bigInteger('company_id');
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();
@@ -28,10 +29,12 @@ return new class () extends Migration {
             "ALTER TABLE users ALTER COLUMN role DROP DEFAULT;"
         );
         DB::statement(
-            "ALTER TABLE users ALTER COLUMN role TYPE roles_enum USING role::roles_enum;"
+            "ALTER TABLE users ALTER COLUMN role TYPE user_roles USING role::user_roles;"
         );
         DB::statement(
-            "ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';"
+            "ALTER TABLE users ALTER COLUMN role SET DEFAULT '"
+            . Roles::USER->value
+            . "';"
         );
     }
 
