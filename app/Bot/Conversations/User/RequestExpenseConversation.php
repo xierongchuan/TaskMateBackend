@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
-namespace App\Conversations;
+namespace App\Bot\Conversations\User;
 
+use App\Enums\ExpenseStatus;
+use App\Services\ExpenseService;
+use App\Traits\KeyboardTrait;
+use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Conversations\Conversation;
 use SergiX44\Nutgram\Nutgram;
 use Illuminate\Support\Facades\DB;
@@ -13,17 +17,15 @@ use App\Models\User;
 
 class RequestExpenseConversation extends Conversation
 {
-    // стартовый шаг
     protected ?string $step = 'askAmount';
 
-    // публичные свойства сериализуются автоматически — сохранятся между шагами
     public ?float $amount = null;
     public ?string $comment = null;
 
     public function askAmount(Nutgram $bot)
     {
-        $bot->sendMessage('Введите сумму (например: 1200 или 1200.50):');
-        // следующий ожидаемый метод (будет вызван при следующем сообщении пользователя)
+        $bot->sendMessage('Введите сумму в UZS:');
+
         $this->next('handleAmount');
     }
 
@@ -34,7 +36,7 @@ class RequestExpenseConversation extends Conversation
         $normalized = str_replace([',', ' '], ['.', ''], $text);
 
         if ($normalized === '' || !is_numeric($normalized) || (float)$normalized <= 0) {
-            $bot->sendMessage('Неверный формат суммы. Введите положительное число, например: 1200 или 1200.50');
+            $bot->sendMessage('Неверный формат суммы. Введите положительное число, например: 100000');
             // остаёмся в этом же шаге — повторный ввод
             $this->next('handleAmount');
             return;
@@ -55,35 +57,22 @@ class RequestExpenseConversation extends Conversation
             return;
         }
 
-        // --- сохраняем в БД атомарно: заявка + лог/аппрув ---
-        DB::transaction(function () use ($bot) {
-            // Пример: сопоставим Telegram user с локальным пользователем
-            $tgUserId = $this->getUserId(); // Telegram user id
-            $localUser = User::firstOrCreate(
-                ['telegram_id' => $tgUserId],
-                ['login' => "tg_{$tgUserId}", 'full_name' => $bot->from()?->first_name ?? null]
-            );
+        $user = User::where('telegram_id', (int) $bot->userId())->first();
 
-            $req = ExpenseRequest::create([
-                'requester_id'   => $localUser->id,
-                'title'          => 'Заявка из бота',
-                'description'    => $this->comment,
-                'amount'         => $this->amount,
-                'currency'       => 'UZS',
-                'status'         => 'pending_manager',
-            ]);
+        Log::info($bot->userId());
+        Log::info($user);
 
-            // лог создания (expense_approvals или audit_logs по вашей схеме)
-            ExpenseApproval::create([
-                'expense_request_id' => $req->id,
-                'actor_id'           => $localUser->id,
-                'actor_role'         => 'user',
-                'action'             => 'created',
-                'comment'            => 'Создано через бота'
-            ]);
-        });
+        ExpenseService::createRequest(
+            $user->id,
+            $this->comment,
+            $this->amount,
+            'UZS'
+        );
 
-        $bot->sendMessage("Готово — заявка на сумму {$this->amount} создана. Спасибо!");
+        $bot->sendMessage(
+            "Готово — заявка на сумму {$this->amount} UZS создана. Спасибо!",
+            reply_markup: KeyboardTrait::userMenu()
+        );
         $this->end();
     }
 
