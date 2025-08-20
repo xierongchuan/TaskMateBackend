@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\ExpenseRequest;
 use App\Models\ExpenseApproval;
 use App\Models\User;
-use App\Http\Services\VCRM\UserService as VCRMUserService;
+use App\Services\VCRM\UserService as VCRMUserService;
 use Illuminate\Support\Facades\Log;
 
 class StartConversation extends Conversation
