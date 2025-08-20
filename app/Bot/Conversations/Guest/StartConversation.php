@@ -14,6 +14,7 @@ use App\Models\ExpenseApproval;
 use App\Models\User;
 use App\Services\VCRM\UserService as VCRMUserService;
 use Illuminate\Support\Facades\Log;
+use App\Traits\KeyboardTrait;
 
 class StartConversation extends Conversation
 {
@@ -22,14 +23,9 @@ class StartConversation extends Conversation
 
     public function askContact(Nutgram $bot)
     {
-        $keyboard = ReplyKeyboardMarkup::make(resize_keyboard: true, one_time_keyboard: true)
-        ->addRow(
-            KeyboardButton::make('Отправить номер телефона', request_contact: true)
-        );
-
         $bot->sendMessage(
             text: 'Привет! Чтобы зарегистрироваться, пожалуйста, поделитесь своим номером телефона:',
-            reply_markup: $keyboard
+            reply_markup: KeyboardTrait::contactRequestKeyboard()
         );
 
         $this->next('getContact');
@@ -70,7 +66,10 @@ class StartConversation extends Conversation
 
         Log::info('Пользователь зарегистрирован: ' . json_encode($VCRMUser));
 
-        $bot->sendMessage("Здравствуйте $VCRMUser->fullName \nВы успешно зарегистрированы!");
+        $bot->sendMessage(
+            "Здравствуйте $VCRMUser->fullName \nВы успешно зарегистрированы!",
+            reply_markup: KeyboardTrait::userMenu()
+        );
         $this->end();
     }
 
