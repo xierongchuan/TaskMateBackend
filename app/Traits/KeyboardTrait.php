@@ -14,19 +14,19 @@ use SergiX44\Nutgram\Telegram\Types\Inline\InlineKeyboardButton;
 trait KeyboardTrait
 {
     /**
-     * Главная клавиатура (reply keyboard)
+     * Клавиатура пользователя (reply keyboard)
      */
-    public static function mainMenu(): ReplyKeyboardMarkup
+    public static function userMenu(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true, one_time_keyboard: false)
             ->addRow(
                 KeyboardButton::make('📝 Создать заявку'),
-                KeyboardButton::make('📄 Мои заявки')
-            )
-            ->addRow(
-                KeyboardButton::make('📞 Поделиться номером', request_contact: true),
-                KeyboardButton::make('❓ Помощь')
+                // KeyboardButton::make('📄 Мои заявки')
             );
+        // ->addRow(
+        //     KeyboardButton::make('📞 Поделиться номером', request_contact: true),
+        //     KeyboardButton::make('❓ Помощь')
+        // );
     }
 
     /**
