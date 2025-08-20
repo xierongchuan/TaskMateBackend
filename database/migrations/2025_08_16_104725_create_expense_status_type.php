@@ -14,9 +14,9 @@ return new class () extends Migration {
     {
         DB::statement("
             CREATE TYPE expense_status AS ENUM (
-              'pending_manager',
-              'manager_approved',
-              'manager_declined',
+              'pending_director',
+              'director_approved',
+              'director_declined',
               'issued',
               'cancelled'
             );

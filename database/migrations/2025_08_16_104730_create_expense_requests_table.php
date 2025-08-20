@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use App\Enums\ExpenseStatus;
 
 return new class () extends Migration {
     /**
@@ -19,17 +20,17 @@ return new class () extends Migration {
             $table->text('description')->nullable();
             $table->decimal('amount', 12, 2);
             $table->char('currency', 3)->default('USD');
-            $table->string('status')->default('pending_manager'); // временно как string
-            $table->unsignedBigInteger('manager_id')->nullable();
+            $table->string('status')->default(ExpenseStatus::PENDING_DIRECTOR->value); // временно как string
+            $table->unsignedBigInteger('director_id')->nullable();
             $table->unsignedBigInteger('accountant_id')->nullable();
-            $table->text('manager_comment')->nullable();
+            $table->text('director_comment')->nullable();
             $table->timestampTz('approved_at')->nullable();
             $table->timestampTz('issued_at')->nullable();
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();
 
             $table->foreign('requester_id')->references('id')->on('users');
-            $table->foreign('manager_id')->references('id')->on('users');
+            $table->foreign('director_id')->references('id')->on('users');
             $table->foreign('accountant_id')->references('id')->on('users');
         });
 
@@ -40,7 +41,9 @@ return new class () extends Migration {
             "ALTER TABLE expense_requests ALTER COLUMN status TYPE expense_status USING status::expense_status;"
         );
         DB::statement(
-            "ALTER TABLE expense_requests ALTER COLUMN status SET DEFAULT 'pending_manager';"
+            "ALTER TABLE expense_requests ALTER COLUMN status SET DEFAULT '"
+            . ExpenseStatus::PENDING_DIRECTOR->value
+            . "';"
         );
 
         // индексы
