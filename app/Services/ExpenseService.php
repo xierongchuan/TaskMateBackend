@@ -9,6 +9,7 @@ use App\Models\ExpenseRequest;
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use App\Enums\ExpenseStatus;
 use Throwable;
 
 class ExpenseService
@@ -128,7 +129,7 @@ class ExpenseService
     }
 
     /** Create request (with audit) */
-    public function createRequest(
+    public static function createRequest(
         int $requesterId,
         string $description,
         float $amount,
@@ -140,7 +141,7 @@ class ExpenseService
                 'description' => $description,
                 'amount' => $amount,
                 'currency' => $currency,
-                'status' => 'pending_director',
+                'status' => ExpenseStatus::PENDING_DIRECTOR->value,
             ]);
 
             AuditLog::create([
