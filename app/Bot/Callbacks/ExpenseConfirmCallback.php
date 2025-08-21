@@ -16,18 +16,18 @@ class ExpenseConfirmCallback
     public function __invoke(Nutgram $bot, string $id): void
     {
         try {
-            $user = auth()->user();
+            $director = auth()->user();
             $req = ExpenseRequest::where('id', $id)->lockForUpdate()->firstOrFail();
             $requester = User::find($req->requester_id);
 
-            DB::transaction(function () use ($req) {
+            DB::transaction(function () use ($req, $director) {
                 if ($req->status !== ExpenseStatus::PENDING->value) {
                     throw new \Exception('Неверный статус заявки');
                 }
 
                 \App\Models\ExpenseApproval::create([
                     'expense_request_id' => $req->id,
-                    'actor_id' => $req->requester_id,
+                    'actor_id' => $director->id,
                     'actor_role' => 'director',
                     'action' => ExpenseStatus::APPROVED->value,
                     'comment' => 'OK'
@@ -35,7 +35,7 @@ class ExpenseConfirmCallback
 
                 $req->update([
                     'status' => ExpenseStatus::APPROVED->value,
-                    'director_id' => $req->requester_id,
+                    'director_id' => $director->id,
                     'director_comment' => 'OK',
                     'approved_at' => now(),
                 ]);
@@ -43,7 +43,7 @@ class ExpenseConfirmCallback
                 \App\Models\AuditLog::create([
                     'table_name' => 'expense_requests',
                     'record_id' => $req->id,
-                    'actor_id' => $req->requester_id,
+                    'actor_id' => $director->id,
                     'action' => ExpenseStatus::APPROVED->value,
                     'payload' => [
                         'old_status' => ExpenseStatus::PENDING->value,
