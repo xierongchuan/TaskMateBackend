@@ -25,9 +25,12 @@ class AuthUser
             return;
         }
 
-        // Сохраняем модель пользователя в контексте бота для следующих middleware/handler'ов.
-        // На самом деле нету такой переменной в Nutgram $bot как user но мы пока что насильно так засовываем изменения
-        $bot->user = $user;
+        app()->instance('telegram_user', $user);
+        auth()->setUser($user);
+
+        // // Сохраняем модель пользователя в контексте бота для следующих middleware/handler'ов.
+        // // На самом деле нету такой переменной в Nutgram $bot как user но мы пока что насильно так засовываем изменения
+        // $bot->user = $user;
 
         return $next($bot);
     }
