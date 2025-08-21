@@ -214,8 +214,13 @@ class ExpenseService
                     );
 
                     $confirmData = "expense:confirm:{$requestId}";
-                    $cancelData  = "expense:cancel:{$requestId}";
-                    $inline = KeyboardTrait::inlineConfirmDecline($confirmData, $cancelData);
+                    $confirmWithCommentData = "expense:confirm_with_comment:{$requestId}";
+                    $cancelData  = "expense:decline:{$requestId}";
+                    $inline = KeyboardTrait::inlineConfirmCommentDecline(
+                        $confirmData,
+                        $confirmWithCommentData,
+                        $cancelData
+                    );
 
                     // Отправляем всем директору (логируем результат)
                     try {
