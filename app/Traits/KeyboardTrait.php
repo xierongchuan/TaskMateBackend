@@ -71,7 +71,7 @@ trait KeyboardTrait
      */
     public static function removeKeyboard(): ReplyKeyboardRemove
     {
-        return ReplyKeyboardRemove::make(selective: false);
+        return ReplyKeyboardRemove::make(true, selective: false);
     }
 
     /**
