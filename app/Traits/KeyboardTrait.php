@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Traits;
 
 use SergiX44\Nutgram\Telegram\Types\Keyboard\ReplyKeyboardMarkup;
-// use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\KeyboardButton;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\ReplyKeyboardRemove;
-use SergiX44\Nutgram\Telegram\Types\Inline\InlineKeyboardMarkup;
-use SergiX44\Nutgram\Telegram\Types\Inline\InlineKeyboardButton;
+use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
+use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
 
 trait KeyboardTrait
 {
@@ -30,19 +29,18 @@ trait KeyboardTrait
     }
 
     /**
-     * Клавиатура администратора
+     * Клавиатура директора
      */
-    public static function adminMenu(): ReplyKeyboardMarkup
+    public static function directorMenu(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true)
             ->addRow(
-                KeyboardButton::make('📋 Все заявки'),
-                KeyboardButton::make('⚙️ Настройки')
-            )
-            ->addRow(
-                KeyboardButton::make('🧾 Отчёты'),
-                KeyboardButton::make('◀️ Назад')
+                KeyboardButton::make('🔃 Ожидающие заявки')
             );
+        // ->addRow(
+        //     KeyboardButton::make('🧾 Отчёты'),
+        //     KeyboardButton::make('◀️ Назад')
+        // );
     }
 
     /**
@@ -62,10 +60,10 @@ trait KeyboardTrait
         string $cancelData = 'cancel'
     ): InlineKeyboardMarkup {
         return InlineKeyboardMarkup::make()
-            ->row([
+            ->addRow(
                 InlineKeyboardButton::make(text: '✅ Подтвердить', callback_data: $confirmData),
                 InlineKeyboardButton::make(text: '❌ Отменить', callback_data: $cancelData),
-            ]);
+            );
     }
 
     /**
