@@ -67,6 +67,24 @@ trait KeyboardTrait
     }
 
     /**
+     * Inline клавиатура: Подтвердить / Подтвердить с комментом / Отменить (callback_data задаются)
+     */
+    public static function inlineConfirmCommentDecline(
+        string $confirmData = 'confirm',
+        string $confirmWithCommentData = 'confirm_with_comment',
+        string $declineData = 'decline'
+    ): InlineKeyboardMarkup {
+        return InlineKeyboardMarkup::make()
+            ->addRow(
+                InlineKeyboardButton::make(text: '✅ Подтвердить', callback_data: $confirmData),
+                InlineKeyboardButton::make(text: '❌ Отменить', callback_data: $declineData),
+            )
+            ->addRow(
+                InlineKeyboardButton::make(text: '💬 Подтвердить с комментарием', callback_data: $confirmData),
+            );
+    }
+
+    /**
      * ReplyKeyboardRemove — убрать reply keyboard
      */
     public static function removeKeyboard(): ReplyKeyboardRemove
