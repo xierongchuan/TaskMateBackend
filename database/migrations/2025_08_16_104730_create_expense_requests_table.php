@@ -20,7 +20,7 @@ return new class () extends Migration {
             $table->text('description')->nullable();
             $table->decimal('amount', 12, 2);
             $table->char('currency', 3)->default('USD');
-            $table->string('status')->default(ExpenseStatus::PENDING_DIRECTOR->value); // временно как string
+            $table->string('status')->default(ExpenseStatus::PENDING->value); // временно как string
             $table->unsignedBigInteger('director_id')->nullable();
             $table->unsignedBigInteger('accountant_id')->nullable();
             $table->text('director_comment')->nullable();
@@ -42,7 +42,7 @@ return new class () extends Migration {
         );
         DB::statement(
             "ALTER TABLE expense_requests ALTER COLUMN status SET DEFAULT '"
-            . ExpenseStatus::PENDING_DIRECTOR->value
+            . ExpenseStatus::PENDING->value
             . "';"
         );
 
