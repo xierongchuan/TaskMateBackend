@@ -115,7 +115,8 @@ class ConfirmWithCommentConversation extends Conversation
                 try {
                     $bot->sendMessage(
                         chat_id: $requester->telegram_id,
-                        text: "🎉 Ваша заявка #{$req->id} подтверждена директором.\nКомментарий: {$this->comment}"
+                        text: "✅ Ваша заявка #{$req->id} подтверждена "
+                        . "директором.\nКомментарий: {$this->comment}\nОжидайте выдачи от бухгалтера."
                     );
                 } catch (\Throwable $sendEx) {
                     Log::error('Failed to notify requester after confirm with comment', [
