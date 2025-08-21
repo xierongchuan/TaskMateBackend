@@ -283,61 +283,8 @@ class ExpenseService
         });
     }
 
-    /** Mass director approve */
-    public function massDirectorApprove(array $requestIds, int $directorId, ?string $comment = null): void
+    public static function confirmExpense()
     {
-        if (empty($requestIds)) {
-            return;
-        }
-
-        DB::transaction(function () use ($requestIds, $directorId, $comment) {
-            $requests = ExpenseRequest::whereIn('id', $requestIds)->lockForUpdate()->get();
-
-            // validate statuses - optional, but recommended
-            foreach ($requests as $r) {
-                if ($r->status !== 'pending_director') {
-                    throw new \RuntimeException("Request {$r->id} has invalid status");
-                }
-            }
-
-            $now = now();
-
-            // bulk insert approvals
-            $inserts = [];
-            foreach ($requests as $r) {
-                $inserts[] = [
-                    'expense_request_id' => $r->id,
-                    'actor_id' => $directorId,
-                    'actor_role' => 'director',
-                    'action' => 'approved',
-                    'comment' => $comment,
-                    'created_at' => $now,
-                ];
-            }
-            ExpenseApproval::insert($inserts);
-
-            // bulk update requests
-            ExpenseRequest::whereIn('id', $requestIds)->update([
-                'status' => 'director_approved',
-                'director_id' => $directorId,
-                'director_comment' => $comment,
-                'director_approved_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            // audit logs (per row) - keep concise
-            $auditInserts = [];
-            foreach ($requests as $r) {
-                $auditInserts[] = [
-                    'table_name' => 'expense_requests',
-                    'record_id' => $r->id,
-                    'actor_id' => $directorId,
-                    'action' => 'director_approved',
-                    'payload' => json_encode(['old_status' => 'pending_director', 'new_status' => 'director_approved']),
-                    'created_at' => $now,
-                ];
-            }
-            DB::table('audit_logs')->insert($auditInserts);
-        });
+        //
     }
 }
