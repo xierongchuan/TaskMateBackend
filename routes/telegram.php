@@ -37,6 +37,3 @@ $bot->onCallbackQueryData(
 )
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
-
-// Регистрируем хендлеры заявок
-ExpenseRequestHandler::register($bot);
