@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Bot\Conversations\Guest;
 
+use App\Enums\Role;
 use SergiX44\Nutgram\Conversations\Conversation;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\ReplyKeyboardMarkup;
@@ -66,10 +67,20 @@ class StartConversation extends Conversation
 
         Log::info('Пользователь зарегистрирован: ' . json_encode($VCRMUser));
 
+        $keyboard = null;
+
+        if ($VCRMUser->role == Role::USER->value) {
+            $keyboard = KeyboardTrait::userMenu();
+        }
+        if ($VCRMUser->role == Role::DIRECTOR->value) {
+            $keyboard = KeyboardTrait::directorMenu();
+        }
+
         $bot->sendMessage(
             "Здравствуйте $VCRMUser->fullName \nВы успешно зарегистрированы!",
-            reply_markup: KeyboardTrait::userMenu()
+            reply_markup: $keyboard
         );
+
         $this->end();
     }
 
