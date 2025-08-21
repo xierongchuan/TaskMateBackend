@@ -57,17 +57,27 @@ class RequestExpenseConversation extends Conversation
             return;
         }
 
-        $user = User::where('telegram_id', (int) $bot->userId())->first();
+        $user = auth()->user();
 
-        Log::info($bot->userId());
-        Log::info($user);
-
-        ExpenseService::createRequest(
+        $result = ExpenseService::createRequest(
+            $bot,
             $user->id,
             $this->comment,
             $this->amount,
             'UZS'
         );
+
+        if ($result === null) {
+            $bot->sendMessage(
+                <<<MSG
+В процессе создания заявки произошла ошибка,
+просим немедленно сообщить администратору
+и подождать до починки неполадки в системе!
+MSG,
+                reply_markup: KeyboardTrait::userMenu()
+            );
+            $this->end();
+        }
 
         $bot->sendMessage(
             "Готово — заявка на сумму {$this->amount} UZS создана. Спасибо!",
