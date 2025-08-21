@@ -83,7 +83,8 @@ MSG,
         }
 
         $bot->sendMessage(
-            "Готово! — Создана заявка #$result\nНа сумму: {$this->amount} UZS",
+            "Готово! — Создана заявка #$result\nНа сумму: " . number_format((float) $this->amount, 2, '.', ' ')
+            . " UZS",
             reply_markup: KeyboardTrait::userMenu()
         );
         $this->end();
