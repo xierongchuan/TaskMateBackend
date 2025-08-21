@@ -83,38 +83,5 @@ MSG,
             ]);
             $bot->answerCallbackQuery(text: "Ошибка при подтверждении заявки.", show_alert: true);
         }
-
-        // // cancel
-        // $bot->onCallbackQueryData('expense:cancel:{id}', function (Nutgram $bot, string $id) {
-        //     try {
-        //         $req = ExpenseRequest::find($id);
-
-        //         if (!$req) {
-        //             $bot->answerCallbackQuery(text: "Заявка не найдена.", show_alert: true);
-        //             Log::warning("Попытка отменить несуществующую заявку #$id директором {$bot->userId()}");
-        //             return;
-        //         }
-
-        //         $req->update(['status' => ExpenseStatus::DECLINED->value]);
-
-        //         $bot->editMessageText(
-        //             text: "❌ Заявка #{$req->id} отклонена.",
-        //             reply_markup: null
-        //         );
-
-        //         $bot->sendMessage(
-        //             chat_id: $req->requester->telegram_id,
-        //             text: "🚫 Ваша заявка #{$req->id} была отклонена директором."
-        //         );
-
-        //         Log::info("Заявка #{$req->id} отклонена директором {$bot->userId()}");
-        //     } catch (\Throwable $e) {
-        //         Log::error("Ошибка при отклонении заявки #$id", [
-        //             'exception' => $e,
-        //             'trace' => $e->getTraceAsString(),
-        //         ]);
-        //         $bot->answerCallbackQuery(text: "Ошибка при отклонении заявки.", show_alert: true);
-        //     }
-        // });
     }
 }

@@ -215,7 +215,7 @@ class ExpenseService
 
                     $confirmData = "expense:confirm:{$requestId}";
                     $cancelData  = "expense:cancel:{$requestId}";
-                    $inline = KeyboardTrait::inlineConfirmCancel($confirmData, $cancelData);
+                    $inline = KeyboardTrait::inlineConfirmDecline($confirmData, $cancelData);
 
                     // Отправляем всем директору (логируем результат)
                     try {
@@ -281,10 +281,5 @@ class ExpenseService
                 'created_at' => now(),
             ]);
         });
-    }
-
-    public static function confirmExpense()
-    {
-        //
     }
 }

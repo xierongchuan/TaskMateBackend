@@ -43,7 +43,10 @@ class RequestExpenseConversation extends Conversation
         }
 
         $this->amount = (float) $normalized;
-        $bot->sendMessage("Сумма принята: {$this->amount}\nПожалуйста, введите комментарий (цель расхода):");
+        $bot->sendMessage(
+            "Сумма принята: " . number_format((float) $this->amount, 2, '.', ' ')
+            . "\nПожалуйста, введите комментарий (цель расхода):"
+        );
         $this->next('handleComment');
     }
 

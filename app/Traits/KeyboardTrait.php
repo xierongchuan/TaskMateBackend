@@ -55,14 +55,14 @@ trait KeyboardTrait
     /**
      * Inline клавиатура: Подтвердить / Отменить (callback_data задаются)
      */
-    public static function inlineConfirmCancel(
+    public static function inlineConfirmDecline(
         string $confirmData = 'confirm',
-        string $cancelData = 'cancel'
+        string $declineData = 'decline'
     ): InlineKeyboardMarkup {
         return InlineKeyboardMarkup::make()
             ->addRow(
                 InlineKeyboardButton::make(text: '✅ Подтвердить', callback_data: $confirmData),
-                InlineKeyboardButton::make(text: '❌ Отменить', callback_data: $cancelData),
+                InlineKeyboardButton::make(text: '❌ Отменить', callback_data: $declineData),
             );
     }
 
