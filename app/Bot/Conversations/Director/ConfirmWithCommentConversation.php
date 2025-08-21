@@ -141,6 +141,6 @@ class ConfirmWithCommentConversation extends Conversation
 
     public function closing(Nutgram $bot)
     {
-        $bot->sendMessage("Успешно отменено подтверждение заявки.");
+        $bot->sendMessage("Закрыто подтверждение заявки.");
     }
 }
