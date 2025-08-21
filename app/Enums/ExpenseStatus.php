@@ -6,9 +6,9 @@ namespace App\Enums;
 
 enum ExpenseStatus: string
 {
-    case PENDING_DIRECTOR   = 'pending_director';
-    case DIRECTOR_APPROVED  = 'director_approved';
-    case DIRECTOR_DECLINED  = 'director_declined';
+    case PENDING   = 'pending';
+    case APPROVED  = 'approved';
+    case DECLINED  = 'declined';
     case ISSUED            = 'issued';
     case CANCELLED         = 'cancelled';
 
@@ -16,9 +16,9 @@ enum ExpenseStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::PENDING_DIRECTOR  => 'Ожидает руководителя',
-            self::DIRECTOR_APPROVED => 'Одобрено руководителем',
-            self::DIRECTOR_DECLINED => 'Отклонено руководителем',
+            self::PENDING  => 'Ожидает руководителя',
+            self::APPROVED => 'Одобрено руководителем',
+            self::DECLINED => 'Отклонено руководителем',
             self::ISSUED           => 'Выдано (бухгалтер)',
             self::CANCELLED        => 'Отменено',
         };
