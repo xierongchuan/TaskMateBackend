@@ -80,7 +80,7 @@ MSG,
         }
 
         $bot->sendMessage(
-            "Готово — заявка на сумму {$this->amount} UZS создана. Спасибо!",
+            "Готово! — Создана заявка #$result\nНа сумму: {$this->amount} UZS",
             reply_markup: KeyboardTrait::userMenu()
         );
         $this->end();
