@@ -9,8 +9,8 @@ enum ExpenseStatus: string
     case PENDING   = 'pending';
     case APPROVED  = 'approved';
     case DECLINED  = 'declined';
-    case ISSUED            = 'issued';
-    case CANCELLED         = 'cancelled';
+    case ISSUED    = 'issued';
+    case CANCELLED = 'cancelled';
 
     /** Читабельная метка (RU) */
     public function label(): string
