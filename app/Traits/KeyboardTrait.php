@@ -80,7 +80,10 @@ trait KeyboardTrait
                 InlineKeyboardButton::make(text: '❌ Отменить', callback_data: $declineData),
             )
             ->addRow(
-                InlineKeyboardButton::make(text: '💬 Подтвердить с комментарием', callback_data: $confirmData),
+                InlineKeyboardButton::make(
+                    text: '💬 Подтвердить с комментарием',
+                    callback_data: $confirmWithCommentData
+                ),
             );
     }
 

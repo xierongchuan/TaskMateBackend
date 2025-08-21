@@ -12,6 +12,7 @@ use App\Bot\Middleware\AuthUser;
 use App\Bot\Middleware\RoleMiddleware;
 use App\Bot\Dispatchers\StartConversationDispatcher;
 use App\Bot\Conversations\User\RequestExpenseConversation;
+use App\Bot\Conversations\Director\ConfirmWithCommentConversation;
 
 /*
 | Nutgram Handlers
@@ -44,3 +45,17 @@ $bot->onCallbackQueryData(
 )
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
+
+$bot->onCallbackQueryData(
+    'expense:confirm_with_comment:{id}',
+    ConfirmWithCommentConversation::class
+)
+->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
+->middleware(AuthUser::class);
+
+// $bot->onCallbackQueryData('expense:confirm_with_comment:{id}', function (SergiX44\Nutgram\Nutgram $bot, string $id) {
+//     // чтобы кнопка не висела
+//     $bot->answerCallbackQuery();
+
+//     ConfirmWithCommentConversation::begin($bot, data: ['requestId' => (int)$id]);
+// });
