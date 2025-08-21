@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 /** @var SergiX44\Nutgram\Nutgram $bot */
 
-use App\Bot\Handlers\ExpenseCancelCallback;
-use App\Bot\Handlers\ExpenseConfirmCallback;
-use App\Bot\Handlers\ExpenseRequestHandler;
+use App\Bot\Callbacks\ExpenseConfirmCallback;
+use App\Bot\Callbacks\ExpenseDeclineCallback;
 use App\Enums\Role;
 use SergiX44\Nutgram\Nutgram;
-use App\Bot\Conversations\Guest\StartCommand;
 use App\Bot\Middleware\AuthUser;
 use App\Bot\Middleware\RoleMiddleware;
 use App\Bot\Dispatchers\StartConversationDispatcher;
@@ -41,7 +39,7 @@ $bot->onCallbackQueryData(
 ->middleware(AuthUser::class);
 
 $bot->onCallbackQueryData(
-    'expense:cancel:{id}',
+    'expense:decline:{id}',
     ExpenseDeclineCallback::class
 )
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))

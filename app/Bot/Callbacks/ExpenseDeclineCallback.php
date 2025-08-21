@@ -2,84 +2,130 @@
 
 declare(strict_types=1);
 
-namespace App\Bot\Handlers;
+namespace App\Bot\Callbacks;
 
+use App\Enums\Role;
 use App\Models\ExpenseRequest;
-use App\Enums\ExpenseStatus;
+use App\Models\ExpenseApproval;
+use App\Models\AuditLog;
 use App\Models\User;
+use App\Enums\ExpenseStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 
 class ExpenseDeclineCallback
 {
+    /**
+     * Callback data pattern: expense:cancel:{id}
+     */
     public function __invoke(Nutgram $bot, string $id): void
     {
         try {
+            // кто нажал — директор
             $director = auth()->user();
-            $req = ExpenseRequest::where('id', $id)->lockForUpdate()->firstOrFail();
+
+            $req = ExpenseRequest::find($id);
             $requester = User::find($req->requester_id);
 
+            if (! $director) {
+                $bot->answerCallbackQuery(
+                    text: 'Не удалось определить пользователя. Войдите в систему.',
+                    show_alert: true
+                );
+                return;
+            }
+
+            // Выполняем все изменения в транзакции и с блокировкой строки
             DB::transaction(function () use ($req, $director) {
+                // Проверяем ожидаемый статус — используем ваш enum
                 if ($req->status !== ExpenseStatus::PENDING->value) {
-                    throw new \Exception('Неверный статус заявки');
+                    throw new \RuntimeException('Неверный статус заявки для отклонения');
                 }
 
-                \App\Models\ExpenseApproval::create([
+                // Комментарий — пока дефолтный; при необходимости можно расширить поток с вводом причины
+                $comment = 'Отклонено директором';
+
+                // Вставляем лог одобрения/отклонения
+                ExpenseApproval::create([
                     'expense_request_id' => $req->id,
-                    'actor_id' => $director->id,
-                    'actor_role' => 'director',
-                    'action' => ExpenseStatus::DECLINED->value,
-                    'comment' => 'Нецелесообразно'
+                    'actor_id'           => $director->id,
+                    'actor_role'         => Role::DIRECTOR->value,
+                    'action'             => ExpenseStatus::DECLINED->value,
+                    'comment'            => $comment,
+                    'created_at'         => now(),
                 ]);
 
+                // Обновляем саму заявку
                 $req->update([
-                    'status' => ExpenseStatus::DECLINED->value,
-                    'director_id' => $director->id,
-                    'director_comment' => 'Нецелесообразно',
-                    'approved_at' => now(),
-                    'updated_at' => now()
+                    'status'              => ExpenseStatus::DECLINED->value,
+                    'director_id'         => $director->id,
+                    'director_comment'    => $comment,
+                    // 'approved_at'         => now(),
+                    'updated_at'          => now(),
                 ]);
 
-                \App\Models\AuditLog::create([
+                // Пишем аудит
+                AuditLog::create([
                     'table_name' => 'expense_requests',
-                    'record_id' => $req->id,
-                    'actor_id' => $director->id,
-                    'action' => ExpenseStatus::DECLINED->value,
-                    'payload' => json_encode(['reason' => 'Нецелесообразно'])
+                    'record_id'  => $req->id,
+                    'actor_id'   => $director->id,
+                    'action'     => ExpenseStatus::DECLINED->value,
+                    'payload'    => [
+                        'reason'     => $comment,
+                        'old_status' => ExpenseStatus::PENDING->value,
+                        'new_status' => ExpenseStatus::DECLINED->value,
+                    ],
+                    'created_at' => now(),
                 ]);
             });
 
+            // Редактируем сообщение у директора (убираем кнопки и показываем результат)
             $bot->editMessageText(
                 text: sprintf(
-                    <<<MSG
-❌ Заявка #%d отклонена директором
-Пользователь: %s (ID: %d)
-Сумма: %s %s
-Комментарий: %s
-MSG,
+                    "❌ Заявка #%d отклонена директором\nПользователь: %s (ID: %d)\nСумма: %s %s\nКомментарий: %s",
                     $req->id,
                     $requester->full_name ?? ($requester->login ?? 'Unknown'),
                     $req->requester_id,
-                    number_format((float) $req->amount, 2, '.', ' '),
+                    number_format((float)$req->amount, 2, '.', ' '),
                     $req->currency,
                     $req->description ?: '-'
                 ),
                 reply_markup: null
             );
 
-            $bot->sendMessage(
-                chat_id: $requester->telegram_id,
-                text: "🚫 Ваша заявка #{$req->id} отклонена директором. Причина: Нецелесообразно."
-            );
+            // Уведомляем заявителя (если есть telegram_id)
+            if ($requester && $requester->telegram_id) {
+                try {
+                    $bot->sendMessage(
+                        chat_id: $requester->telegram_id,
+                        text: sprintf(
+                            "🚫 Ваша заявка #%d на сумму %s %s для: %s. \nБыла отклонена директором.",
+                            $req->id,
+                            number_format((float)$req->amount, 2, '.', ' '),
+                            $req->currency,
+                            $req->description ?: '-'
+                        )
+                    );
+                } catch (\Throwable $sendEx) {
+                    Log::error('Failed to send decline notification to requester', [
+                        'request_id' => $req->id,
+                        'requester_id' => $requester->id ?? null,
+                        'message' => $sendEx->getMessage(),
+                        'trace' => $sendEx->getTraceAsString(),
+                    ]);
+                }
+            }
 
-            Log::info("Заявка #{$req->id} отклонена директором {$director->id}");
+            Log::info("Заявка #{$id} отклонена директором {$director->id}");
         } catch (\Throwable $e) {
-            Log::error("Ошибка при отклонении заявки #$id", [
-                'exception' => $e,
+            Log::error("Ошибка при отклонении заявки #{$id}", [
+                'exception' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $bot->answerCallbackQuery(text: "Ошибка при отклонении заявки.", show_alert: true);
+
+            // Вежливо сообщаем директору об ошибке
+            $bot->answerCallbackQuery(text: "Ошибка при отклонении заявки: {$e->getMessage()}", show_alert: true);
         }
     }
 }

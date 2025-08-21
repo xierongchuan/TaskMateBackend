@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Bot\Handlers;
+namespace App\Bot\Callbacks;
 
+use App\Enums\Role;
 use App\Models\ExpenseRequest;
 use App\Enums\ExpenseStatus;
 use App\Models\User;
@@ -28,7 +29,7 @@ class ExpenseConfirmCallback
                 \App\Models\ExpenseApproval::create([
                     'expense_request_id' => $req->id,
                     'actor_id' => $director->id,
-                    'actor_role' => 'director',
+                    'actor_role' => Role::DIRECTOR->value,
                     'action' => ExpenseStatus::APPROVED->value,
                     'comment' => 'OK'
                 ]);
@@ -38,6 +39,7 @@ class ExpenseConfirmCallback
                     'director_id' => $director->id,
                     'director_comment' => 'OK',
                     'approved_at' => now(),
+                    'updated_at' => now(),
                 ]);
 
                 \App\Models\AuditLog::create([
