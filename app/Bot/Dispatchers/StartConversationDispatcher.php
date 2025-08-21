@@ -59,7 +59,8 @@ class StartConversationDispatcher
 
             // 1) Conversation — стартуем
             if ($handler instanceof \SergiX44\Nutgram\Conversations\Conversation) {
-                $bot->startConversation($handler);
+                // $bot->startConversation($handler);
+                $target::begin($bot);
                 return;
             }
 
