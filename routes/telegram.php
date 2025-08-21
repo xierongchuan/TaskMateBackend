@@ -52,10 +52,3 @@ $bot->onCallbackQueryData(
 )
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
-
-// $bot->onCallbackQueryData('expense:confirm_with_comment:{id}', function (SergiX44\Nutgram\Nutgram $bot, string $id) {
-//     // чтобы кнопка не висела
-//     $bot->answerCallbackQuery();
-
-//     ConfirmWithCommentConversation::begin($bot, data: ['requestId' => (int)$id]);
-// });
