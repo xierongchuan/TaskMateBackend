@@ -52,3 +52,11 @@ $bot->onCallbackQueryData(
 )
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
+
+// Accountant Callbacks
+$bot->onCallbackQueryData(
+    'expense:issued:{id}',
+    \App\Bot\Callbacks\ExpenseIssuedCallback::class
+)
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
+->middleware(AuthUser::class);

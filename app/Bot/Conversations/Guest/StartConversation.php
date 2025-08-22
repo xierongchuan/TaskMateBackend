@@ -76,8 +76,10 @@ class StartConversation extends Conversation
             $keyboard = KeyboardTrait::directorMenu();
         }
 
+        $role = Role::tryFromString($VCRMUser->role)->label();
+
         $bot->sendMessage(
-            "Здравствуйте $VCRMUser->fullName \nВы успешно зарегистрированы!",
+            'Добро пожаловать ' . $role . ' ' . $VCRMUser->fullName . '!',
             reply_markup: $keyboard
         );
 

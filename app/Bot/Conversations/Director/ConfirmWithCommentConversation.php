@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Bot\Conversations\Director;
 
+use App\Services\ExpenseService;
 use SergiX44\Nutgram\Conversations\Conversation;
 use SergiX44\Nutgram\Nutgram;
 use Illuminate\Support\Facades\DB;
@@ -118,6 +119,8 @@ class ConfirmWithCommentConversation extends Conversation
                         text: "✅ Ваша заявка #{$req->id} подтверждена "
                         . "директором.\nКомментарий: {$this->comment}\nОжидайте выдачи от бухгалтера."
                     );
+
+                    ExpenseService::sendToAccountant($bot, $requester, $req->id, (float) $req->amount, $req->currency);
                 } catch (\Throwable $sendEx) {
                     Log::error('Failed to notify requester after confirm with comment', [
                         'request_id' => $req->id,

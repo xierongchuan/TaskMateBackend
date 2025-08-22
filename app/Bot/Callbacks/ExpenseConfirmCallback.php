@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\ExpenseRequest;
 use App\Enums\ExpenseStatus;
 use App\Models\User;
+use App\Services\ExpenseService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
@@ -76,6 +77,8 @@ MSG,
                 chat_id: $requester->telegram_id,
                 text: "✅ Ваша заявка #{$req->id} подтверждена директором. Ожидайте выдачи от бухгалтера."
             );
+
+            ExpenseService::sendToAccountant($bot, $requester, $req->id, (float) $req->amount, $req->currency);
 
             Log::info("Заявка #{$req->id} подтверждена директором {$director->id}");
         } catch (\Throwable $e) {

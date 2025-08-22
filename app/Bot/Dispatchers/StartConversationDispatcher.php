@@ -28,10 +28,10 @@ class StartConversationDispatcher
         $role = $user->role ?? 'guest';
 
         $map = [
-            'guest'     => \App\Bot\Conversations\Guest\StartConversation::class,
+            'guest'      => \App\Bot\Conversations\Guest\StartConversation::class,
             // 'user'      => \App\Bot\Commands\User\StartCommand::class,
-            'director'  => \App\Bot\Commands\Director\StartCommand::class,
-            // 'accountant'=> \App\Bot\Commands\Accountant\StartCommand::class,
+            'director'   => \App\Bot\Commands\Director\StartCommand::class,
+            'accountant' => \App\Bot\Commands\Accountant\StartCommand::class,
         ];
 
         $target = $map[$role] ?? null;

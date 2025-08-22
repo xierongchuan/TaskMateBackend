@@ -64,7 +64,7 @@ class RequestExpenseConversation extends Conversation
 
         $result = ExpenseService::createRequest(
             $bot,
-            $user->id,
+            $user,
             $this->comment,
             $this->amount,
             'UZS'

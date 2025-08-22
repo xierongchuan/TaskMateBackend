@@ -15,5 +15,6 @@ class ExpenseRequest extends Model
         'amount',
         'currency',
         'status',
+        'company_id',
     ];
 }

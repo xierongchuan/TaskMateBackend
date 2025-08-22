@@ -136,32 +136,33 @@ class ExpenseService
     /** Create request (with audit) */
     public static function createRequest(
         Nutgram $bot,
-        int $requesterId,
+        User $requester,
         string $description,
         float $amount,
         string $currency = 'UZS'
     ): null|int {
         try {
             // 1) Создаём запись в транзакции
-            $requestId = DB::transaction(function () use ($requesterId, $description, $amount, $currency) {
+            $requestId = DB::transaction(function () use ($requester, $description, $amount, $currency) {
                 $req = ExpenseRequest::create([
-                    'requester_id' => $requesterId,
+                    'requester_id' => $requester->id,
                     'description' => $description,
                     'amount' => $amount,
                     'currency' => $currency,
                     'status' => ExpenseStatus::PENDING->value,
+                    'company_id' => $requester->company_id,
                 ]);
 
                 AuditLog::create([
                     'table_name' => 'expense_requests',
                     'record_id' => $req->id,
-                    'actor_id' => $requesterId,
+                    'actor_id' => $requester->id,
                     'action' => 'insert',
                     'payload' => ['amount' => $amount, 'currency' => $currency],
                     'created_at' => now(),
                 ]);
 
-                Log::info("Заявка #{$req->id} успешно создана пользователем {$requesterId}");
+                Log::info("Заявка #{$req->id} успешно создана пользователем {$requester->id}");
 
                 return $req->id;
             });
@@ -170,11 +171,10 @@ class ExpenseService
             if ($requestId !== null) {
                 try {
                     // Найдём заявителя
-                    $requester = User::find($requesterId);
                     if (! $requester) {
                         Log::warning(
                             'createRequest: requester not found',
-                            ['requester_id' => $requesterId, 'request_id' => $requestId]
+                            ['requester_id' => $requester->id, 'request_id' => $requestId]
                         );
                         return $requestId;
                     }
@@ -184,7 +184,7 @@ class ExpenseService
                     if ($companyId === null) {
                         Log::warning(
                             'createRequest: requester has no company_id',
-                            ['requester_id' => $requesterId, 'request_id' => $requestId]
+                            ['requester_id' => $requester->id, 'request_id' => $requestId]
                         );
                         return $requestId;
                     }
@@ -207,7 +207,7 @@ class ExpenseService
                         "Новая заявка #%d\nПользователь: %s (ID: %d)\nСумма: %s %s\nКомментарий: %s",
                         $requestId,
                         $requester->full_name ?? ($requester->login ?? 'Unknown'),
-                        $requesterId,
+                        $requester->id,
                         number_format($amount, 2, '.', ' '),
                         $currency,
                         $description ?: '-'
@@ -258,7 +258,7 @@ class ExpenseService
             return $requestId;
         } catch (Throwable $e) {
             Log::error('Ошибка при создании заявки', [
-                'requester_id' => $requesterId,
+                'requester_id' => $requester->id,
                 'amount'       => $amount,
                 'currency'     => $currency,
                 'message'      => $e->getMessage(),
@@ -267,6 +267,28 @@ class ExpenseService
 
             return null;
         }
+    }
+
+    public static function sendToAccountant(
+        Nutgram $bot,
+        User $requester,
+        int $requestId,
+        float $amount,
+        string $currency
+    ) {
+        $accountant = User::where('company_id', $requester->company_id)
+            ->where('role', Role::ACCOUNTANT->value)->first();
+
+        $confirmData = "expense:issued:{$requestId}";
+
+        $bot->sendMessage(
+            chat_id: $accountant->telegram_id,
+            text: "Заявка #{$requestId} подтверждена "
+                . "директором.\nСумма: " . number_format((float) $amount, 2, '.', ' ') . " $currency\n"
+                . "Ожидает выдачи указанной суммы "
+                . $requester->full_name . ' (ID: ' . $requester->id . ')',
+            reply_markup: KeyboardTrait::inlineConfirmIssued($confirmData)
+        );
     }
 
     /** Delete request (with audit) */

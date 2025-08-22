@@ -24,6 +24,7 @@ return new class () extends Migration {
             $table->unsignedBigInteger('director_id')->nullable();
             $table->unsignedBigInteger('accountant_id')->nullable();
             $table->text('director_comment')->nullable();
+            $table->bigInteger('company_id');
             $table->timestampTz('approved_at')->nullable();
             $table->timestampTz('issued_at')->nullable();
             $table->timestampTz('created_at')->useCurrent();

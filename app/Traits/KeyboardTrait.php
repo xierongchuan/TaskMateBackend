@@ -53,6 +53,18 @@ trait KeyboardTrait
     }
 
     /**
+     * Inline клавиатура: Подтвердить выдачу (callback_data задаются)
+     */
+    public static function inlineConfirmIssued(
+        string $confirmData = 'confirm',
+    ): InlineKeyboardMarkup {
+        return InlineKeyboardMarkup::make()
+            ->addRow(
+                InlineKeyboardButton::make(text: '✅ Выдано', callback_data: $confirmData),
+            );
+    }
+
+    /**
      * Inline клавиатура: Подтвердить / Отменить (callback_data задаются)
      */
     public static function inlineConfirmDecline(
