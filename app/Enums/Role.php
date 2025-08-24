@@ -10,7 +10,7 @@ enum Role: string
     case ACCOUNTANT  = 'accountant';
     case DIRECTOR  = 'director';
 
-    /** Читабельная метка (RU) */
+    /** Читабельная метка */
     public function label(): string
     {
         return match ($this) {
