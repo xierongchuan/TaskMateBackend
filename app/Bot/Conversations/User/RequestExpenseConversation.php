@@ -80,6 +80,8 @@ MSG,
                 reply_markup: KeyboardTrait::userMenu()
             );
             $this->end();
+
+            return null;
         }
 
         $bot->sendMessage(
