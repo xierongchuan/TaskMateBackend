@@ -244,6 +244,8 @@ class ExpenseService
                             'message' => $sendEx->getMessage(),
                             'trace' => $sendEx->getTraceAsString(),
                         ]);
+
+                        return null;
                     }
                 } catch (Throwable $notifyEx) {
                     // Защищаемся: любые ошибки уведомлений не должны ломать основной процесс
@@ -252,6 +254,8 @@ class ExpenseService
                         'message' => $notifyEx->getMessage(),
                         'trace' => $notifyEx->getTraceAsString(),
                     ]);
+
+                    return null;
                 }
             }
 
