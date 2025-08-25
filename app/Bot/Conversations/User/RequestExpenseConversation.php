@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Bot\Conversations\User;
 
 use App\Enums\ExpenseStatus;
+use App\Services\ConversationStateService;
 use App\Services\ExpenseService;
 use App\Traits\KeyboardTrait;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,8 @@ class RequestExpenseConversation extends Conversation
 
     public function askAmount(Nutgram $bot)
     {
+        ConversationStateService::activateStatus($bot->userId());
+
         $bot->sendMessage('Введите сумму в UZS:');
 
         $this->next('handleAmount');
@@ -37,7 +40,15 @@ class RequestExpenseConversation extends Conversation
 
         if ($normalized === '' || !is_numeric($normalized) || (float)$normalized <= 0) {
             $bot->sendMessage('Неверный формат суммы. Введите положительное число, например: 100000');
-            // остаёмся в этом же шаге — повторный ввод
+
+            $this->next('handleAmount');
+            return;
+        }
+
+        // Проверяем не вышели ли значение ограничений типа данных в БД
+        if ($normalized > 9_999_999_999) {
+            $bot->sendMessage('Неверный формат суммы. Введите число менее 10 млрд.');
+
             $this->next('handleAmount');
             return;
         }
@@ -95,6 +106,6 @@ MSG,
     // опционально: вызывается при завершении (end) — можно уведомить, почистить данные и т.д.
     public function closing(Nutgram $bot)
     {
-        // например, логирование или уведомление менеджера
+        ConversationStateService::deactivateStatus($bot->userId());
     }
 }

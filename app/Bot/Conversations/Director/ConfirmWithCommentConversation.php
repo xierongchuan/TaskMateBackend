@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Bot\Conversations\Director;
 
+use App\Services\ConversationStateService;
 use App\Services\ExpenseService;
 use SergiX44\Nutgram\Conversations\Conversation;
 use SergiX44\Nutgram\Nutgram;
@@ -29,6 +30,8 @@ class ConfirmWithCommentConversation extends Conversation
         $this->requestId = (int) $id;
 
         $this->requestMessageId = $bot->messageId();
+
+        ConversationStateService::activateStatus($bot->userId());
 
         $bot->answerCallbackQuery();
 
@@ -145,6 +148,7 @@ class ConfirmWithCommentConversation extends Conversation
 
     public function closing(Nutgram $bot)
     {
+        ConversationStateService::deactivateStatus($bot->userId());
         $bot->sendMessage("Закрыто подтверждение заявки.");
     }
 }
