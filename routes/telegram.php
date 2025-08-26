@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 use App\Bot\Callbacks\ExpenseConfirmCallback;
 use App\Bot\Callbacks\ExpenseDeclineCallback;
+use App\Bot\Commands\Director\PendingExpensesCommand;
 use App\Enums\Role;
 use SergiX44\Nutgram\Nutgram;
 use App\Bot\Middleware\AuthUser;
@@ -30,6 +31,14 @@ $bot->onText(
     RequestExpenseConversation::class
 )
 ->middleware(new RoleMiddleware([Role::USER->value]))
+->middleware(AuthUser::class);
+
+// Director Commands
+$bot->onText(
+    '🔃 Ожидающие заявки',
+    PendingExpensesCommand::class
+)
+->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
 
 // Director Callbacks
