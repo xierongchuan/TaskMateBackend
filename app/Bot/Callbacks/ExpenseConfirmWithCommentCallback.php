@@ -31,7 +31,8 @@ class ExpenseConfirmWithCommentCallback
                     'actor_id' => $director->id,
                     'actor_role' => Role::DIRECTOR->value,
                     'action' => ExpenseStatus::APPROVED->value,
-                    'comment' => 'OK'
+                    'comment' => 'OK',
+                    'created_at' => now(),
                 ]);
 
                 $req->update([
@@ -50,7 +51,8 @@ class ExpenseConfirmWithCommentCallback
                     'payload' => [
                         'old_status' => ExpenseStatus::PENDING->value,
                         'new_status' => ExpenseStatus::APPROVED->value
-                    ]
+                    ],
+                    'created_at' => now()
                 ]);
             });
 
