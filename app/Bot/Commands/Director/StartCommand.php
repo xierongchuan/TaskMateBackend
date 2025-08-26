@@ -30,7 +30,6 @@ class StartCommand extends Command
                 reply_markup: KeyboardTrait::directorMenu()
             );
         } catch (\Throwable $e) {
-            // логируем, но не сливаем стек трейс пользователю
             Log::error('director.start.command.failed', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
