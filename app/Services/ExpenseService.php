@@ -19,45 +19,6 @@ use App\Models\User;
 
 class ExpenseService
 {
-    /** Director approves a request */
-    public function directorApprove(int $requestId, int $directorId, ?string $comment = null): void
-    {
-        DB::transaction(function () use ($requestId, $directorId, $comment) {
-            $req = ExpenseRequest::where('id', $requestId)->lockForUpdate()->firstOrFail();
-
-            if ($req->status !== 'pending_director') {
-                throw new \RuntimeException('Неверный статус заявки для подтверждения');
-            }
-
-            ExpenseApproval::create([
-                'expense_request_id' => $req->id,
-                'actor_id' => $directorId,
-                'actor_role' => 'director',
-                'action' => 'approved',
-                'comment' => $comment,
-                'created_at' => now(),
-            ]);
-
-            $oldStatus = $req->status;
-
-            $req->update([
-                'status' => 'director_approved',
-                'director_id' => $directorId,
-                'director_comment' => $comment,
-                'director_approved_at' => now(),
-            ]);
-
-            AuditLog::create([
-                'table_name' => 'expense_requests',
-                'record_id' => $req->id,
-                'actor_id' => $directorId,
-                'action' => 'director_approved',
-                'payload' => ['old_status' => $oldStatus, 'new_status' => 'director_approved'],
-                'created_at' => now(),
-            ]);
-        });
-    }
-
     /** Create request (with audit) */
     public static function createRequest(
         Nutgram $bot,
