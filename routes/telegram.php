@@ -37,7 +37,6 @@ $bot->onCallbackQueryData(
     'expense:confirm:{id}',
     ExpenseConfirmCallback::class
 )
-->middleware(ConversationGuard::class)
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
 
@@ -45,7 +44,6 @@ $bot->onCallbackQueryData(
     'expense:decline:{id}',
     ExpenseDeclineCallback::class
 )
-->middleware(ConversationGuard::class)
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
 
@@ -53,7 +51,6 @@ $bot->onCallbackQueryData(
     'expense:confirm_with_comment:{id}',
     ConfirmWithCommentConversation::class
 )
-->middleware(ConversationGuard::class)
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
 
@@ -62,6 +59,5 @@ $bot->onCallbackQueryData(
     'expense:issued:{id}',
     \App\Bot\Callbacks\ExpenseIssuedCallback::class
 )
-->middleware(ConversationGuard::class)
 ->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
 ->middleware(AuthUser::class);

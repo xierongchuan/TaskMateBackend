@@ -26,5 +26,5 @@ return [
     'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'null'),
 
     // Conversation cache lifetime
-    'conversationTtl' => 86400, // 24hrs
+    'conversationTtl' => 43200, // 24hrs
 ];

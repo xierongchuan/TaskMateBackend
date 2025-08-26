@@ -25,8 +25,6 @@ class RequestExpenseConversation extends Conversation
 
     public function askAmount(Nutgram $bot)
     {
-        ConversationStateService::activateStatus($bot->userId());
-
         $bot->sendMessage('Введите сумму в UZS:');
 
         $this->next('handleAmount');
@@ -106,6 +104,6 @@ MSG,
     // опционально: вызывается при завершении (end) — можно уведомить, почистить данные и т.д.
     public function closing(Nutgram $bot)
     {
-        ConversationStateService::deactivateStatus($bot->userId());
+        //
     }
 }

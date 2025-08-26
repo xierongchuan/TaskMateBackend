@@ -31,8 +31,6 @@ class ConfirmWithCommentConversation extends Conversation
 
         $this->requestMessageId = $bot->messageId();
 
-        ConversationStateService::activateStatus($bot->userId());
-
         $bot->answerCallbackQuery();
 
         $bot->sendMessage('Введите комментарий для подтверждения заявки (или /cancel для отмены):');
@@ -148,7 +146,6 @@ class ConfirmWithCommentConversation extends Conversation
 
     public function closing(Nutgram $bot)
     {
-        ConversationStateService::deactivateStatus($bot->userId());
         $bot->sendMessage("Закрыто подтверждение заявки.");
     }
 }

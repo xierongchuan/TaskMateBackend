@@ -30,8 +30,7 @@ class RoleMiddleware
 
         // Если роли переданы пустые — разрешаем всем залогиненным пользователям
         if (!empty($this->allowed)) {
-            // Предполагается, что у вас есть $user->role->name или $user->role_name
-            $roleName = $user->role->name ?? $user->role_name ?? $user->role ?? 'guest';
+            $roleName = $user->role ?? 'guest';
 
             if (!in_array($roleName, $this->allowed, true)) {
                 $bot->sendMessage('У вас недостаточно прав для выполнения этой команды.');
