@@ -28,7 +28,6 @@ class PendingExpensesCommand
                 ->get();
 
             foreach ($pendingExpenses as $key => $expense) {
-                // подготовим текст и inline-кнопки
                 $message = sprintf(
                     "Заявка #%d\nПользователь: %s (ID: %d)\nСумма: %s %s\nКомментарий: %s",
                     $expense->id,
