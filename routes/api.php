@@ -35,7 +35,6 @@ Route::prefix('v1')->group(function () {
     // Защищённые маршруты только для админов
     Route::middleware([
             'auth:sanctum',      // проверка токена Sanctum
-            'admin.token',       // middleware, сверяющий role === 'admin'
             'throttle:150,1'     // лимит запросов
         ])
         ->group(function () {
