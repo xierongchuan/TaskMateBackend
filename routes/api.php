@@ -13,13 +13,13 @@ Route::prefix('v1')->group(function () {
     Route::post(
         '/session',
         [SessionController::class, 'store']
-    )->middleware('throttle:5,1440');
+    )->middleware('throttle:100,1440');
 
     // Регистрация пользовтеля (регистрация)
     Route::post(
         '/register',
         [AuthController::class, 'register']
-    )->middleware('throttle:100,1440');
+    )->middleware('throttle:50,1440');
 
     // Закрытие сессии (логаут)
     Route::delete(
