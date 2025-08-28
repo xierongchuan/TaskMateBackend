@@ -32,7 +32,6 @@ Route::prefix('v1')->group(function () {
         return response()->json(['success' => true], 200);
     })->middleware('throttle:100,1');
 
-    // Защищённые маршруты только для админов
     Route::middleware([
             'auth:sanctum',      // проверка токена Sanctum
             'throttle:150,1'     // лимит запросов
