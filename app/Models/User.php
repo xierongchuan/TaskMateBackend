@@ -23,5 +23,6 @@ class User extends Authenticatable
         'phone',
         'role',
         'company_id',
+        'password'
     ];
 }
