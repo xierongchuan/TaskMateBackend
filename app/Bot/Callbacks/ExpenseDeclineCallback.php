@@ -22,7 +22,6 @@ class ExpenseDeclineCallback
     public function __invoke(Nutgram $bot, string $id): void
     {
         try {
-            // кто нажал — директор
             $director = auth()->user();
 
             $req = ExpenseRequest::find($id);
