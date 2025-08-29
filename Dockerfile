@@ -1,4 +1,4 @@
-FROM php:8.4.10-fpm
+FROM php:8.4.12-fpm
 
 # 1) Системные библиотеки для сборки расширений
 RUN apt-get update -y
