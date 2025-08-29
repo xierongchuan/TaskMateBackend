@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use App\Enums\Role;
 
 return new class () extends Migration {
@@ -16,26 +17,30 @@ return new class () extends Migration {
         Schema::create('users', function (Blueprint $table) {
             $table->bigIncrements('id'); // BIGSERIAL
             $table->string('login', 100)->unique();
-            $table->string('full_name', 2557);
-            $table->bigInteger('telegram_id');
-            $table->string('phone', 50);
+            $table->string('full_name', 255)->nullable();
+            $table->bigInteger('telegram_id')->nullable();
+            $table->string('phone', 50)->nullable();
             $table->string('role', 50)->default(Role::USER->value);
-            $table->bigInteger('company_id');
+            $table->bigInteger('company_id')->nullable();
+            $table->string('password')->nullable();
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();
         });
 
-        DB::statement(
-            "ALTER TABLE users ALTER COLUMN role DROP DEFAULT;"
-        );
-        DB::statement(
-            "ALTER TABLE users ALTER COLUMN role TYPE user_roles USING role::user_roles;"
-        );
-        DB::statement(
-            "ALTER TABLE users ALTER COLUMN role SET DEFAULT '"
-            . Role::USER->value
-            . "';"
-        );
+        // Skip PostgreSQL specific alterations for SQLite
+        if (config('database.default') !== 'sqlite') {
+            DB::statement(
+                "ALTER TABLE users ALTER COLUMN role DROP DEFAULT;"
+            );
+            DB::statement(
+                "ALTER TABLE users ALTER COLUMN role TYPE user_roles USING role::user_roles;"
+            );
+            DB::statement(
+                "ALTER TABLE users ALTER COLUMN role SET DEFAULT '"
+                . Role::USER->value
+                . "';"
+            );
+        }
     }
 
     /**
