@@ -33,8 +33,8 @@ Route::prefix('v1')->group(function () {
     })->middleware('throttle:100,1');
 
     Route::middleware([
-            'auth:sanctum',      // проверка токена Sanctum
-            'throttle:150,1'     // лимит запросов
+            'auth:sanctum',
+            'throttle:150,1'
         ])
         ->group(function () {
             Route::get('/users', [UserApiController::class, 'index']);
