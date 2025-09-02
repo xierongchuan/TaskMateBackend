@@ -178,7 +178,7 @@ class ExpenseService
         );
     }
 
-    /** Delete request (with audit) */
+    /** Delete request */
     public function deleteRequest(int $requestId, int $actorId, ?string $reason = null): void
     {
         DB::transaction(function () use ($requestId, $actorId, $reason) {
