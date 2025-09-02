@@ -19,7 +19,7 @@ use App\Models\User;
 
 class ExpenseService
 {
-    /** Create request (with audit) */
+    /** Create request */
     public static function createRequest(
         Nutgram $bot,
         User $requester,
@@ -155,6 +155,7 @@ class ExpenseService
         }
     }
 
+    /** Notify accountant */
     public static function sendToAccountant(
         Nutgram $bot,
         User $requester,
