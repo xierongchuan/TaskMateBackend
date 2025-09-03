@@ -19,7 +19,7 @@ use App\Models\User;
 
 class ExpenseService
 {
-    /** Create request */
+    /* Create request */
     public static function createRequest(
         Nutgram $bot,
         User $requester,
@@ -155,7 +155,7 @@ class ExpenseService
         }
     }
 
-    /** Notify accountant */
+    /* Notify accountant */
     public static function sendToAccountant(
         Nutgram $bot,
         User $requester,
@@ -178,7 +178,7 @@ class ExpenseService
         );
     }
 
-    /** Delete request */
+    /* Delete request */
     public function deleteRequest(int $requestId, int $actorId, ?string $reason = null): void
     {
         DB::transaction(function () use ($requestId, $actorId, $reason) {
