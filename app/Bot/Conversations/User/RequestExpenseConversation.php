@@ -64,7 +64,7 @@ class RequestExpenseConversation extends Conversation
         $this->comment = trim($bot->message()?->text ?? '');
 
         if ($this->comment === '') {
-            $bot->sendMessage('Комментарий не может быть пустым. Введите, пожалуйста, комментарий:');
+            $bot->sendMessage('Комментарий не может быть пустым. Введите пожалуйста комментарий:');
             $this->next('handleComment');
             return;
         }
