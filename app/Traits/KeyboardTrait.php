@@ -20,7 +20,7 @@ trait KeyboardTrait
         return ReplyKeyboardMarkup::make(resize_keyboard: true, one_time_keyboard: false)
             ->addRow(
                 KeyboardButton::make('📝 Создать заявку'),
-                // KeyboardButton::make('📄 Мои заявки')
+                KeyboardButton::make('📄 Мои заявки')
             );
         // ->addRow(
         //     KeyboardButton::make('📞 Поделиться номером', request_contact: true),
@@ -35,7 +35,8 @@ trait KeyboardTrait
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true)
             ->addRow(
-                KeyboardButton::make('🔃 Ожидающие заявки')
+                KeyboardButton::make('🔃 Ожидающие заявки'),
+                KeyboardButton::make('📋 История заявок')
             );
         // ->addRow(
         //     KeyboardButton::make('🧾 Отчёты'),
@@ -50,7 +51,8 @@ trait KeyboardTrait
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true)
             ->addRow(
-                KeyboardButton::make('💰 Ожидающие выдачи')
+                KeyboardButton::make('💰 Ожидающие выдачи'),
+                KeyboardButton::make('💼 История операций')
             );
     }
 

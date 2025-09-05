@@ -33,6 +33,13 @@ $bot->onText(
 ->middleware(new RoleMiddleware([Role::USER->value]))
 ->middleware(AuthUser::class);
 
+$bot->onText(
+    '📄 Мои заявки',
+    \App\Bot\Commands\User\HistoryCommand::class
+)
+->middleware(new RoleMiddleware([Role::USER->value]))
+->middleware(AuthUser::class);
+
 // Director Commands
 $bot->onText(
     '🔃 Ожидающие заявки',
@@ -41,10 +48,24 @@ $bot->onText(
 ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);
 
+$bot->onText(
+    '📋 История заявок',
+    \App\Bot\Commands\Director\HistoryCommand::class
+)
+->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
+->middleware(AuthUser::class);
+
 // Accountant Commands
 $bot->onText(
     '💰 Ожидающие выдачи',
     \App\Bot\Commands\Accountant\PendingExpensesCommand::class
+)
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
+->middleware(AuthUser::class);
+
+$bot->onText(
+    '💼 История операций',
+    \App\Bot\Commands\Accountant\HistoryCommand::class
 )
 ->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
 ->middleware(AuthUser::class);
