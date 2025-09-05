@@ -34,11 +34,19 @@ $bot->onText(
 ->middleware(AuthUser::class);
 
 // Director Commands
+// $bot->onText(
+//     '🔃 Ожидающие заявки',
+//     PendingExpensesCommand::class
+// )
+// ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
+// ->middleware(AuthUser::class);
+
+// Accountant Commands
 $bot->onText(
-    '🔃 Ожидающие заявки',
-    PendingExpensesCommand::class
+    '💰 Ожидающие выдачи',
+    \App\Bot\Commands\Accountant\PendingExpensesCommand::class
 )
-->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
 ->middleware(AuthUser::class);
 
 // Director Callbacks
@@ -68,5 +76,5 @@ $bot->onCallbackQueryData(
     'expense:issued:{id}',
     \App\Bot\Callbacks\ExpenseIssuedCallback::class
 )
-->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value, Role::DIRECTOR->value]))
 ->middleware(AuthUser::class);

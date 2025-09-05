@@ -4,105 +4,129 @@ declare(strict_types=1);
 
 namespace App\Bot\Conversations\User;
 
-use App\Enums\ExpenseStatus;
-use App\Services\ConversationStateService;
-use App\Services\ExpenseService;
-use App\Traits\KeyboardTrait;
-use Illuminate\Support\Facades\Log;
-use SergiX44\Nutgram\Conversations\Conversation;
+use App\Bot\Abstracts\BaseConversation;
+use App\Services\Contracts\ExpenseServiceInterface;
+use App\Services\Contracts\ValidationServiceInterface;
 use SergiX44\Nutgram\Nutgram;
-use Illuminate\Support\Facades\DB;
-use App\Models\ExpenseRequest;
-use App\Models\ExpenseApproval;
-use App\Models\User;
 
-class RequestExpenseConversation extends Conversation
+/**
+ * Conversation for requesting expenses.
+ * Refactored to use base class and follow SOLID principles.
+ */
+
+class RequestExpenseConversation extends BaseConversation
 {
     protected ?string $step = 'askAmount';
 
     public ?float $amount = null;
     public ?string $comment = null;
 
+    /**
+     * Get validation service from container.
+     */
+    private function getValidationService(): ValidationServiceInterface
+    {
+        return app(ValidationServiceInterface::class);
+    }
+
+    /**
+     * Get expense service from container.
+     */
+    private function getExpenseService(): ExpenseServiceInterface
+    {
+        return app(ExpenseServiceInterface::class);
+    }
+
+    /**
+     * Ask for expense amount.
+     */
     public function askAmount(Nutgram $bot)
     {
         $bot->sendMessage('Введите сумму в UZS:');
-
         $this->next('handleAmount');
     }
 
+    /**
+     * Handle amount input with validation.
+     */
     public function handleAmount(Nutgram $bot)
     {
-        $text = trim($bot->message()?->text ?? '');
-        // допускаем запятую как разделитель, убираем пробелы
-        $normalized = str_replace([',', ' '], ['.', ''], $text);
+        try {
+            $text = trim($bot->message()?->text ?? '');
+            $validation = $this->getValidationService()->validateAmount($text);
 
-        if ($normalized === '' || !is_numeric($normalized) || (float)$normalized <= 0) {
-            $bot->sendMessage('Неверный формат суммы. Введите положительное число, например: 100000');
+            if (!$validation['valid']) {
+                $bot->sendMessage($validation['message']);
+                $this->next('handleAmount');
+                return;
+            }
 
-            $this->next('handleAmount');
-            return;
+            $this->amount = $validation['value'];
+            $bot->sendMessage(
+                "Сумма принята: " . number_format($this->amount, 2, '.', ' ')
+                . "\nПожалуйста, введите комментарий (цель расхода):"
+            );
+            $this->next('handleComment');
+        } catch (\Throwable $e) {
+            $this->handleError($bot, $e, 'handleAmount');
         }
-
-        // Проверяем не вышели ли значение ограничений типа данных в БД
-        if ($normalized > 9_999_999_999) {
-            $bot->sendMessage('Неверный формат суммы. Введите число менее 10 млрд.');
-
-            $this->next('handleAmount');
-            return;
-        }
-
-        $this->amount = (float) $normalized;
-        $bot->sendMessage(
-            "Сумма принята: " . number_format((float) $this->amount, 2, '.', ' ')
-            . "\nПожалуйста, введите комментарий (цель расхода):"
-        );
-        $this->next('handleComment');
     }
 
+    /**
+     * Handle comment input with validation.
+     */
     public function handleComment(Nutgram $bot)
     {
-        $this->comment = trim($bot->message()?->text ?? '');
+        try {
+            $text = trim($bot->message()?->text ?? '');
+            $validation = $this->getValidationService()->validateComment($text);
 
-        if ($this->comment === '') {
-            $bot->sendMessage('Комментарий не может быть пустым. Введите пожалуйста комментарий:');
-            $this->next('handleComment');
-            return;
-        }
+            if (!$validation['valid']) {
+                $bot->sendMessage($validation['message']);
+                $this->next('handleComment');
+                return;
+            }
 
-        $user = auth()->user();
+            $this->comment = $text;
+            $user = $this->getAuthenticatedUser();
 
-        $result = ExpenseService::createRequest(
-            $bot,
-            $user,
-            $this->comment,
-            $this->amount,
-            'UZS'
-        );
+            $result = $this->getExpenseService()->createRequest(
+                $bot,
+                $user,
+                $this->comment,
+                $this->amount,
+                'UZS'
+            );
 
-        if ($result === null) {
-            $bot->sendMessage(
-                <<<MSG
+            if ($result === null) {
+                $bot->sendMessage(
+                    <<<MSG
 В процессе создания заявки произошла ошибка,
 просим немедленно сообщить администратору
 и подождать до починки неполадки в системе!
 MSG,
-                reply_markup: KeyboardTrait::userMenu()
+                    reply_markup: static::userMenu()
+                );
+                $this->end();
+                return;
+            }
+
+            $bot->sendMessage(
+                "Готово! — Создана заявка #$result\nНа сумму: " . number_format($this->amount, 2, '.', ' ')
+                . " UZS",
+                reply_markup: static::userMenu()
             );
             $this->end();
-
-            return null;
+        } catch (\Throwable $e) {
+            $this->handleError($bot, $e, 'handleComment');
         }
-
-        $bot->sendMessage(
-            "Готово! — Создана заявка #$result\nНа сумму: " . number_format((float) $this->amount, 2, '.', ' ')
-            . " UZS",
-            reply_markup: KeyboardTrait::userMenu()
-        );
-        $this->end();
     }
 
-    public function closing(Nutgram $bot)
+    /**
+     * Get default keyboard for user.
+     */
+    protected function getDefaultKeyboard()
     {
-        //
+        return static::userMenu();
     }
 }

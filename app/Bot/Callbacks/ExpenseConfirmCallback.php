@@ -4,90 +4,79 @@ declare(strict_types=1);
 
 namespace App\Bot\Callbacks;
 
-use App\Enums\Role;
-use App\Models\ExpenseRequest;
-use App\Enums\ExpenseStatus;
-use App\Models\User;
-use App\Services\ExpenseService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Bot\Abstracts\BaseCallbackHandler;
+use App\Services\Contracts\ExpenseApprovalServiceInterface;
+use App\Services\Contracts\NotificationServiceInterface;
 use SergiX44\Nutgram\Nutgram;
 
-class ExpenseConfirmCallback
+/**
+ * Handle expense confirmation callback.
+ * Refactored to use base class and follow SOLID principles.
+ */
+
+class ExpenseConfirmCallback extends BaseCallbackHandler
 {
-    public function __invoke(Nutgram $bot, string $id): void
+    /**
+     * Get approval service from container.
+     */
+    private function getApprovalService(): ExpenseApprovalServiceInterface
     {
-        try {
-            $director = auth()->user();
-            $req = ExpenseRequest::where('id', $id)->lockForUpdate()->firstOrFail();
-            $requester = User::find($req->requester_id);
+        return app(ExpenseApprovalServiceInterface::class);
+    }
 
-            DB::transaction(function () use ($req, $director) {
-                if ($req->status !== ExpenseStatus::PENDING->value) {
-                    throw new \Exception('Неверный статус заявки');
-                }
+    /**
+     * Get notification service from container.
+     */
+    private function getNotificationService(): NotificationServiceInterface
+    {
+        return app(NotificationServiceInterface::class);
+    }
 
-                \App\Models\ExpenseApproval::create([
-                    'expense_request_id' => $req->id,
-                    'actor_id' => $director->id,
-                    'actor_role' => Role::DIRECTOR->value,
-                    'action' => ExpenseStatus::APPROVED->value,
-                    'comment' => '-'
-                ]);
+    /**
+     * Execute the approval logic.
+     */
+    protected function execute(Nutgram $bot, string $id): void
+    {
+        $director = $this->validateUser($bot);
+        $requestId = (int) $id;
 
-                $req->update([
-                    'status' => ExpenseStatus::APPROVED->value,
-                    'director_id' => $director->id,
-                    'director_comment' => '-',
-                    'approved_at' => now(),
-                    'updated_at' => now(),
-                ]);
+        $result = $this->getApprovalService()->approveRequest(
+            $bot,
+            $requestId,
+            $director
+        );
 
-                \App\Models\AuditLog::create([
-                    'table_name' => 'expense_requests',
-                    'record_id' => $req->id,
-                    'actor_id' => $director->id,
-                    'action' => ExpenseStatus::APPROVED->value,
-                    'payload' => [
-                        'old_status' => ExpenseStatus::PENDING->value,
-                        'new_status' => ExpenseStatus::APPROVED->value
-                    ],
-                    'created_at' => now(),
-                ]);
-            });
+        if (!$result['success']) {
+            throw new \RuntimeException($result['message'] ?? 'Ошибка при подтверждении заявки');
+        }
 
-            $bot->editMessageText(
-                text: sprintf(
-                    <<<MSG
+        $request = $result['request'];
+        $requester = $request->requester;
+
+        // Update the message to show approval
+        $message = sprintf(
+            <<<MSG
 ✅ Заявка #%d подтверждена директором
 Пользователь: %s (ID: %d)
 Сумма: %s %s
 Комментарий: %s
 MSG,
-                    $req->id,
-                    $requester->full_name ?? ($requester->login ?? 'Unknown'),
-                    $req->requester_id,
-                    number_format((float) $req->amount, 2, '.', ' '),
-                    $req->currency,
-                    $req->description ?: '-'
-                ),
-                reply_markup: null
-            );
+            $request->id,
+            $requester->full_name ?? ($requester->login ?? 'Unknown'),
+            $request->requester_id,
+            number_format((float) $request->amount, 2, '.', ' '),
+            $request->currency,
+            $request->description ?: '-'
+        );
 
-            $bot->sendMessage(
-                chat_id: $requester->telegram_id,
-                text: "✅ Ваша заявка #{$req->id} подтверждена директором. Ожидайте выдачи от бухгалтера."
-            );
+        $this->getNotificationService()->updateMessage($bot, $message);
+    }
 
-            ExpenseService::sendToAccountant($bot, $requester, $req->id, (float) $req->amount, $req->currency);
-
-            Log::info("Заявка #{$req->id} подтверждена директором {$director->id}");
-        } catch (\Throwable $e) {
-            Log::error("Ошибка при подтверждении заявки #$id", [
-                'exception' => $e,
-                'trace' => $e->getTraceAsString(),
-            ]);
-            $bot->answerCallbackQuery(text: "Ошибка при подтверждении заявки.", show_alert: true);
-        }
+    /**
+     * Get specific error message for this callback.
+     */
+    protected function getErrorMessage(\Throwable $e): string
+    {
+        return 'Ошибка при подтверждении заявки.';
     }
 }

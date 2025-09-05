@@ -44,6 +44,17 @@ trait KeyboardTrait
     }
 
     /**
+     * Клавиатура бухгалтера
+     */
+    public static function accountantMenu(): ReplyKeyboardMarkup
+    {
+        return ReplyKeyboardMarkup::make(resize_keyboard: true)
+            ->addRow(
+                KeyboardButton::make('💰 Ожидающие выдачи')
+            );
+    }
+
+    /**
      * Кнопка запроса контакта (на одну кнопку) — удобно если нужен только контакт
      */
     public static function contactRequestKeyboard(string $label = 'Отправить номер'): ReplyKeyboardMarkup
