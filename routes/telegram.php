@@ -34,12 +34,12 @@ $bot->onText(
 ->middleware(AuthUser::class);
 
 // Director Commands
-// $bot->onText(
-//     '🔃 Ожидающие заявки',
-//     PendingExpensesCommand::class
-// )
-// ->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
-// ->middleware(AuthUser::class);
+$bot->onText(
+    '🔃 Ожидающие заявки',
+    PendingExpensesCommand::class
+)
+->middleware(new RoleMiddleware([Role::DIRECTOR->value]))
+->middleware(AuthUser::class);
 
 // Accountant Commands
 $bot->onText(
