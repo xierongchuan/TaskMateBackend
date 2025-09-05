@@ -44,7 +44,7 @@ abstract class BaseConversationHandler extends Conversation
             'context' => $context,
             'conversation' => static::class,
             'user_id' => auth()->id(),
-            'telegram_id' => $bot->user()?->id,
+            'telegram_id' => $bot->user()?->id ?? $bot->from()?->id ?? null,
             'message' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
         ]);
