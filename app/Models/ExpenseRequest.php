@@ -13,6 +13,12 @@ class ExpenseRequest extends Model
 
     protected $table = 'expense_requests';
 
+    protected $primaryKey = 'id';
+
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     protected $fillable = [
         'requester_id',
         'title',
