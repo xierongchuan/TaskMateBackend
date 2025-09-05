@@ -76,5 +76,19 @@ $bot->onCallbackQueryData(
     'expense:issued:{id}',
     \App\Bot\Callbacks\ExpenseIssuedCallback::class
 )
-->middleware(new RoleMiddleware([Role::ACCOUNTANT->value, Role::DIRECTOR->value]))
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
+->middleware(AuthUser::class);
+
+$bot->onCallbackQueryData(
+    'expense:issued_full:{id}',
+    \App\Bot\Callbacks\ExpenseIssuedFullCallback::class
+)
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
+->middleware(AuthUser::class);
+
+$bot->onCallbackQueryData(
+    'expense:issued_different:{id}',
+    \App\Bot\Conversations\Accountant\IssueDifferentAmountConversation::class
+)
+->middleware(new RoleMiddleware([Role::ACCOUNTANT->value]))
 ->middleware(AuthUser::class);

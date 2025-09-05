@@ -76,6 +76,22 @@ trait KeyboardTrait
     }
 
     /**
+     * Inline клавиатура: Подтвердить выдачу полной суммы / Выдать иную сумму
+     */
+    public static function inlineConfirmIssuedWithAmount(
+        string $confirmFullData = 'confirm_full',
+        string $confirmDifferentData = 'confirm_different_amount'
+    ): InlineKeyboardMarkup {
+        return InlineKeyboardMarkup::make()
+            ->addRow(
+                InlineKeyboardButton::make(text: '✅ Выдать полную сумму', callback_data: $confirmFullData),
+            )
+            ->addRow(
+                InlineKeyboardButton::make(text: '💰 Выдать иную сумму', callback_data: $confirmDifferentData),
+            );
+    }
+
+    /**
      * Inline клавиатура: Подтвердить / Отменить (callback_data задаются)
      */
     public static function inlineConfirmDecline(

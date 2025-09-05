@@ -52,7 +52,10 @@ class PendingExpensesCommand extends BaseCommandHandler
                 $message .= "\nКомментарий директора: {$expense->director_comment}";
             }
 
-            $keyboard = static::inlineConfirmIssued("expense:issued:{$expense->id}");
+            $keyboard = static::inlineConfirmIssuedWithAmount(
+                "expense:issued_full:{$expense->id}",
+                "expense:issued_different:{$expense->id}"
+            );
 
             $bot->sendMessage(
                 $message,

@@ -99,7 +99,10 @@ class TelegramNotificationService implements NotificationServiceInterface
             $message .= "\nКомментарий директора: {$directorComment}";
         }
 
-        $keyboard = static::inlineConfirmIssued("expense:issued:{$request->id}");
+        $keyboard = static::inlineConfirmIssuedWithAmount(
+            "expense:issued_full:{$request->id}",
+            "expense:issued_different:{$request->id}"
+        );
 
         return $this->sendMessage($bot, $accountant->telegram_id, $message, $keyboard);
     }
