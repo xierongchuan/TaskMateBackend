@@ -50,7 +50,8 @@ class IssueDifferentAmountConversation extends BaseConversationHandler
 
             $bot->answerCallbackQuery();
             $message = sprintf(
-                "Заявка #%d\nПользователь: %s\nПодтвержденная сумма: %s %s\n\nВведите сумму для выдачи (или /cancel для отмены):",
+                "Заявка #%d\nПользователь: %s\nПодтвержденная сумма: %s %s\n\n" .
+                "Введите сумму для выдачи (или /cancel для отмены):",
                 $this->originalRequest->id,
                 $this->originalRequest->requester->full_name ?? $this->originalRequest->requester->login ?? 'Unknown',
                 number_format((float) $this->originalRequest->amount, 2, '.', ' '),
@@ -135,7 +136,8 @@ class IssueDifferentAmountConversation extends BaseConversationHandler
                 $originalAmount = $request->amount;
 
                 // Update request with new issued amount and add comment about the difference
-                $comment = "Выдано бухгалтером. Подтвержденная сумма: {$originalAmount} {$request->currency}, выдана: {$newAmount} {$request->currency}";
+                $comment = "Выдано бухгалтером. Подтвержденная сумма: {$originalAmount} {$request->currency}, " .
+                    "выдана: {$newAmount} {$request->currency}";
 
                 // Create approval record with different amount info
                 ExpenseApproval::create([

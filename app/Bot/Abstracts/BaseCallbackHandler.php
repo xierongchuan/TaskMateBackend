@@ -54,7 +54,7 @@ abstract class BaseCallbackHandler implements CallbackHandlerInterface
      */
     protected function handleError(Nutgram $bot, string $id, Throwable $e): void
     {
-        Log::error($this->getLogContext($id, $e));
+        Log::error('Callback handler error: ' . $e->getMessage(), $this->getLogContext($id, $e));
 
         $bot->answerCallbackQuery(
             text: $this->getErrorMessage($e),

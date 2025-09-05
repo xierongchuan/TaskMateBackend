@@ -116,6 +116,11 @@ class TelegramNotificationService implements NotificationServiceInterface
         ?int $messageId = null
     ): bool {
         try {
+            // If no messageId provided, try to get it from callback query
+            if ($messageId === null && $bot->callbackQuery()) {
+                $messageId = $bot->callbackQuery()->message?->message_id;
+            }
+
             $bot->editMessageText(
                 text: $text,
                 reply_markup: null,

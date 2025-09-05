@@ -57,7 +57,7 @@ abstract class BaseConversation extends Conversation implements ConversationInte
      */
     protected function handleError(Nutgram $bot, Throwable $e, string $step): void
     {
-        Log::error([
+        Log::error('Conversation error', [
             'conversation' => static::class,
             'step' => $step,
             'message' => $e->getMessage(),

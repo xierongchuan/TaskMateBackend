@@ -69,7 +69,10 @@ MSG,
             $request->description ?: '-'
         );
 
-        $this->getNotificationService()->updateMessage($bot, $message);
+        $bot->editMessageText(
+            text: $message,
+            reply_markup: null
+        );
     }
 
     /**

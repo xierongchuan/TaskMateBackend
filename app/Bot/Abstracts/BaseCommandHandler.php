@@ -58,7 +58,7 @@ abstract class BaseCommandHandler extends Command implements CommandHandlerInter
      */
     protected function handleError(Nutgram $bot, Throwable $e): void
     {
-        Log::error($this->getLogContext($e));
+        Log::error('Command execution failed: ' . $e->getMessage(), $this->getLogContext($e));
 
         $bot->sendMessage($this->getErrorMessage($e));
     }

@@ -98,7 +98,10 @@ class ConfirmWithCommentConversation extends BaseConversation
             try {
                 $bot->editMessageText(
                     text: sprintf(
-                        "✅ Заявка #%d подтверждена директором\nПользователь: %s (ID: %d)\nСумма: %s %s\nКомментарий: %s",
+                        "✅ Заявка #%d подтверждена директором\n" .
+                        "Пользователь: %s (ID: %d)\n" .
+                        "Сумма: %s %s\n" .
+                        "Комментарий: %s",
                         $request->id,
                         $requester->full_name ?? ($requester->login ?? 'Unknown'),
                         $request->requester_id,

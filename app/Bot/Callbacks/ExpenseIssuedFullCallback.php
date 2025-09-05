@@ -20,6 +20,8 @@ class ExpenseIssuedFullCallback extends BaseCallbackHandler
      */
     protected function execute(Nutgram $bot, string $id): void
     {
+        $bot->answerCallbackQuery();
+
         $accountant = $this->validateUser($bot);
         $requestId = (int) $id;
 

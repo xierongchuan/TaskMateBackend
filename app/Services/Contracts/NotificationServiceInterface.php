@@ -60,4 +60,18 @@ interface NotificationServiceInterface
         ExpenseRequest $request,
         ?string $directorComment = null
     ): bool;
+
+    /**
+     * Update existing message (for callbacks).
+     *
+     * @param Nutgram $bot Bot instance
+     * @param string $text New message text
+     * @param int|null $messageId Message ID to update (if null, uses callback query message)
+     * @return bool Success status
+     */
+    public function updateMessage(
+        Nutgram $bot,
+        string $text,
+        ?int $messageId = null
+    ): bool;
 }
