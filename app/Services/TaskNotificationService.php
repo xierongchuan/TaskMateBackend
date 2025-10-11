@@ -20,6 +20,14 @@ class TaskNotificationService
     ) {}
 
     /**
+     * Send task notification to a specific user (alias for sendTaskToUser)
+     */
+    public function notifyUser(User $user, Task $task): bool
+    {
+        return $this->sendTaskToUser($task, $user);
+    }
+
+    /**
      * Send task notification to a specific user
      */
     public function sendTaskToUser(Task $task, User $user): bool
