@@ -19,6 +19,7 @@ return new class () extends Migration {
             $table->timestampTz('shift_start');
             $table->timestampTz('shift_end')->nullable();
             $table->string('opening_photo_path', 500)->nullable();
+            $table->string('closing_photo_path', 500)->nullable();
             $table->string('status', 50)->default('open'); // open, closed, late
             $table->integer('late_minutes')->default(0);
             $table->timestampTz('scheduled_start')->nullable();

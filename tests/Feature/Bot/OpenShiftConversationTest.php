@@ -36,7 +36,7 @@ test('employee can start open shift conversation', function () {
     $this->bot
         ->hearText('/openshift')
         ->reply()
-        ->assertReplyText('📸 Пожалуйста, загрузите фото экрана компьютера');
+        ->assertReplyText('📸 Пожалуйста, загрузите фото экрана компьютера с текущим временем для открытия смены.');
 });
 
 test('employee cannot open shift if already has open shift', function () {

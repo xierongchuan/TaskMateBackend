@@ -50,14 +50,23 @@ class ArchiveOldTasksJob implements ShouldQueue
                     ->get();
 
                 foreach ($tasksToArchive as $task) {
-                    // Check if all assignments are completed
-                    $allCompleted = $task->assignments()
-                        ->whereDoesntHave('responses', function ($query) {
-                            $query->where('status', 'completed');
-                        })
-                        ->count() === 0;
+                    // Check if all assigned users have completed responses
+                    $assignments = $task->assignments;
+                    $allCompleted = true;
 
-                    if ($allCompleted) {
+                    foreach ($assignments as $assignment) {
+                        $hasCompletedResponse = $task->responses()
+                            ->where('user_id', $assignment->user_id)
+                            ->where('status', 'completed')
+                            ->exists();
+
+                        if (!$hasCompletedResponse) {
+                            $allCompleted = false;
+                            break;
+                        }
+                    }
+
+                    if ($allCompleted && $assignments->count() > 0) {
                         $task->archived_at = $now;
                         $task->save();
                         $archivedCount++;
@@ -78,13 +87,23 @@ class ArchiveOldTasksJob implements ShouldQueue
                 ->get();
 
             foreach ($globalTasksToArchive as $task) {
-                $allCompleted = $task->assignments()
-                    ->whereDoesntHave('responses', function ($query) {
-                        $query->where('status', 'completed');
-                    })
-                    ->count() === 0;
+                // Check if all assigned users have completed responses
+                $assignments = $task->assignments;
+                $allCompleted = true;
 
-                if ($allCompleted) {
+                foreach ($assignments as $assignment) {
+                    $hasCompletedResponse = $task->responses()
+                        ->where('user_id', $assignment->user_id)
+                        ->where('status', 'completed')
+                        ->exists();
+
+                    if (!$hasCompletedResponse) {
+                        $allCompleted = false;
+                        break;
+                    }
+                }
+
+                if ($allCompleted && $assignments->count() > 0) {
                     $task->archived_at = $now;
                     $task->save();
                     $archivedCount++;
