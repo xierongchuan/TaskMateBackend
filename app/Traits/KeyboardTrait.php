@@ -13,47 +13,58 @@ use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
 trait KeyboardTrait
 {
     /**
-     * Клавиатура пользователя (reply keyboard)
+     * Клавиатура сотрудника (Employee)
      */
-    public static function userMenu(): ReplyKeyboardMarkup
+    public static function employeeMenu(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true, one_time_keyboard: false)
             ->addRow(
-                KeyboardButton::make('📝 Создать заявку'),
-                KeyboardButton::make('📄 Мои заявки')
+                KeyboardButton::make('🔓 Открыть смену'),
+                KeyboardButton::make('🔒 Закрыть смену')
             );
-        // ->addRow(
-        //     KeyboardButton::make('📞 Поделиться номером', request_contact: true),
-        //     KeyboardButton::make('❓ Помощь')
-        // );
+        // TODO: Add task response buttons when implemented
     }
 
     /**
-     * Клавиатура директора
+     * Клавиатура управляющего (Manager)
      */
-    public static function directorMenu(): ReplyKeyboardMarkup
+    public static function managerMenu(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true)
             ->addRow(
-                KeyboardButton::make('🔃 Ожидающие заявки'),
-                KeyboardButton::make('📋 История заявок')
+                KeyboardButton::make('📊 Смены'),
+                KeyboardButton::make('📋 Задачи')
             );
-        // ->addRow(
-        //     KeyboardButton::make('🧾 Отчёты'),
-        //     KeyboardButton::make('◀️ Назад')
-        // );
+        // TODO: Add more manager functions via web admin panel
     }
 
     /**
-     * Клавиатура бухгалтера
+     * Клавиатура наблюдателя (Observer)
      */
-    public static function accountantMenu(): ReplyKeyboardMarkup
+    public static function observerMenu(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true)
             ->addRow(
-                KeyboardButton::make('💰 Ожидающие выдачи'),
-                KeyboardButton::make('💼 История операций')
+                KeyboardButton::make('👀 Просмотр смен'),
+                KeyboardButton::make('📋 Просмотр задач')
             );
+    }
+
+    /**
+     * Клавиатура владельца (Owner)
+     */
+    public static function ownerMenu(): ReplyKeyboardMarkup
+    {
+        return ReplyKeyboardMarkup::make(resize_keyboard: true)
+            ->addRow(
+                KeyboardButton::make('🏢 Салоны'),
+                KeyboardButton::make('👥 Сотрудники')
+            )
+            ->addRow(
+                KeyboardButton::make('📊 Смены'),
+                KeyboardButton::make('📋 Задачи')
+            );
+        // TODO: Full access to all features
     }
 
     /**
@@ -166,5 +177,14 @@ trait KeyboardTrait
                 KeyboardButton::make($yes),
                 KeyboardButton::make($no)
             );
+    }
+
+    /**
+     * Inline keyboard with cancel button
+     */
+    public static function cancelKeyboard(string $text = '❌ Отменить', string $data = 'cancel'): InlineKeyboardMarkup
+    {
+        return InlineKeyboardMarkup::make()
+            ->addRow(InlineKeyboardButton::make(text: $text, callback_data: $data));
     }
 }

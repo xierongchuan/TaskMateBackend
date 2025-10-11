@@ -32,7 +32,7 @@ class AuthController extends Controller
             'telegram_id' => 0,
             'company_id' => 0,
             'phone' => '+0000000000',
-            'role'      => Role::USER->value,
+            'role'      => Role::EMPLOYEE->value,
         ]);
 
         $token = $user->createToken('user-token')->plainTextToken;

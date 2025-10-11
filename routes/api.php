@@ -3,7 +3,12 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\SessionController;
+use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Controllers\Api\V1\ShiftController;
+use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,8 +42,40 @@ Route::prefix('v1')->group(function () {
             'throttle:150,1'
         ])
         ->group(function () {
+            // Users
             Route::get('/users', [UserApiController::class, 'index']);
             Route::get('/users/{id}', [UserApiController::class, 'show']);
             Route::get('/users/{id}/status', [UserApiController::class, 'status']);
+
+            // Dealerships
+            Route::get('/dealerships', [DealershipController::class, 'index']);
+            Route::post('/dealerships', [DealershipController::class, 'store']);
+            Route::get('/dealerships/{id}', [DealershipController::class, 'show']);
+            Route::put('/dealerships/{id}', [DealershipController::class, 'update']);
+
+            // Shifts
+            Route::get('/shifts', [ShiftController::class, 'index']);
+            Route::get('/shifts/current', [ShiftController::class, 'current']);
+            Route::get('/shifts/statistics', [ShiftController::class, 'statistics']);
+            Route::get('/shifts/{id}', [ShiftController::class, 'show']);
+
+            // Tasks
+            Route::get('/tasks', [TaskController::class, 'index']);
+            Route::post('/tasks', [TaskController::class, 'store']);
+            Route::get('/tasks/postponed', [TaskController::class, 'postponed']);
+            Route::get('/tasks/{id}', [TaskController::class, 'show']);
+            Route::put('/tasks/{id}', [TaskController::class, 'update']);
+
+            // Dashboard
+            Route::get('/dashboard', [DashboardController::class, 'index']);
+
+            // Settings
+            Route::get('/settings', [SettingsController::class, 'index']);
+            Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
+            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig']);
+            Route::get('/settings/{key}', [SettingsController::class, 'show']);
+            Route::post('/settings', [SettingsController::class, 'store']);
+            Route::put('/settings/{id}', [SettingsController::class, 'update']);
+            Route::delete('/settings/{id}', [SettingsController::class, 'destroy']);
         });
 });

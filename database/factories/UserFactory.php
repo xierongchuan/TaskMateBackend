@@ -29,7 +29,7 @@ class UserFactory extends Factory
             'full_name' => fake()->name(),
             'telegram_id' => fake()->randomNumber(9),
             'phone' => fake()->phoneNumber(),
-            'role' => fake()->randomElement([Role::USER->value, Role::DIRECTOR->value, Role::ACCOUNTANT->value]),
+            'role' => fake()->randomElement([Role::EMPLOYEE->value, Role::MANAGER->value, Role::OBSERVER->value]),
             'company_id' => fake()->numberBetween(1, 10),
             'password' => Hash::make('password123'),
         ];

@@ -20,7 +20,7 @@ return new class () extends Migration {
             $table->string('full_name', 255)->nullable();
             $table->bigInteger('telegram_id')->nullable();
             $table->string('phone', 50)->nullable();
-            $table->string('role', 50)->default(Role::USER->value);
+            $table->string('role', 50)->default(Role::EMPLOYEE->value);
             $table->bigInteger('company_id')->nullable();
             $table->string('password')->nullable();
             $table->timestampTz('created_at')->useCurrent();
@@ -37,7 +37,7 @@ return new class () extends Migration {
             );
             DB::statement(
                 "ALTER TABLE users ALTER COLUMN role SET DEFAULT '"
-                . Role::USER->value
+                . Role::EMPLOYEE->value
                 . "';"
             );
         }

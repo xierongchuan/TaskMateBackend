@@ -33,7 +33,7 @@ describe('Authentication Endpoints', function () {
             expect($user)
                 ->not->toBeNull()
                 ->and($user->login)->toBe('testuser123')
-                ->and($user->role)->toBe(Role::USER->value)
+                ->and($user->role)->toBe(Role::EMPLOYEE->value)
                 ->and($user->full_name)->toBe('-')
                 ->and($user->telegram_id)->toBe(0)
                 ->and($user->company_id)->toBe(0)
@@ -221,7 +221,7 @@ describe('Authentication Endpoints', function () {
             $response->assertStatus(200);
 
             $user = User::where('login', 'defaultstest')->first();
-            expect($user->role)->toBe(Role::USER->value)
+            expect($user->role)->toBe(Role::EMPLOYEE->value)
                 ->and($user->full_name)->toBe('-')
                 ->and($user->telegram_id)->toBe(0)
                 ->and($user->company_id)->toBe(0)
