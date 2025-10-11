@@ -9,6 +9,10 @@ enum Role: string
     case USER   = 'user';
     case ACCOUNTANT  = 'accountant';
     case DIRECTOR  = 'director';
+    case OWNER  = 'owner';
+    case MANAGER  = 'manager';
+    case OBSERVER  = 'observer';
+    case EMPLOYEE  = 'employee';
 
     /** Читабельная метка (Ru) */
     public function label(): string
@@ -17,6 +21,10 @@ enum Role: string
             self::USER  => 'Пользователь',
             self::ACCOUNTANT => 'Бухгалтер',
             self::DIRECTOR => 'Директор',
+            self::OWNER => 'Владелец',
+            self::MANAGER => 'Управляющий',
+            self::OBSERVER => 'Смотрящий',
+            self::EMPLOYEE => 'Сотрудник',
         };
     }
 
