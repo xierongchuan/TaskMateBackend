@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\SessionController;
+use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
@@ -67,5 +68,14 @@ Route::prefix('v1')->group(function () {
 
             // Dashboard
             Route::get('/dashboard', [DashboardController::class, 'index']);
+
+            // Settings
+            Route::get('/settings', [SettingsController::class, 'index']);
+            Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
+            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig']);
+            Route::get('/settings/{key}', [SettingsController::class, 'show']);
+            Route::post('/settings', [SettingsController::class, 'store']);
+            Route::put('/settings/{id}', [SettingsController::class, 'update']);
+            Route::delete('/settings/{id}', [SettingsController::class, 'destroy']);
         });
 });

@@ -242,6 +242,24 @@ class OpenShiftConversation extends BaseConversation
         try {
             $user = $this->getAuthenticatedUser();
             $now = Carbon::now();
+            $settingsService = app(\App\Services\SettingsService::class);
+
+            // Determine which shift (1 or 2) based on current time
+            $shiftNumber = $this->determineShiftNumber($now, $settingsService, $user->dealership_id);
+
+            // Get scheduled start time for this shift
+            $scheduledStartTime = $settingsService->getShiftStartTime($user->dealership_id, $shiftNumber);
+            $scheduledStart = Carbon::parse($now->format('Y-m-d') . ' ' . $scheduledStartTime);
+
+            // Calculate late minutes
+            $lateMinutes = 0;
+            $status = 'open';
+            $lateTolerance = $settingsService->getLateTolerance($user->dealership_id);
+
+            if ($now->greaterThan($scheduledStart->addMinutes($lateTolerance))) {
+                $lateMinutes = $scheduledStart->diffInMinutes($now);
+                $status = 'late';
+            }
 
             // Create shift
             $shift = Shift::create([
@@ -249,8 +267,9 @@ class OpenShiftConversation extends BaseConversation
                 'dealership_id' => $user->dealership_id,
                 'shift_start' => $now,
                 'opening_photo_path' => $this->photoPath,
-                'status' => 'open',
-                'scheduled_start' => $now, // TODO: Get from shift configuration
+                'status' => $status,
+                'late_minutes' => $lateMinutes,
+                'scheduled_start' => $scheduledStart,
             ]);
 
             // Create replacement record if needed
@@ -282,6 +301,12 @@ class OpenShiftConversation extends BaseConversation
 
             $bot->sendMessage($message, reply_markup: static::employeeMenu());
 
+            // Notify managers if late
+            if ($status === 'late') {
+                $managerService = app(\App\Services\ManagerNotificationService::class);
+                $managerService->notifyAboutLateShift($shift);
+            }
+
             // Send pending tasks
             $this->sendPendingTasks($bot, $user);
 
@@ -289,6 +314,23 @@ class OpenShiftConversation extends BaseConversation
         } catch (\Throwable $e) {
             $this->handleError($bot, $e, 'createShift');
         }
+    }
+
+    /**
+     * Determine shift number based on current time
+     */
+    private function determineShiftNumber(Carbon $now, \App\Services\SettingsService $settingsService, ?int $dealershipId): int
+    {
+        $shift1Start = Carbon::parse($now->format('Y-m-d') . ' ' . $settingsService->getShiftStartTime($dealershipId, 1));
+        $shift2Start = Carbon::parse($now->format('Y-m-d') . ' ' . $settingsService->getShiftStartTime($dealershipId, 2));
+
+        // If shift 2 starts later in the evening and we're past midnight, it's shift 2 from yesterday
+        if ($shift2Start->greaterThan($shift1Start) && $now->lessThan($shift1Start)) {
+            return 2;
+        }
+
+        // Otherwise, choose the closest shift
+        return $now->diffInMinutes($shift1Start, false) < $now->diffInMinutes($shift2Start, false) ? 1 : 2;
     }
 
     /**
