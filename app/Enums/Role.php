@@ -6,9 +6,6 @@ namespace App\Enums;
 
 enum Role: string
 {
-    case USER   = 'user';
-    case ACCOUNTANT  = 'accountant';
-    case DIRECTOR  = 'director';
     case OWNER  = 'owner';
     case MANAGER  = 'manager';
     case OBSERVER  = 'observer';
@@ -18,9 +15,6 @@ enum Role: string
     public function label(): string
     {
         return match ($this) {
-            self::USER  => 'Пользователь',
-            self::ACCOUNTANT => 'Бухгалтер',
-            self::DIRECTOR => 'Директор',
             self::OWNER => 'Владелец',
             self::MANAGER => 'Управляющий',
             self::OBSERVER => 'Смотрящий',
