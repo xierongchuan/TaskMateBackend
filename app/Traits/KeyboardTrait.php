@@ -178,4 +178,13 @@ trait KeyboardTrait
                 KeyboardButton::make($no)
             );
     }
+
+    /**
+     * Inline keyboard with cancel button
+     */
+    public static function cancelKeyboard(string $text = '❌ Отменить', string $data = 'cancel'): InlineKeyboardMarkup
+    {
+        return InlineKeyboardMarkup::make()
+            ->addRow(InlineKeyboardButton::make(text: $text, callback_data: $data));
+    }
 }
