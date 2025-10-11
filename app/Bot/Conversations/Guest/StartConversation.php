@@ -107,9 +107,10 @@ class StartConversation extends BaseConversation
     private function getRoleKeyboard(string $role)
     {
         return match ($role) {
-            Role::USER->value => static::userMenu(),
-            Role::DIRECTOR->value => static::directorMenu(),
-            Role::ACCOUNTANT->value => static::accountantMenu(),
+            Role::EMPLOYEE->value => static::employeeMenu(),
+            Role::MANAGER->value => static::managerMenu(),
+            Role::OBSERVER->value => static::observerMenu(),
+            Role::OWNER->value => static::ownerMenu(),
             default => static::removeKeyboard()
         };
     }
