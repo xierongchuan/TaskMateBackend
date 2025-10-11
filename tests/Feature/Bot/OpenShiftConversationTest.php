@@ -41,11 +41,12 @@ test('employee can start open shift conversation', function () {
 
 test('employee cannot open shift if already has open shift', function () {
     // Create an existing open shift
+    $shiftStart = now();
     Shift::factory()->create([
         'user_id' => $this->employee->id,
         'dealership_id' => $this->dealership->id,
         'status' => 'open',
-        'shift_start' => now(),
+        'shift_start' => $shiftStart,
         'shift_end' => null,
     ]);
 
@@ -54,7 +55,7 @@ test('employee cannot open shift if already has open shift', function () {
     $this->bot
         ->hearText('/openshift')
         ->reply()
-        ->assertReplyText('⚠️ У вас уже есть открытая смена');
+        ->assertReplyText('⚠️ У вас уже есть открытая смена с ' . $shiftStart->format('H:i d.m.Y'));
 });
 
 test('shift is created with late status when opened after scheduled time', function () {
