@@ -1,0 +1,1942 @@
+openapi: 3.0.3
+info:
+  title: TaskMate Telegram Bot API
+  description: API для управления задачами, сменами и автосалонами в телеграм-боте TaskMate
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/xierongchuan/TaskMateTelegramBot
+  license:
+    name: Proprietary License
+
+servers:
+  - url: /api/v1
+    description: Production API v1
+
+tags:
+  - name: Auth
+    description: Аутентификация и управление сессиями
+  - name: Users
+    description: Управление пользователями
+  - name: Dealerships
+    description: Управление автосалонами
+  - name: Shifts
+    description: Управление сменами
+  - name: Tasks
+    description: Управление задачами
+  - name: Dashboard
+    description: Дашборд для менеджеров
+  - name: Settings
+    description: Управление настройками
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+      description: Laravel Sanctum token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Неверные данные
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        login:
+          type: string
+          example: user123
+        full_name:
+          type: string
+          example: Иван Иванов
+        telegram_id:
+          type: integer
+          example: 123456789
+        phone:
+          type: string
+          example: +79001234567
+        role:
+          type: string
+          enum: [employee, manager, observer, owner]
+          example: employee
+        company_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Dealership:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Автосалон Центральный
+        address:
+          type: string
+          nullable: true
+          example: г. Москва, ул. Ленина, д. 1
+        phone:
+          type: string
+          nullable: true
+          example: +74951234567
+        description:
+          type: string
+          nullable: true
+          example: Главный автосалон компании
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          example: 1
+        shift_start:
+          type: string
+          format: date-time
+          example: 2025-10-12T09:00:00Z
+        shift_end:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2025-10-12T18:00:00Z
+        status:
+          type: string
+          enum: [open, closed]
+          example: open
+        late_minutes:
+          type: integer
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+        replacement:
+          $ref: '#/components/schemas/ShiftReplacement'
+
+    ShiftReplacement:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        shift_id:
+          type: integer
+          example: 1
+        replacing_user_id:
+          type: integer
+          example: 2
+        replaced_user_id:
+          type: integer
+          example: 1
+        reason:
+          type: string
+          example: Больничный
+        created_at:
+          type: string
+          format: date-time
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Проверить инвентарь
+        description:
+          type: string
+          nullable: true
+          example: Провести полную проверку инвентаря на складе
+        comment:
+          type: string
+          nullable: true
+          example: Особое внимание на новые поступления
+        creator_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          nullable: true
+          example: 1
+        appear_date:
+          type: string
+          format: date-time
+          nullable: true
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        recurrence:
+          type: string
+          enum: [daily, weekly, monthly]
+          nullable: true
+          example: weekly
+        task_type:
+          type: string
+          enum: [individual, group]
+          example: group
+        response_type:
+          type: string
+          enum: [acknowledge, complete]
+          example: complete
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: [urgent, inventory]
+        is_active:
+          type: boolean
+          example: true
+        postpone_count:
+          type: integer
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        creator:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskAssignment'
+        responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskResponse'
+
+    TaskAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [pending, completed, acknowledged]
+          example: completed
+        responded_at:
+          type: string
+          format: date-time
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+
+    Setting:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        key:
+          type: string
+          example: shift_1_start_time
+        value:
+          oneOf:
+            - type: string
+            - type: integer
+            - type: boolean
+            - type: object
+          example: "09:00"
+        type:
+          type: string
+          enum: [string, integer, boolean, json, time]
+          example: time
+        description:
+          type: string
+          nullable: true
+          example: Время начала первой смены
+        dealership_id:
+          type: integer
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        current_page:
+          type: integer
+          example: 1
+        last_page:
+          type: integer
+          example: 5
+        per_page:
+          type: integer
+          example: 15
+        total:
+          type: integer
+          example: 75
+        from:
+          type: integer
+          example: 1
+        to:
+          type: integer
+          example: 15
+
+paths:
+  /session:
+    post:
+      tags:
+        - Auth
+      summary: Открыть сессию (вход)
+      description: Аутентификация пользователя и получение токена доступа
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - login
+                - password
+              properties:
+                login:
+                  type: string
+                  minLength: 4
+                  maxLength: 255
+                  example: user123
+                password:
+                  type: string
+                  minLength: 6
+                  maxLength: 255
+                  example: password123
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: 1|abcdef123456
+        '401':
+          description: Неверные учетные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Auth
+      summary: Закрыть сессию (выход)
+      description: Удаление текущего токена доступа
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Сессия успешно завершена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Сессия завершена
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Регистрация нового пользователя
+      description: Создание нового пользователя и получение токена доступа
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - login
+                - password
+              properties:
+                login:
+                  type: string
+                  minLength: 4
+                  maxLength: 255
+                  example: newuser123
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 255
+                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
+                  description: Пароль должен содержать минимум 12 символов, включая заглавные и строчные буквы, цифры и специальные символы
+                  example: Password123!
+      responses:
+        '200':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Пользователь успешно зарегистрирован
+                  token:
+                    type: string
+                    example: 2|xyz789abc456
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /up:
+    get:
+      tags:
+        - Auth
+      summary: Проверка работоспособности API
+      description: Проверка доступности API
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Получить список пользователей
+      description: Получение списка пользователей с пагинацией и фильтрацией по телефону
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: per_page
+          in: query
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 15
+            example: 20
+        - name: phone
+          in: query
+          description: Фильтр по номеру телефона
+          schema:
+            type: string
+            example: "+79001234567"
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Получить пользователя по ID
+      description: Получение детальной информации о пользователе
+      operationId: getUserById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Информация о пользователе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/status:
+    get:
+      tags:
+        - Users
+      summary: Проверить статус пользователя
+      description: Проверка активности пользователя
+      operationId: getUserStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Статус пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_active:
+                    type: boolean
+                    example: true
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /dealerships:
+    get:
+      tags:
+        - Dealerships
+      summary: Получить список автосалонов
+      description: Получение списка автосалонов с пагинацией и фильтрацией
+      operationId: listDealerships
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: per_page
+          in: query
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 15
+            example: 20
+        - name: is_active
+          in: query
+          description: Фильтр по активности
+          schema:
+            type: boolean
+            example: true
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
+      responses:
+        '200':
+          description: Список автосалонов
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Dealership'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Dealerships
+      summary: Создать новый автосалон
+      description: Создание нового автосалона
+      operationId: createDealership
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  example: Автосалон Северный
+                address:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+                  example: г. Санкт-Петербург, Невский пр., д. 100
+                phone:
+                  type: string
+                  maxLength: 50
+                  nullable: true
+                  example: +78121234567
+                description:
+                  type: string
+                  nullable: true
+                  example: Филиал в Санкт-Петербурге
+                is_active:
+                  type: boolean
+                  default: true
+                  example: true
+      responses:
+        '201':
+          description: Автосалон успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dealership'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /dealerships/{id}:
+    get:
+      tags:
+        - Dealerships
+      summary: Получить автосалон по ID
+      description: Получение детальной информации об автосалоне со связанными данными
+      operationId: getDealershipById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID автосалона
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Информация об автосалоне
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Dealership'
+                  - type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      shifts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Shift'
+                      tasks:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Task'
+        '404':
+          description: Автосалон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Dealerships
+      summary: Обновить автосалон
+      description: Обновление информации об автосалоне
+      operationId: updateDealership
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID автосалона
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  example: Автосалон Центральный (обновлено)
+                address:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+                  example: г. Москва, ул. Ленина, д. 2
+                phone:
+                  type: string
+                  maxLength: 50
+                  nullable: true
+                  example: +74951234568
+                description:
+                  type: string
+                  nullable: true
+                  example: Обновленное описание
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Автосалон успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dealership'
+        '404':
+          description: Автосалон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts:
+    get:
+      tags:
+        - Shifts
+      summary: Получить список смен
+      description: Получение списка смен с пагинацией и фильтрацией
+      operationId: listShifts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: per_page
+          in: query
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 15
+            example: 20
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+        - name: status
+          in: query
+          description: Фильтр по статусу
+          schema:
+            type: string
+            enum: [open, closed]
+            example: open
+        - name: date
+          in: query
+          description: Фильтр по дате
+          schema:
+            type: string
+            format: date
+            example: "2025-10-12"
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
+      responses:
+        '200':
+          description: Список смен
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Shift'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts/{id}:
+    get:
+      tags:
+        - Shifts
+      summary: Получить смену по ID
+      description: Получение детальной информации о смене
+      operationId: getShiftById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID смены
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Информация о смене
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shift'
+        '404':
+          description: Смена не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts/current:
+    get:
+      tags:
+        - Shifts
+      summary: Получить текущие открытые смены
+      description: Получение списка всех открытых смен
+      operationId: getCurrentShifts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Список текущих смен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Shift'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts/statistics:
+    get:
+      tags:
+        - Shifts
+      summary: Получить статистику по сменам
+      description: Получение статистики по сменам за период
+      operationId: getShiftStatistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+        - name: start_date
+          in: query
+          description: Начальная дата периода
+          schema:
+            type: string
+            format: date
+            example: "2025-10-05"
+        - name: end_date
+          in: query
+          description: Конечная дата периода
+          schema:
+            type: string
+            format: date
+            example: "2025-10-12"
+      responses:
+        '200':
+          description: Статистика по сменам
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_shifts:
+                    type: integer
+                    example: 45
+                  late_shifts:
+                    type: integer
+                    example: 8
+                  avg_late_minutes:
+                    type: number
+                    format: float
+                    example: 12.5
+                  replacements:
+                    type: integer
+                    example: 3
+                  period:
+                    type: object
+                    properties:
+                      start:
+                        type: string
+                        format: date
+                        example: "2025-10-05"
+                      end:
+                        type: string
+                        format: date
+                        example: "2025-10-12"
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks:
+    get:
+      tags:
+        - Tasks
+      summary: Получить список задач
+      description: Получение списка задач с пагинацией и фильтрацией
+      operationId: listTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: per_page
+          in: query
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 15
+            example: 20
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+        - name: task_type
+          in: query
+          description: Фильтр по типу задачи
+          schema:
+            type: string
+            enum: [individual, group]
+            example: group
+        - name: is_active
+          in: query
+          description: Фильтр по активности
+          schema:
+            type: boolean
+            example: true
+        - name: tags
+          in: query
+          description: Фильтр по тегам (через запятую)
+          schema:
+            type: string
+            example: "urgent,inventory"
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
+      responses:
+        '200':
+          description: Список задач
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Task'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Tasks
+      summary: Создать новую задачу
+      description: Создание новой задачи с назначением пользователей
+      operationId: createTask
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - task_type
+                - response_type
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+                  example: Проверить инвентарь
+                description:
+                  type: string
+                  nullable: true
+                  example: Провести полную проверку инвентаря на складе
+                comment:
+                  type: string
+                  nullable: true
+                  example: Особое внимание на новые поступления
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+                appear_date:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  example: "2025-10-12T09:00:00Z"
+                deadline:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  example: "2025-10-15T18:00:00Z"
+                recurrence:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                  nullable: true
+                  example: weekly
+                task_type:
+                  type: string
+                  enum: [individual, group]
+                  example: group
+                response_type:
+                  type: string
+                  enum: [acknowledge, complete]
+                  example: complete
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  nullable: true
+                  example: [urgent, inventory]
+                assigned_users:
+                  type: array
+                  items:
+                    type: integer
+                  nullable: true
+                  example: [1, 2, 3]
+      responses:
+        '201':
+          description: Задача успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{id}:
+    get:
+      tags:
+        - Tasks
+      summary: Получить задачу по ID
+      description: Получение детальной информации о задаче
+      operationId: getTaskById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID задачи
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Информация о задаче
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Задача не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Tasks
+      summary: Обновить задачу
+      description: Обновление информации о задаче
+      operationId: updateTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID задачи
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+                  example: Проверить инвентарь (обновлено)
+                description:
+                  type: string
+                  nullable: true
+                  example: Обновленное описание задачи
+                comment:
+                  type: string
+                  nullable: true
+                  example: Обновленный комментарий
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 2
+                appear_date:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  example: "2025-10-13T09:00:00Z"
+                deadline:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  example: "2025-10-16T18:00:00Z"
+                recurrence:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                  nullable: true
+                  example: daily
+                task_type:
+                  type: string
+                  enum: [individual, group]
+                  example: individual
+                response_type:
+                  type: string
+                  enum: [acknowledge, complete]
+                  example: acknowledge
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  nullable: true
+                  example: [important]
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Задача успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Задача не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/postponed:
+    get:
+      tags:
+        - Tasks
+      summary: Получить отложенные задачи
+      description: Получение списка задач, которые были отложены
+      operationId: getPostponedTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Список отложенных задач
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /dashboard:
+    get:
+      tags:
+        - Dashboard
+      summary: Получить данные дашборда
+      description: Получение сводной информации для менеджеров (текущие смены, статистика задач, опоздания, замены)
+      operationId: getDashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Данные дашборда
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_shifts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        user:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            role:
+                              type: string
+                        dealership:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                        shift_start:
+                          type: string
+                          format: date-time
+                        late_minutes:
+                          type: integer
+                        is_replacement:
+                          type: boolean
+                        replacement_info:
+                          type: object
+                          nullable: true
+                          properties:
+                            replaced_user:
+                              type: string
+                            reason:
+                              type: string
+                  task_statistics:
+                    type: object
+                    properties:
+                      total_active:
+                        type: integer
+                      completed_today:
+                        type: integer
+                      overdue:
+                        type: integer
+                      postponed:
+                        type: integer
+                  late_shifts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user:
+                          type: string
+                        dealership:
+                          type: string
+                        late_minutes:
+                          type: integer
+                        shift_start:
+                          type: string
+                          format: date-time
+                  replacements:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        replacing_user:
+                          type: string
+                        replaced_user:
+                          type: string
+                        reason:
+                          type: string
+                        dealership:
+                          type: string
+                        shift_start:
+                          type: string
+                          format: date-time
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /settings:
+    get:
+      tags:
+        - Settings
+      summary: Получить список настроек
+      description: Получение всех настроек для автосалона или глобальных настроек
+      operationId: listSettings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращаются глобальные настройки)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Список настроек
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Setting'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Settings
+      summary: Создать или обновить настройку
+      description: Создание новой настройки или обновление существующей
+      operationId: createOrUpdateSetting
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - key
+                - value
+                - type
+              properties:
+                key:
+                  type: string
+                  maxLength: 100
+                  example: notification_enabled
+                value:
+                  oneOf:
+                    - type: string
+                    - type: integer
+                    - type: boolean
+                    - type: object
+                  example: true
+                type:
+                  type: string
+                  enum: [string, integer, boolean, json, time]
+                  example: boolean
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+                description:
+                  type: string
+                  nullable: true
+                  example: Включить уведомления
+      responses:
+        '201':
+          description: Настройка успешно создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Setting'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
+
+  /settings/{key}:
+    get:
+      tags:
+        - Settings
+      summary: Получить настройку по ключу
+      description: Получение значения конкретной настройки
+      operationId: getSettingByKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: Ключ настройки
+          schema:
+            type: string
+            example: shift_1_start_time
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращается глобальная настройка)
+          schema:
+            type: integer
+            example: 1
+        - name: default
+          in: query
+          description: Значение по умолчанию, если настройка не найдена
+          schema:
+            type: string
+            example: "09:00"
+      responses:
+        '200':
+          description: Значение настройки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                        example: shift_1_start_time
+                      value:
+                        oneOf:
+                          - type: string
+                          - type: integer
+                          - type: boolean
+                          - type: object
+                        example: "09:00"
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /settings/{id}:
+    put:
+      tags:
+        - Settings
+      summary: Обновить настройку по ID
+      description: Обновление существующей настройки
+      operationId: updateSettingById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID настройки
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - value
+              properties:
+                value:
+                  oneOf:
+                    - type: string
+                    - type: integer
+                    - type: boolean
+                    - type: object
+                  example: "10:00"
+                description:
+                  type: string
+                  nullable: true
+                  example: Обновленное описание
+      responses:
+        '200':
+          description: Настройка успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Setting'
+        '404':
+          description: Настройка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
+
+    delete:
+      tags:
+        - Settings
+      summary: Удалить настройку
+      description: Удаление настройки по ID
+      operationId: deleteSettingById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID настройки
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Настройка успешно удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Setting deleted successfully
+        '404':
+          description: Настройка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /settings/shift-config:
+    get:
+      tags:
+        - Settings
+      summary: Получить конфигурацию смен
+      description: Получение конфигурации времени смен и допустимого опоздания
+      operationId: getShiftConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращается глобальная конфигурация)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Конфигурация смен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      shift_1_start_time:
+                        type: string
+                        example: "09:00"
+                      shift_1_end_time:
+                        type: string
+                        example: "18:00"
+                      shift_2_start_time:
+                        type: string
+                        example: "18:00"
+                      shift_2_end_time:
+                        type: string
+                        example: "03:00"
+                      late_tolerance_minutes:
+                        type: integer
+                        example: 5
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Settings
+      summary: Обновить конфигурацию смен
+      description: Обновление конфигурации времени смен и допустимого опоздания
+      operationId: updateShiftConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shift_1_start_time:
+                  type: string
+                  format: time
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                  nullable: true
+                  example: "09:00"
+                shift_1_end_time:
+                  type: string
+                  format: time
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                  nullable: true
+                  example: "18:00"
+                shift_2_start_time:
+                  type: string
+                  format: time
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                  nullable: true
+                  example: "18:00"
+                shift_2_end_time:
+                  type: string
+                  format: time
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                  nullable: true
+                  example: "03:00"
+                late_tolerance_minutes:
+                  type: integer
+                  minimum: 0
+                  maximum: 120
+                  nullable: true
+                  example: 10
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '200':
+          description: Конфигурация смен успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shift configuration updated successfully
+                  data:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: integer
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
