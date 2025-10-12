@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: TaskMate Backend API
+  description: API documentation for TaskMate Backend application
+  version: 1.0.0
+  contact:
+    name: TaskMate Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+  - url: https://api.taskmate.example.com/api
+    description: Production server
+
+tags:
+  - name: Session
+    description: User authentication and session management
+  - name: User
+    description: User profile operations
+
+paths:
+  /v1/session/create:
+    post:
+      tags:
+        - Session
+      summary: Register new user
+      description: Creates a new user account and returns authentication token
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - device_name
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  description: User's full name
+                  example: John Doe
+                email:
+                  type: string
+                  format: email
+                  maxLength: 255
+                  description: User's email address (must be unique)
+                  example: john.doe@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  description: User's password (minimum 8 characters)
+                  example: SecurePassword123
+                device_name:
+                  type: string
+                  description: Name of the device/client used for authentication
+                  example: iPhone 13
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /v1/session/start:
+    post:
+      tags:
+        - Session
+      summary: Login user
+      description: Authenticates existing user and returns authentication token
+      operationId: startSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - device_name
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: john.doe@example.com
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+                  example: SecurePassword123
+                device_name:
+                  type: string
+                  description: Name of the device/client used for authentication
+                  example: iPhone 13
+      responses:
+        '200':
+          description: User successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Invalid credentials
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /v1/session/end:
+    post:
+      tags:
+        - Session
+      summary: Logout user
+      description: Ends current user session by deleting the authentication token
+      operationId: endSession
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Session successfully ended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User session ended successfully
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthenticatedError'
+
+  /v1/user/self:
+    get:
+      tags:
+        - User
+      summary: Get current user
+      description: Returns information about the currently authenticated user
+      operationId: getSelf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthenticatedError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Laravel Sanctum authentication token
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: User ID
+          example: 1
+        name:
+          type: string
+          description: User's full name
+          example: John Doe
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: john.doe@example.com
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Email verification timestamp
+          example: 2025-10-12T10:30:00.000000Z
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: 2025-10-12T10:00:00.000000Z
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: 2025-10-12T10:00:00.000000Z
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Soft delete timestamp
+          example: null
+
+    SessionResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          description: User's full name
+          example: John Doe
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: john.doe@example.com
+        token:
+          type: string
+          description: Bearer authentication token
+          example: 1|a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+        expires_at:
+          type: string
+          format: date-time
+          description: Token expiration timestamp (ISO 8601 format)
+          example: 2025-11-12T10:00:00+00:00
+
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+          example: The given data was invalid.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            email:
+              - The email has already been taken.
+            password:
+              - The password must be at least 8 characters.
+
+    UnauthenticatedError:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Unauthenticated.
