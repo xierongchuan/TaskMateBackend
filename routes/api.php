@@ -10,8 +10,12 @@ use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
+use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// Webhook для Telegram
+Route::post('/webhook', [FrontController::class, 'webhook']);
 
 Route::prefix('v1')->group(function () {
     // Открытие сессии (логин)

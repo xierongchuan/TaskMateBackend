@@ -82,6 +82,4 @@ RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
 # Документирование порта
 EXPOSE 9000
 
-# Команда запуска (как в вашем исходнике, с wait-for-it.sh)
-# Предполагается, что wait-for-it.sh включён в репозиторий в корне проекта.
-CMD ["bash", "-lc", "/wait-for-it.sh postgres:5432 --timeout=30 --strict -- composer install --optimize-autoloader --no-dev --no-scripts --no-interaction && php artisan migrate && exec php-fpm -F"]
+CMD ["php-fpm", "-F"]
