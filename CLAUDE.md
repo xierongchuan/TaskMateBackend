@@ -5,3 +5,13 @@ Your forked repository: konard/TaskMateTelegramBot
 Original repository (upstream): xierongchuan/TaskMateTelegramBot
 
 Proceed.
+
+---
+
+Issue to solve: undefined
+Your prepared branch: issue-7-66df45f9
+Your prepared working directory: /tmp/gh-issue-solver-1760596414634
+Your forked repository: konard/TaskMateTelegramBot
+Original repository (upstream): xierongchuan/TaskMateTelegramBot
+
+Proceed.

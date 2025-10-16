@@ -20,9 +20,10 @@ return new class () extends Migration {
 
         DB::statement("
             CREATE TYPE user_roles AS ENUM (
-              'user',
-              'accountant',
-              'director'
+              'owner',
+              'manager',
+              'observer',
+              'employee'
             );
         ");
     }
