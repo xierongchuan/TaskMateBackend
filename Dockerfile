@@ -41,7 +41,6 @@ COPY . .
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
   && chmod -R 755 storage storage/framework bootstrap/cache || true
 
-# --- Можно выполнить дополнительные шаги кэша/артефактов тут (опционально) ---
 # Например: php artisan config:cache && php artisan route:cache
 
 # ---------------- STAGE: runner ----------------
