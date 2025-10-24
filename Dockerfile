@@ -26,7 +26,7 @@ RUN pecl install redis-6.2.0 \
 # 4) Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/src_laravel_api
+WORKDIR /var/www/taskmate_src_laravel_frontend
 
 # 5) Копирование composer.json и composer.lock в контейнер
 COPY composer.json composer.lock ./
