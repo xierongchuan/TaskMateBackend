@@ -43,7 +43,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware([
             'auth:sanctum',
-            'throttle:150,1'
+            'throttle:220,1'
         ])
         ->group(function () {
             // Users

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\AutoDealership;
 use Illuminate\Http\Request;
+use Log;
 
 class DealershipController extends Controller
 {
@@ -42,6 +43,7 @@ class DealershipController extends Controller
 
     public function store(Request $request)
     {
+        Log::info("Request Dealership Store: " . json_encode($request->all()));
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'address' => 'nullable|string|max:500',

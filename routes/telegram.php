@@ -42,7 +42,16 @@ $bot->group(function (Nutgram $bot) {
     $bot->onText('👥 Сотрудники', \App\Bot\Commands\Owner\ViewEmployeesCommand::class)->middleware(AuthUser::class);
 
     // Task response handlers via callback queries
-    $bot->onCallbackQueryData('task_ok_{taskId}', \App\Bot\Handlers\TaskResponseHandler::class . '@handleOk')->middleware(AuthUser::class);
-    $bot->onCallbackQueryData('task_done_{taskId}', \App\Bot\Handlers\TaskResponseHandler::class . '@handleDone')->middleware(AuthUser::class);
-    $bot->onCallbackQueryData('task_postpone_{taskId}', \App\Bot\Handlers\TaskResponseHandler::class . '@handlePostpone')->middleware(AuthUser::class);
+    $bot->onCallbackQueryData(
+        'task_ok_{taskId}',
+        \App\Bot\Handlers\TaskResponseHandler::class . '@handleOk'
+    )->middleware(AuthUser::class);
+    $bot->onCallbackQueryData(
+        'task_done_{taskId}',
+        \App\Bot\Handlers\TaskResponseHandler::class . '@handleDone'
+    )->middleware(AuthUser::class);
+    $bot->onCallbackQueryData(
+        'task_postpone_{taskId}',
+        \App\Bot\Handlers\TaskResponseHandler::class . '@handlePostpone'
+    )->middleware(AuthUser::class);
 });
