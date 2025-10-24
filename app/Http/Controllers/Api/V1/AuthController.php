@@ -30,7 +30,6 @@ class AuthController extends Controller
             'password'  => Hash::make($req->password),
             'full_name' => '-',
             'telegram_id' => 0,
-            'company_id' => 0,
             'phone' => '+0000000000',
             'role'      => Role::EMPLOYEE->value,
         ]);

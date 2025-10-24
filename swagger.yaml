@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TaskMate Telegram Bot API
-  description: API для управления задачами, сменами и автосалонами в телеграм-боте TaskMate
+  description: API для управления задачами, сменами, автосалонами и пользователями в телеграм-боте TaskMate. Полностью автономная система без внешних зависимостей.
   version: 1.0.0
   contact:
     name: API Support
@@ -17,7 +17,7 @@ tags:
   - name: Auth
     description: Аутентификация и управление сессиями
   - name: Users
-    description: Управление пользователями
+    description: Управление пользователями и регистрация сотрудников
   - name: Dealerships
     description: Управление автосалонами
   - name: Shifts
@@ -28,6 +28,8 @@ tags:
     description: Дашборд для менеджеров
   - name: Settings
     description: Управление настройками
+  - name: Webhook
+    description: Telegram Bot Webhook
 
 components:
   securitySchemes:
@@ -73,10 +75,7 @@ components:
           type: string
           enum: [employee, manager, observer, owner]
           example: employee
-        company_id:
-          type: integer
-          example: 1
-        dealership_id:
+          dealership_id:
           type: integer
           nullable: true
           example: 1
@@ -341,6 +340,89 @@ components:
           type: string
           format: date-time
 
+    UserRegistrationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Сотрудник успешно создан
+        data:
+          $ref: '#/components/schemas/User'
+
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Ошибка валидации
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            login: ["Логин обязателен"]
+            password: ["Пароль должен содержать минимум 8 символов"]
+
+    TelegramWebhook:
+      type: object
+      properties:
+        update_id:
+          type: integer
+          example: 123456789
+        message:
+          type: object
+          properties:
+            message_id:
+              type: integer
+              example: 987
+            from:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 123456789
+                is_bot:
+                  type: boolean
+                  example: false
+                first_name:
+                  type: string
+                  example: Иван
+                username:
+                  type: string
+                  example: ivanov
+                language_code:
+                  type: string
+                  example: ru
+            chat:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 123456789
+                first_name:
+                  type: string
+                  example: Иван
+                username:
+                  type: string
+                  example: ivanov
+                type:
+                  type: string
+                  example: private
+            date:
+              type: integer
+              example: 1640995200
+            text:
+              type: string
+              example: /start
+
     PaginatedResponse:
       type: object
       properties:
@@ -564,6 +646,193 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Users
+      summary: Создать нового сотрудника (с аутентификацией)
+      description: Создание нового сотрудника в системе с аутентификацией
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - login
+                - password
+                - full_name
+                - phone
+                - role
+              properties:
+                login:
+                  type: string
+                  minLength: 4
+                  maxLength: 255
+                  example: newuser123
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 255
+                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]'
+                  description: Пароль должен содержать минимум 8 символов, включая заглавные и строчные буквы и цифры
+                  example: Password123
+                full_name:
+                  type: string
+                  minLength: 2
+                  maxLength: 255
+                  example: Иван Иванов
+                phone:
+                  type: string
+                  pattern: '^\+?[\d\s\-\(\)]+$'
+                  maxLength: 20
+                  example: +79001234567
+                role:
+                  type: string
+                  enum: [employee, manager, observer, owner]
+                  example: employee
+                telegram_id:
+                  type: integer
+                  nullable: true
+                  example: 123456789
+                  dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '201':
+          description: Сотрудник успешно создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Сотрудник успешно создан
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Ошибка валидации
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+
+  /users/create:
+    post:
+      tags:
+        - Users
+      summary: Создать нового сотрудника (публичный эндпоинт)
+      description: Создание нового сотрудника в системе без аутентификации
+      operationId: createUserPublic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - login
+                - password
+                - full_name
+                - phone
+                - role
+              properties:
+                login:
+                  type: string
+                  minLength: 4
+                  maxLength: 255
+                  example: newuser123
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 255
+                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]'
+                  description: Пароль должен содержать минимум 8 символов, включая заглавные и строчные буквы и цифры
+                  example: Password123
+                full_name:
+                  type: string
+                  minLength: 2
+                  maxLength: 255
+                  example: Иван Иванов
+                phone:
+                  type: string
+                  pattern: '^\+?[\d\s\-\(\)]+$'
+                  maxLength: 20
+                  example: +79001234567
+                role:
+                  type: string
+                  enum: [employee, manager, observer, owner]
+                  example: employee
+                telegram_id:
+                  type: integer
+                  nullable: true
+                  example: 123456789
+                  dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '201':
+          description: Сотрудник успешно создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Сотрудник успешно создан
+                  data:
+                    $ref: '#/components/schemas/User'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Ошибка валидации
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
 
   /users/{id}:
     get:
@@ -1940,3 +2209,39 @@ paths:
                     example: false
                   errors:
                     type: object
+
+  /webhook:
+    post:
+      tags:
+        - Webhook
+      summary: Telegram Bot Webhook
+      description: Эндпоинт для обработки обновлений от Telegram Bot API
+      operationId: telegramWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramWebhook"
+      responses:
+        "200":
+          description: Успешная обработка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid webhook data
+

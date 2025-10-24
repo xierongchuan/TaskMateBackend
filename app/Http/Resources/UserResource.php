@@ -16,15 +16,28 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id'           => $this->id,
             'login'        => $this->login,
             'full_name'    => $this->full_name,
-            'role'         => $this->in_bot_role,
+            'role'         => $this->role,
             'telegram_id'  => $this->telegram_id,
-            'phone_number' => $this->phone_number,
-            'company_id'   => $this->company_id,
+            'phone_number' => $this->phone,
+            'dealership_id' => $this->dealership_id,
             // 'status'       => $this->status,
         ];
+
+        // Include dealership data if loaded
+        if ($this->relationLoaded('dealership') && $this->dealership) {
+            $data['dealership'] = [
+                'id' => $this->dealership->id,
+                'name' => $this->dealership->name,
+                'address' => $this->dealership->address,
+                'phone' => $this->dealership->phone,
+                'is_active' => $this->dealership->is_active,
+            ];
+        }
+
+        return $data;
     }
 }

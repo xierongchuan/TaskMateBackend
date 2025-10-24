@@ -35,9 +35,4 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-
-    'vcrm' => [
-        'api_url' => env('VCRM_API_URL'),
-        'api_token' => env('VCRM_API_TOKEN'),
-    ],
 ];

@@ -15,7 +15,6 @@ describe('User Model', function () {
             'telegram_id' => 123456789,
             'phone' => '+998901234567',
             'role' => Role::EMPLOYEE->value,
-            'company_id' => 1,
             'password' => Hash::make('password123'),
         ]);
 
@@ -27,7 +26,6 @@ describe('User Model', function () {
             ->and($user->telegram_id)->toBe(123456789)
             ->and($user->phone)->toBe('+998901234567')
             ->and($user->role)->toBe(Role::EMPLOYEE->value)
-            ->and($user->company_id)->toBe(1)
             ->and($user->exists)->toBeTrue();
     });
 
@@ -64,19 +62,16 @@ describe('User Model', function () {
         $owner = User::create([
             'login' => 'owner1',
             'role' => Role::OWNER->value,
-            'company_id' => 1,
         ]);
 
         $manager = User::create([
             'login' => 'manager1',
             'role' => Role::MANAGER->value,
-            'company_id' => 1,
         ]);
 
         $employee = User::create([
             'login' => 'employee1',
             'role' => Role::EMPLOYEE->value,
-            'company_id' => 1,
         ]);
 
         // Assert
@@ -85,32 +80,26 @@ describe('User Model', function () {
             ->and($employee->role)->toBe(Role::EMPLOYEE->value);
     });
 
-    it('can query users by role and company', function () {
+    it('can query users by role', function () {
         // Arrange
         User::factory()->create([
             'role' => Role::MANAGER->value,
-            'company_id' => 1,
         ]);
 
         User::factory()->create([
             'role' => Role::MANAGER->value,
-            'company_id' => 2,
         ]);
 
         User::factory()->create([
             'role' => Role::EMPLOYEE->value,
-            'company_id' => 1,
         ]);
 
         // Act
-        $managersCompany1 = User::where('role', Role::MANAGER->value)
-            ->where('company_id', 1)
-            ->get();
+        $managers = User::where('role', Role::MANAGER->value)->get();
 
         // Assert
-        expect($managersCompany1)->toHaveCount(1)
-            ->and($managersCompany1->first()->role)->toBe(Role::MANAGER->value)
-            ->and($managersCompany1->first()->company_id)->toBe(1);
+        expect($managers)->toHaveCount(2)
+            ->and($managers->first()->role)->toBe(Role::MANAGER->value);
     });
 
     it('can find user by telegram_id', function () {

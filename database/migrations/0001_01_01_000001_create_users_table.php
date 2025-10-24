@@ -18,10 +18,11 @@ return new class () extends Migration {
             $table->bigIncrements('id'); // BIGSERIAL
             $table->string('login', 100)->unique();
             $table->string('full_name', 255)->nullable();
-            $table->bigInteger('telegram_id')->nullable();
-            $table->string('phone', 50)->nullable();
+            $table->bigInteger('telegram_id')->nullable()->unique();
+            $table->string('phone', 50)->nullable()->index();
             $table->string('role', 50)->default(Role::EMPLOYEE->value);
             $table->bigInteger('company_id')->nullable();
+            $table->bigInteger('dealership_id')->nullable();
             $table->string('password')->nullable();
             $table->timestampTz('created_at')->useCurrent();
             $table->timestampTz('updated_at')->useCurrent();

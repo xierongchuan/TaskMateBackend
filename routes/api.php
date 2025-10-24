@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
+use App\Http\Controllers\Api\V1\UserRegistrationController;
 use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,12 @@ Route::prefix('v1')->group(function () {
         [AuthController::class, 'register']
     )->middleware('throttle:50,1440');
 
+    // Создание сотрудника (независимая регистрация)
+    Route::post(
+        '/users/create',
+        [UserRegistrationController::class, 'store']
+    )->middleware('throttle:50,1440');
+
     // Закрытие сессии (логаут)
     Route::delete(
         '/session',
@@ -48,6 +55,7 @@ Route::prefix('v1')->group(function () {
         ->group(function () {
             // Users
             Route::get('/users', [UserApiController::class, 'index']);
+            Route::post('/users', [UserApiController::class, 'store']);
             Route::get('/users/{id}', [UserApiController::class, 'show']);
             Route::get('/users/{id}/status', [UserApiController::class, 'status']);
 

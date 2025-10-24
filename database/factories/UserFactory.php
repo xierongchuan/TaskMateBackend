@@ -30,7 +30,6 @@ class UserFactory extends Factory
             'telegram_id' => fake()->randomNumber(9),
             'phone' => fake()->phoneNumber(),
             'role' => fake()->randomElement([Role::EMPLOYEE->value, Role::MANAGER->value, Role::OBSERVER->value]),
-            'company_id' => fake()->numberBetween(1, 10),
             'password' => Hash::make('password123'),
         ];
     }
@@ -45,15 +44,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the user should belong to a specific company.
-     */
-    public function company(int $companyId): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'company_id' => $companyId,
-        ]);
-    }
 
     /**
      * Indicate that the user should have a specific telegram ID.
