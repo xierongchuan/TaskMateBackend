@@ -118,6 +118,114 @@ class UserApiController extends Controller
         ]);
     }
 
+    public function update(Request $request, $id): JsonResponse
+    {
+        $user = User::find($id);
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Пользователь не найден'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'password' => [
+                'sometimes',
+                'required',
+                'string',
+                'min:8',
+                'max:255',
+                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]/'
+            ],
+            'full_name' => [
+                'sometimes',
+                'required',
+                'string',
+                'min:2',
+                'max:255'
+            ],
+            'phone' => [
+                'sometimes',
+                'required',
+                'string',
+                'regex:/^\+?[\d\s\-\(\)]+$/',
+                'max:20'
+            ],
+            'role' => [
+                'sometimes',
+                'required',
+                'string',
+                Rule::in(Role::values())
+            ],
+            'dealership_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'exists:auto_dealerships,id'
+            ]
+        ], [
+            'password.required' => 'Пароль обязателен',
+            'password.min' => 'Пароль должен содержать минимум 8 символов',
+            'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
+            'full_name.required' => 'Полное имя обязательно',
+            'full_name.min' => 'Полное имя должно содержать минимум 2 символа',
+            'phone.required' => 'Телефон обязателен',
+            'phone.regex' => 'Некорректный формат телефона',
+            'role.required' => 'Роль обязательна',
+            'role.in' => 'Некорректная роль',
+            'dealership_id.exists' => 'Автосалон не найден'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        try {
+            $updateData = [];
+
+            if (isset($validated['password'])) {
+                $updateData['password'] = Hash::make($validated['password']);
+            }
+
+            if (isset($validated['full_name'])) {
+                $updateData['full_name'] = $validated['full_name'];
+            }
+
+            if (isset($validated['phone'])) {
+                $updateData['phone'] = $validated['phone'];
+            }
+
+            if (isset($validated['role'])) {
+                $updateData['role'] = $validated['role'];
+            }
+
+            if (isset($validated['dealership_id'])) {
+                $updateData['dealership_id'] = $validated['dealership_id'];
+            }
+
+            $user->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Данные пользователя успешно обновлены',
+                'data' => new UserResource($user)
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка при обновлении пользователя',
+                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера'
+            ], 500);
+        }
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -205,7 +313,6 @@ class UserApiController extends Controller
                 'message' => 'Сотрудник успешно создан',
                 'data' => new UserResource($user)
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

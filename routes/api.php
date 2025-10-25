@@ -57,6 +57,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/users', [UserApiController::class, 'index']);
             Route::post('/users', [UserApiController::class, 'store']);
             Route::get('/users/{id}', [UserApiController::class, 'show']);
+            Route::put('/users/{id}', [UserApiController::class, 'update']);
             Route::get('/users/{id}/status', [UserApiController::class, 'status']);
 
             // Dealerships

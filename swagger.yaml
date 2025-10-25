@@ -870,6 +870,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    put:
+      tags:
+        - Users
+      summary: Обновить данные пользователя
+      description: Обновление информации о пользователе
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name:
+                  type: string
+                  example: 'Иван Иванов'
+                  description: Полное имя пользователя
+                phone:
+                  type: string
+                  example: '+79991234567'
+                  description: Телефон пользователя
+                role:
+                  type: string
+                  enum: [employee, manager, observer, owner]
+                  example: employee
+                  description: Роль пользователя
+                dealership_id:
+                  type: integer
+                  example: 1
+                  description: ID автосалона
+                password:
+                  type: string
+                  example: 'NewPassword123'
+                  description: Новый пароль (если нужно изменить)
+      responses:
+        '200':
+          description: Данные пользователя успешно обновлены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'Данные пользователя успешно обновлены'
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /users/{id}/status:
     get:
