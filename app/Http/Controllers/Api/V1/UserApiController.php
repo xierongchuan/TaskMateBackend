@@ -145,7 +145,7 @@ class UserApiController extends Controller
                 'min:2',
                 'max:255'
             ],
-            'phone' => [
+            'phone_number' => [
                 'sometimes',
                 'required',
                 'string',
@@ -170,8 +170,8 @@ class UserApiController extends Controller
             'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
             'full_name.required' => 'Полное имя обязательно',
             'full_name.min' => 'Полное имя должно содержать минимум 2 символа',
-            'phone.required' => 'Телефон обязателен',
-            'phone.regex' => 'Некорректный формат телефона',
+            'phone_number.required' => 'Телефон обязателен',
+            'phone_number.regex' => 'Некорректный формат телефона',
             'role.required' => 'Роль обязательна',
             'role.in' => 'Некорректная роль',
             'dealership_id.exists' => 'Автосалон не найден'
@@ -198,8 +198,8 @@ class UserApiController extends Controller
                 $updateData['full_name'] = $validated['full_name'];
             }
 
-            if (isset($validated['phone'])) {
-                $updateData['phone'] = $validated['phone'];
+            if (isset($validated['phone_number'])) {
+                $updateData['phone'] = $validated['phone_number'];
             }
 
             if (isset($validated['role'])) {
