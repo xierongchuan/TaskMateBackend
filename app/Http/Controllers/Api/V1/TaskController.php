@@ -29,22 +29,6 @@ class TaskController extends Controller
         $search = $request->query('search');
         $status = $request->query('status');
 
-        // Логируем входные параметры для отладки
-        \Log::info('Task index params', [
-            'dealership_id' => $dealershipId,
-            'task_type' => $taskType,
-            'is_active' => $isActive,
-            'tags' => $tags,
-            'creator_id' => $creatorId,
-            'response_type' => $responseType,
-            'deadline_from' => $deadlineFrom,
-            'deadline_to' => $deadlineTo,
-            'has_deadline' => $hasDeadline,
-            'status' => $status,
-            'search' => $search,
-            'all_query_params' => $request->query()
-        ]);
-
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
 
         // Фильтрация по автосалону
@@ -62,7 +46,6 @@ class TaskController extends Controller
             $isActiveValue = filter_var($isActive, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             if ($isActiveValue !== null) {
                 $query->where('is_active', $isActiveValue);
-                \Log::info('Applied is_active filter', ['value' => $isActive, 'converted' => $isActiveValue]);
             }
         }
 
@@ -113,7 +96,6 @@ class TaskController extends Controller
                 } else {
                     $query->whereNull('deadline');
                 }
-                \Log::info('Applied has_deadline filter', ['value' => $hasDeadline, 'converted' => $hasDeadlineValue]);
             }
         }
 
@@ -169,18 +151,10 @@ class TaskController extends Controller
                     });
                     break;
             }
-
-            \Log::info('Applied status filter', ['status' => $status]);
         }
 
         // Исключаем архивные задачи (у которых есть archived_at)
         $query->whereNull('archived_at');
-
-        // Логируем SQL запрос для отладки
-        \Log::info('Task SQL query', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings()
-        ]);
 
         $tasks = $query->orderByDesc('created_at')->paginate($perPage);
 
@@ -218,8 +192,8 @@ class TaskController extends Controller
             'task_type' => 'required|string|in:individual,group',
             'response_type' => 'required|string|in:acknowledge,complete',
             'tags' => 'nullable|array',
-            'assigned_users' => 'nullable|array',
-            'assigned_users.*' => 'exists:users,id',
+            'assignments' => 'nullable|array',
+            'assignments.*' => 'exists:users,id',
         ]);
 
         $task = Task::create([
@@ -237,8 +211,8 @@ class TaskController extends Controller
         ]);
 
         // Assign users
-        if (!empty($validated['assigned_users'])) {
-            foreach ($validated['assigned_users'] as $userId) {
+        if (!empty($validated['assignments'])) {
+            foreach ($validated['assignments'] as $userId) {
                 TaskAssignment::create([
                     'task_id' => $task->id,
                     'user_id' => $userId,
@@ -271,11 +245,50 @@ class TaskController extends Controller
             'response_type' => 'sometimes|required|string|in:acknowledge,complete',
             'tags' => 'nullable|array',
             'is_active' => 'boolean',
+            'assignments' => 'nullable|array',
+            'assignments.*' => 'exists:users,id',
         ]);
 
         $task->update($validated);
 
+        // Update user assignments if provided
+        if (array_key_exists('assignments', $validated)) {
+            // Remove existing assignments
+            TaskAssignment::where('task_id', $task->id)->delete();
+
+            // Add new assignments
+            if (!empty($validated['assignments'])) {
+                foreach ($validated['assignments'] as $userId) {
+                    TaskAssignment::create([
+                        'task_id' => $task->id,
+                        'user_id' => $userId,
+                    ]);
+                }
+            }
+        }
+
         return response()->json($task->load(['assignments.user', 'responses.user']));
+    }
+
+    public function destroy($id)
+    {
+        $task = Task::find($id);
+
+        if (!$task) {
+            return response()->json([
+                'message' => 'Задача не найдена'
+            ], 404);
+        }
+
+        // Delete task assignments (they will be automatically deleted due to foreign key constraints)
+        TaskAssignment::where('task_id', $task->id)->delete();
+
+        // Delete the task
+        $task->delete();
+
+        return response()->json([
+            'message' => 'Задача успешно удалена'
+        ]);
     }
 
     public function postponed(Request $request)
