@@ -80,6 +80,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/tasks/postponed', [TaskController::class, 'postponed']);
             Route::get('/tasks/{id}', [TaskController::class, 'show']);
             Route::put('/tasks/{id}', [TaskController::class, 'update']);
+            Route::delete('/tasks/{id}', [TaskController::class, 'destroy']);
 
             // Dashboard
             Route::get('/dashboard', [DashboardController::class, 'index']);
