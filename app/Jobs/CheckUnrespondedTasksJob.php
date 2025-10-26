@@ -32,7 +32,7 @@ class CheckUnrespondedTasksJob implements ShouldQueue
      */
     public function handle(TaskNotificationService $taskNotificationService): void
     {
-        $now = Carbon::now();
+        $now = Carbon::now('Asia/Yekaterinburg');
 
         Log::info('Checking for unresponded tasks', ['time' => $now->format('Y-m-d H:i:s')]);
 
@@ -59,11 +59,13 @@ class CheckUnrespondedTasksJob implements ShouldQueue
     ): void {
         $checkTime = $now->copy()->subMinutes($minutesAgo);
 
-        // Find tasks that should have appeared before this time and have no responses
+        // Find tasks that should have appeared before this time and have no completed responses
         $unrespondedTasks = Task::with(['assignments.user', 'responses'])
             ->where('is_active', true)
             ->where('appear_date', '<=', $checkTime)
-            ->whereDoesntHave('responses')
+            ->whereDoesntHave('responses', function ($query) {
+                $query->where('status', 'completed');
+            })
             ->where(function ($query) {
                 // Only tasks that have been assigned to users
                 $query->whereHas('assignments');

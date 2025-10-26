@@ -17,8 +17,7 @@ Artisan::command('workers:test {type=all}', function ($type) {
 
 // Scheduled tasks for shift and task management
 
-// Process recurring tasks (daily, weekly, monthly) - runs every 30 minutes for better responsiveness
-Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->everyThirtyMinutes();
+// Process recurring tasks functionality removed - tasks should only be created via API
 
 // Send scheduled tasks based on appear_date - runs every 5 minutes for immediate delivery
 Schedule::job(new \App\Jobs\SendScheduledTasksJob())->everyFiveMinutes();

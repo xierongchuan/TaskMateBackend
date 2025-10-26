@@ -7,7 +7,6 @@ namespace App\Console\Commands;
 use App\Jobs\CheckOverdueTasksJob;
 use App\Jobs\CheckUnrespondedTasksJob;
 use App\Jobs\CheckUpcomingDeadlinesJob;
-use App\Jobs\ProcessRecurringTasksJob;
 use App\Jobs\SendScheduledTasksJob;
 use Illuminate\Console\Command;
 
@@ -59,8 +58,7 @@ class TestWorkersCommand extends Command
                 break;
 
             case 'recurring':
-                $this->info('Dispatching ProcessRecurringTasksJob...');
-                ProcessRecurringTasksJob::dispatch();
+                $this->error('ProcessRecurringTasksJob has been removed - tasks should only be created via API');
                 break;
 
             case 'all':
@@ -69,12 +67,12 @@ class TestWorkersCommand extends Command
                 CheckUpcomingDeadlinesJob::dispatch();
                 CheckUnrespondedTasksJob::dispatch();
                 SendScheduledTasksJob::dispatch();
-                ProcessRecurringTasksJob::dispatch();
+                $this->info('ProcessRecurringTasksJob skipped - removed (tasks should only be created via API)');
                 break;
 
             default:
                 $this->error("Unknown worker type: {$type}");
-                $this->info('Available types: overdue, upcoming, unresponded, scheduled, recurring, all');
+                $this->info('Available types: overdue, upcoming, unresponded, scheduled, all');
                 return 1;
         }
 

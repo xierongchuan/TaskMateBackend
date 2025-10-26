@@ -17,7 +17,17 @@ class TaskNotificationService
 {
     public function __construct(
         private Nutgram $bot
-    ) {}
+    ) {
+        //
+    }
+
+    /**
+     * Get the bot instance
+     */
+    public function getBot(): Nutgram
+    {
+        return $this->bot;
+    }
 
     /**
      * Send task notification to a specific user (alias for sendTaskToUser)
@@ -113,7 +123,11 @@ class TaskNotificationService
      */
     private function formatTaskMessage(Task $task): string
     {
-        $message = "📌 *{$task->title}*\n\n";
+        // Check if task is overdue to add appropriate prefix
+        $isOverdue = $this->isTaskOverdue($task);
+        $prefix = $isOverdue ? "⚠️ *ПРОСРОЧЕНА ЗАДАЧА*\n" : "";
+
+        $message = "{$prefix}📌 *{$task->title}*\n\n";
 
         if ($task->description) {
             $message .= "{$task->description}\n\n";
@@ -125,6 +139,9 @@ class TaskNotificationService
 
         if ($task->deadline) {
             $message .= "⏰ Дедлайн: " . $task->deadline_for_bot . "\n";
+            if ($isOverdue) {
+                $message .= "⏱️ Просрочено на: " . $this->getOverdueTime($task->deadline) . "\n";
+            }
         }
 
         if ($task->tags && is_array($task->tags) && !empty($task->tags)) {
@@ -162,12 +179,17 @@ class TaskNotificationService
 
     /**
      * Check and notify about overdue tasks
+     * Note: This method now only tracks overdue tasks, actual notifications are integrated
+     * into regular task messages via formatTaskMessage() to avoid duplicates
      */
     public function notifyAboutOverdueTasks(): array
     {
+        // Use Asia/Yekaterinburg timezone for consistent time comparisons
+        $nowInUserTimezone = Carbon::now('Asia/Yekaterinburg');
+
         $overdueTasks = Task::where('is_active', true)
             ->whereNotNull('deadline')
-            ->where('deadline', '<', Carbon::now())
+            ->where('deadline', '<', $nowInUserTimezone->copy()->setTimezone('UTC'))
             ->whereDoesntHave('responses', function ($query) {
                 $query->where('status', 'completed');
             })
@@ -175,13 +197,21 @@ class TaskNotificationService
             ->get();
 
         $results = [
-            'tasks_processed' => 0,
+            'tasks_processed' => $overdueTasks->count(),
             'notifications_sent' => 0,
         ];
 
         foreach ($overdueTasks as $task) {
-            $results['tasks_processed']++;
+            Log::info("Overdue task detected", [
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'deadline' => $task->deadline_for_bot,
+                'deadline_utc' => $task->deadline->format('Y-m-d H:i:s'),
+                'current_time_utc' => Carbon::now()->format('Y-m-d H:i:s'),
+                'current_time_user_tz' => $nowInUserTimezone->format('Y-m-d H:i:s')
+            ]);
 
+            // Send integrated overdue notification to each assigned user
             foreach ($task->assignedUsers as $user) {
                 // Check if user hasn't completed the task
                 $hasCompleted = $task->responses()
@@ -191,18 +221,11 @@ class TaskNotificationService
 
                 if (!$hasCompleted && $user->telegram_id) {
                     try {
-                        $message = "⚠️ *ПРОСРОЧЕНА ЗАДАЧА*\n\n";
-                        $message .= "📌 {$task->title}\n";
-                        $message .= "⏰ Дедлайн был: " . $task->deadline_for_bot . "\n";
-                        $message .= "⏱️ Просрочено на: " . $this->getOverdueTime($task->deadline);
-
-                        $this->bot->sendMessage(
-                            text: $message,
-                            chat_id: $user->telegram_id,
-                            parse_mode: 'Markdown'
-                        );
-
-                        $results['notifications_sent']++;
+                        // Use the regular sendTaskToUser method which will include overdue status
+                        $sent = $this->sendTaskToUser($task, $user);
+                        if ($sent) {
+                            $results['notifications_sent']++;
+                        }
                     } catch (\Throwable $e) {
                         Log::error("Failed to send overdue notification to user #{$user->id}: " . $e->getMessage());
                     }
@@ -214,11 +237,39 @@ class TaskNotificationService
     }
 
     /**
+     * Check if a task is overdue
+     */
+    private function isTaskOverdue(Task $task): bool
+    {
+        if (!$task->deadline) {
+            return false;
+        }
+
+        // Check if task has completed response
+        $hasCompletedResponse = $task->responses()
+            ->where('status', 'completed')
+            ->exists();
+
+        if ($hasCompletedResponse) {
+            return false;
+        }
+
+        // Use Asia/Yekaterinburg timezone for consistent time comparison
+        $nowInUserTimezone = Carbon::now('Asia/Yekaterinburg');
+        $deadlineInUserTimezone = $task->deadline->copy()->setTimezone('Asia/Yekaterinburg');
+
+        return $deadlineInUserTimezone->isPast();
+    }
+
+    /**
      * Get human-readable overdue time
      */
     private function getOverdueTime(Carbon $deadline): string
     {
-        $diff = Carbon::now()->diff($deadline);
+        // Use Asia/Yekaterinburg timezone for consistent time calculation
+        $nowInUserTimezone = Carbon::now('Asia/Yekaterinburg');
+        $deadlineInUserTimezone = $deadline->copy()->setTimezone('Asia/Yekaterinburg');
+        $diff = $nowInUserTimezone->diff($deadlineInUserTimezone);
 
         if ($diff->days > 0) {
             return $diff->days . ' ' . $this->pluralize($diff->days, 'день', 'дня', 'дней');
