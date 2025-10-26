@@ -33,20 +33,15 @@ class CheckUpcomingDeadlinesJob implements ShouldQueue
      */
     public function handle(TaskNotificationService $taskNotificationService): void
     {
-        $now = Carbon::now();
+        Log::info('Checking for upcoming deadlines', ['time' => now()->format('Y-m-d H:i:s')]);
 
-        Log::info('Checking for upcoming deadlines', ['time' => $now->format('Y-m-d H:i:s')]);
+        // Use the new method from TaskNotificationService - 30 minutes before deadline
+        $result = $taskNotificationService->notifyAboutUpcomingDeadlines();
 
-        // Check for deadlines in 1 hour
-        $this->checkDeadlinesInRange($taskNotificationService, $now, 60, '1 час');
-
-        // Check for deadlines in 2 hours
-        $this->checkDeadlinesInRange($taskNotificationService, $now, 120, '2 часа');
-
-        // Check for deadlines in 4 hours
-        $this->checkDeadlinesInRange($taskNotificationService, $now, 240, '4 часа');
-
-        Log::info('Upcoming deadlines check completed');
+        Log::info('Upcoming deadlines check completed', [
+            'tasks_processed' => $result['tasks_processed'],
+            'notifications_sent' => $result['notifications_sent']
+        ]);
     }
 
     /**

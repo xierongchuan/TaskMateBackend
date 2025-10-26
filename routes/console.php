@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -15,21 +17,27 @@ Artisan::command('workers:test {type=all}', function ($type) {
     $this->info('Use "php artisan queue:work --queue=notifications" to process the jobs');
 })->purpose('Test notification workers manually');
 
-// Scheduled tasks for shift and task management
+// Scheduled tasks for task notifications according to 4-scenario system
 
-// Process recurring tasks functionality removed - tasks should only be created via API
+// Сценарий 1: Уведомление когда задача стала доступна (appear_date)
+// Send scheduled tasks based on appear_date - runs every 5 minutes at exactly 0 seconds
+Schedule::job(new \App\Jobs\SendScheduledTasksJob())->cron('*/5 * * * *');
 
-// Send scheduled tasks based on appear_date - runs every 5 minutes for immediate delivery
-Schedule::job(new \App\Jobs\SendScheduledTasksJob())->everyFiveMinutes();
+// Сценарий 2: Напоминание за 30 минут до дедлайна
+// Check for upcoming deadlines (30 minutes before) - runs every 5 minutes at exactly 0 seconds
+Schedule::job(new \App\Jobs\CheckUpcomingDeadlinesJob())->cron('*/5 * * * *');
 
-// Check for overdue tasks and notify managers - runs every 10 minutes for timely notifications
-Schedule::job(new \App\Jobs\CheckOverdueTasksJob())->everyTenMinutes();
+// Сценарий 3: Уведомление когда дедлайн истёк (просрочка в момент дедлайна)
+// Check for overdue tasks at deadline time - runs every 5 minutes at exactly 0 seconds
+Schedule::job(new \App\Jobs\CheckOverdueTasksJob())->cron('*/5 * * * *');
 
-// Check for upcoming deadlines (1 hour, 2 hours before) - runs every 15 minutes
-Schedule::job(new \App\Jobs\CheckUpcomingDeadlinesJob())->everyFifteenMinutes();
+// Сценарий 4: Уведомление когда просрочено на час
+// Check for tasks overdue by 1 hour - runs every 10 minutes at exactly 0 seconds
+Schedule::job(new \App\Jobs\CheckHourlyOverdueJob())->cron('*/10 * * * *');
 
-// Check for tasks without response - runs every 30 minutes
-Schedule::job(new \App\Jobs\CheckUnrespondedTasksJob())->everyThirtyMinutes();
+// Additional tasks for management
+// Check for tasks without response - DISABLED for now
+// Schedule::job(new \App\Jobs\CheckUnrespondedTasksJob())->everyThirtyMinutes();
 
 // Archive old completed tasks - runs daily at 2:00 AM
 Schedule::job(new \App\Jobs\ArchiveOldTasksJob())->dailyAt('02:00');

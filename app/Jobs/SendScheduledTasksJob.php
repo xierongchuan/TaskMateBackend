@@ -33,16 +33,15 @@ class SendScheduledTasksJob implements ShouldQueue
     public function handle(TaskNotificationService $taskService): void
     {
         try {
-            // Get tasks that should appear today but haven't been sent yet
+            // Get tasks that appeared in the last 5 minutes (time window approach)
+            $now = Carbon::now('UTC');
             $tasks = Task::where('is_active', true)
                 ->whereNotNull('appear_date')
-                ->whereDate('appear_date', Carbon::today())
-                ->where(function ($query) {
-                    // Only tasks that haven't been sent or completed
-                    $query->whereDoesntHave('responses')
-                        ->orWhereHas('responses', function ($q) {
-                            $q->whereIn('status', ['postponed']);
-                        });
+                ->where('appear_date', '>=', $now->copy()->subMinutes(5))
+                ->where('appear_date', '<=', $now)
+                ->whereDoesntHave('responses', function ($query) {
+                    // Only tasks without completed responses
+                    $query->where('status', 'completed');
                 })
                 ->with('assignedUsers')
                 ->get();
