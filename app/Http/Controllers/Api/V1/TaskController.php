@@ -158,7 +158,24 @@ class TaskController extends Controller
 
         $tasks = $query->orderByDesc('created_at')->paginate($perPage);
 
-        return response()->json($tasks);
+        // Transform tasks to use UTC+5 timezone
+        $tasksData = $tasks->getCollection()->map(function ($task) {
+            return $task->toApiArray();
+        });
+
+        return response()->json([
+            'data' => $tasksData,
+            'current_page' => $tasks->currentPage(),
+            'last_page' => $tasks->lastPage(),
+            'per_page' => $tasks->perPage(),
+            'total' => $tasks->total(),
+            'links' => [
+                'first' => $tasks->url(1),
+                'last' => $tasks->url($tasks->lastPage()),
+                'prev' => $tasks->previousPageUrl(),
+                'next' => $tasks->nextPageUrl(),
+            ]
+        ]);
     }
 
     public function show($id)
@@ -176,7 +193,7 @@ class TaskController extends Controller
             ], 404);
         }
 
-        return response()->json($task);
+        return response()->json($task->toApiArray());
     }
 
     public function store(Request $request)
@@ -186,8 +203,8 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'comment' => 'nullable|string',
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'appear_date' => 'nullable|date',
-            'deadline' => 'nullable|date',
+            'appear_date' => 'nullable|string',
+            'deadline' => 'nullable|string',
             'recurrence' => 'nullable|string|in:daily,weekly,monthly',
             'task_type' => 'required|string|in:individual,group',
             'response_type' => 'required|string|in:acknowledge,complete',
@@ -220,7 +237,7 @@ class TaskController extends Controller
             }
         }
 
-        return response()->json($task->load(['assignments.user']), 201);
+        return response()->json($task->load(['assignments.user'])->toApiArray(), 201);
     }
 
     public function update(Request $request, $id)
@@ -238,8 +255,8 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'comment' => 'nullable|string',
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'appear_date' => 'nullable|date',
-            'deadline' => 'nullable|date',
+            'appear_date' => 'nullable|string',
+            'deadline' => 'nullable|string',
             'recurrence' => 'nullable|string|in:daily,weekly,monthly',
             'task_type' => 'sometimes|required|string|in:individual,group',
             'response_type' => 'sometimes|required|string|in:acknowledge,complete',
@@ -267,7 +284,7 @@ class TaskController extends Controller
             }
         }
 
-        return response()->json($task->load(['assignments.user', 'responses.user']));
+        return response()->json($task->load(['assignments.user', 'responses.user'])->toApiArray());
     }
 
     public function destroy($id)
@@ -305,6 +322,11 @@ class TaskController extends Controller
 
         $postponedTasks = $query->orderByDesc('postpone_count')->get();
 
-        return response()->json($postponedTasks);
+        // Transform tasks to use UTC+5 timezone
+        $tasksData = $postponedTasks->map(function ($task) {
+            return $task->toApiArray();
+        });
+
+        return response()->json($tasksData);
     }
 }

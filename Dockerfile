@@ -55,6 +55,7 @@ RUN apt-get update -y \
   libzip-dev libonig-dev libxml2-dev \
   sqlite3 libsqlite3-dev \
   libpq-dev \
+  supervisor \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
@@ -77,6 +78,9 @@ COPY --from=build /usr/bin/composer /usr/bin/composer
 # Права
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
   && chmod -R 755 storage storage/framework bootstrap/cache || true
+
+# Создаем директорию для логов supervisor
+RUN mkdir -p /var/log/supervisor && chown -R www-data:www-data /var/log/supervisor
 
 # Документирование порта
 EXPOSE 9000

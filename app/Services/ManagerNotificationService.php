@@ -86,7 +86,7 @@ class ManagerNotificationService
             $message .= "📋 Задача: {$task->title}\n";
 
             if ($task->deadline) {
-                $message .= "⏰ Дедлайн: " . $task->deadline->format('d.m.Y H:i') . "\n";
+                $message .= "⏰ Дедлайн: " . $task->deadline_for_bot . "\n";
                 $message .= "⏱️ Просрочено на: " . $this->getOverdueTime($task->deadline) . "\n";
             }
 

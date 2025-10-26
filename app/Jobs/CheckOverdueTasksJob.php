@@ -22,7 +22,7 @@ class CheckOverdueTasksJob implements ShouldQueue
 
     public function __construct()
     {
-        //
+        $this->onQueue('notifications');
     }
 
     /**
@@ -33,7 +33,10 @@ class CheckOverdueTasksJob implements ShouldQueue
         try {
             $results = $taskService->notifyAboutOverdueTasks();
 
-            Log::info("CheckOverdueTasksJob completed: {$results['tasks_processed']} tasks processed, {$results['notifications_sent']} notifications sent");
+            Log::info("CheckOverdueTasksJob completed", [
+                'tasks_processed' => $results['tasks_processed'],
+                'notifications_sent' => $results['notifications_sent']
+            ]);
         } catch (\Throwable $e) {
             Log::error('CheckOverdueTasksJob failed: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),

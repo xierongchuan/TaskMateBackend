@@ -124,7 +124,7 @@ class TaskNotificationService
         }
 
         if ($task->deadline) {
-            $message .= "⏰ Дедлайн: " . $task->deadline->format('d.m.Y H:i') . "\n";
+            $message .= "⏰ Дедлайн: " . $task->deadline_for_bot . "\n";
         }
 
         if ($task->tags && is_array($task->tags) && !empty($task->tags)) {
@@ -193,7 +193,7 @@ class TaskNotificationService
                     try {
                         $message = "⚠️ *ПРОСРОЧЕНА ЗАДАЧА*\n\n";
                         $message .= "📌 {$task->title}\n";
-                        $message .= "⏰ Дедлайн был: " . $task->deadline->format('d.m.Y H:i') . "\n";
+                        $message .= "⏰ Дедлайн был: " . $task->deadline_for_bot . "\n";
                         $message .= "⏱️ Просрочено на: " . $this->getOverdueTime($task->deadline);
 
                         $this->bot->sendMessage(

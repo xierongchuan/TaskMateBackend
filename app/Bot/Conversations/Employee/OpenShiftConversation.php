@@ -384,7 +384,7 @@ class OpenShiftConversation extends BaseConversation
         }
 
         if ($task->deadline) {
-            $message .= "⏰ Дедлайн: " . $task->deadline->format('d.m.Y H:i') . "\n";
+            $message .= "⏰ Дедлайн: " . $task->deadline_for_bot . "\n";
         }
 
         // Create response keyboard based on response_type
