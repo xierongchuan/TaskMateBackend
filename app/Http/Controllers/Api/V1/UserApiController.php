@@ -322,6 +322,79 @@ class UserApiController extends Controller
         }
     }
 
+    public function destroy($id): JsonResponse
+    {
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Пользователь не найден'
+            ], 404);
+        }
+
+        // Проверяем наличие связанных данных
+        $relatedData = [];
+
+        if ($user->shifts()->count() > 0) {
+            $relatedData['shifts'] = $user->shifts()->count();
+        }
+
+        if ($user->taskAssignments()->count() > 0) {
+            $relatedData['task_assignments'] = $user->taskAssignments()->count();
+        }
+
+        if ($user->taskResponses()->count() > 0) {
+            $relatedData['task_responses'] = $user->taskResponses()->count();
+        }
+
+        if ($user->createdTasks()->count() > 0) {
+            $relatedData['created_tasks'] = $user->createdTasks()->count();
+        }
+
+        if ($user->createdLinks()->count() > 0) {
+            $relatedData['created_links'] = $user->createdLinks()->count();
+        }
+
+        if ($user->replacementsAsReplacing()->count() > 0) {
+            $relatedData['replacements_as_replacing'] = $user->replacementsAsReplacing()->count();
+        }
+
+        if ($user->replacementsAsReplaced()->count() > 0) {
+            $relatedData['replacements_as_replaced'] = $user->replacementsAsReplaced()->count();
+        }
+
+        if (!empty($relatedData)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Невозможно удалить пользователя со связанными данными',
+                'related_data' => $relatedData,
+                'errors' => [
+                    'user' => ['Пользователь имеет связанные записи: ' . implode(', ', array_keys($relatedData))]
+                ]
+            ], 422);
+        }
+
+        try {
+            // Удаляем все токены пользователя перед удалением
+            $user->tokens()->delete();
+
+            $userName = $user->full_name;
+            $user->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Пользователь '{$userName}' успешно удален"
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка при удалении пользователя',
+                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера'
+            ], 500);
+        }
+    }
+
     /**
      * Нормализует телефон: убирает все не-цифры.
      * Возвращает строку из цифр или пустую строку.

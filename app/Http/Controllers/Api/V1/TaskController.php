@@ -15,33 +15,172 @@ class TaskController extends Controller
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', '15');
+
+        // Получаем все параметры фильтрации
         $dealershipId = $request->query('dealership_id');
         $taskType = $request->query('task_type');
         $isActive = $request->query('is_active');
         $tags = $request->query('tags');
+        $creatorId = $request->query('creator_id');
+        $responseType = $request->query('response_type');
+        $deadlineFrom = $request->query('deadline_from');
+        $deadlineTo = $request->query('deadline_to');
+        $hasDeadline = $request->query('has_deadline');
+        $search = $request->query('search');
+        $status = $request->query('status');
+
+        // Логируем входные параметры для отладки
+        \Log::info('Task index params', [
+            'dealership_id' => $dealershipId,
+            'task_type' => $taskType,
+            'is_active' => $isActive,
+            'tags' => $tags,
+            'creator_id' => $creatorId,
+            'response_type' => $responseType,
+            'deadline_from' => $deadlineFrom,
+            'deadline_to' => $deadlineTo,
+            'has_deadline' => $hasDeadline,
+            'status' => $status,
+            'search' => $search,
+            'all_query_params' => $request->query()
+        ]);
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
 
+        // Фильтрация по автосалону
         if ($dealershipId) {
             $query->where('dealership_id', $dealershipId);
         }
 
+        // Фильтрация по типу задачи
         if ($taskType) {
             $query->where('task_type', $taskType);
         }
 
+        // Фильтрация по активности
         if ($isActive !== null) {
-            $query->where('is_active', (bool) $isActive);
+            $isActiveValue = filter_var($isActive, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isActiveValue !== null) {
+                $query->where('is_active', $isActiveValue);
+                \Log::info('Applied is_active filter', ['value' => $isActive, 'converted' => $isActiveValue]);
+            }
         }
 
+        // Фильтрация по создателю
+        if ($creatorId) {
+            $query->where('creator_id', $creatorId);
+        }
+
+        // Фильтрация по типу ответа
+        if ($responseType) {
+            $query->where('response_type', $responseType);
+        }
+
+        // Фильтрация по тегам
         if ($tags) {
             $tagsArray = is_array($tags) ? $tags : explode(',', $tags);
+            $tagsArray = array_map('trim', $tagsArray);
             $query->where(function ($q) use ($tagsArray) {
                 foreach ($tagsArray as $tag) {
-                    $q->orWhereJsonContains('tags', trim($tag));
+                    $q->orWhereJsonContains('tags', $tag);
                 }
             });
         }
+
+        // Фильтрация по дедлайну
+        if ($deadlineFrom) {
+            try {
+                $query->where('deadline', '>=', Carbon::parse($deadlineFrom));
+            } catch (\Exception $e) {
+                // Некорректная дата - игнорируем фильтр
+            }
+        }
+
+        if ($deadlineTo) {
+            try {
+                $query->where('deadline', '<=', Carbon::parse($deadlineTo));
+            } catch (\Exception $e) {
+                // Некорректная дата - игнорируем фильтр
+            }
+        }
+
+        // Фильтрация по наличию дедлайна
+        if ($hasDeadline !== null) {
+            $hasDeadlineValue = filter_var($hasDeadline, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($hasDeadlineValue !== null) {
+                if ($hasDeadlineValue) {
+                    $query->whereNotNull('deadline');
+                } else {
+                    $query->whereNull('deadline');
+                }
+                \Log::info('Applied has_deadline filter', ['value' => $hasDeadline, 'converted' => $hasDeadlineValue]);
+            }
+        }
+
+        // Поиск по названию и описанию
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'LIKE', "%{$search}%")
+                  ->orWhere('description', 'LIKE', "%{$search}%")
+                  ->orWhere('comment', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Фильтрация по статусу задачи
+        if ($status) {
+            $now = Carbon::now();
+
+            switch (strtolower($status)) {
+                case 'active':
+                    $query->where('is_active', true)
+                          ->whereNull('archived_at');
+                    break;
+
+                case 'completed':
+                    $query->whereHas('responses', function ($q) {
+                        $q->where('status', 'completed');
+                    });
+                    break;
+
+                case 'overdue':
+                    $query->where('is_active', true)
+                          ->whereNotNull('deadline')
+                          ->where('deadline', '<', $now)
+                          ->whereDoesntHave('responses', function ($q) {
+                              $q->where('status', 'completed');
+                          });
+                    break;
+
+                case 'postponed':
+                    $query->where('postpone_count', '>', 0)
+                          ->where('is_active', true);
+                    break;
+
+                case 'pending':
+                    $query->where('is_active', true)
+                          ->whereDoesntHave('responses', function ($q) {
+                              $q->whereIn('status', ['completed', 'acknowledged']);
+                          });
+                    break;
+
+                case 'acknowledged':
+                    $query->whereHas('responses', function ($q) {
+                        $q->where('status', 'acknowledged');
+                    });
+                    break;
+            }
+
+            \Log::info('Applied status filter', ['status' => $status]);
+        }
+
+        // Исключаем архивные задачи (у которых есть archived_at)
+        $query->whereNull('archived_at');
+
+        // Логируем SQL запрос для отладки
+        \Log::info('Task SQL query', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings()
+        ]);
 
         $tasks = $query->orderByDesc('created_at')->paginate($perPage);
 

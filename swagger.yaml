@@ -68,14 +68,14 @@ components:
         telegram_id:
           type: integer
           example: 123456789
-        phone:
+        phone_number:
           type: string
           example: +79001234567
         role:
           type: string
           enum: [employee, manager, observer, owner]
           example: employee
-          dealership_id:
+        dealership_id:
           type: integer
           nullable: true
           example: 1
@@ -138,6 +138,14 @@ components:
           format: date-time
           nullable: true
           example: 2025-10-12T18:00:00Z
+        opening_photo_path:
+          type: string
+          nullable: true
+          example: /storage/photos/opening_123.jpg
+        closing_photo_path:
+          type: string
+          nullable: true
+          example: /storage/photos/closing_123.jpg
         status:
           type: string
           enum: [open, closed]
@@ -145,6 +153,16 @@ components:
         late_minutes:
           type: integer
           example: 5
+        scheduled_start:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2025-10-12T09:00:00Z
+        scheduled_end:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2025-10-12T18:00:00Z
         created_at:
           type: string
           format: date-time
@@ -179,6 +197,15 @@ components:
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        shift:
+          $ref: '#/components/schemas/Shift'
+        replacingUser:
+          $ref: '#/components/schemas/User'
+        replacedUser:
+          $ref: '#/components/schemas/User'
 
     Task:
       type: object
@@ -208,10 +235,12 @@ components:
           type: string
           format: date-time
           nullable: true
+          example: 2025-10-12T09:00:00Z
         deadline:
           type: string
           format: date-time
           nullable: true
+          example: 2025-10-15T18:00:00Z
         recurrence:
           type: string
           enum: [daily, weekly, monthly]
@@ -237,6 +266,11 @@ components:
         postpone_count:
           type: integer
           example: 0
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
         created_at:
           type: string
           format: date-time
@@ -255,6 +289,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaskResponse'
+        assignedUsers:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
 
     TaskAssignment:
       type: object
@@ -268,12 +306,23 @@ components:
         user_id:
           type: integer
           example: 1
+        role:
+          type: string
+          nullable: true
+          example: assignee
+        assigned_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2025-10-12T09:00:00Z
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+        task:
+          $ref: '#/components/schemas/Task'
         user:
           $ref: '#/components/schemas/User'
 
@@ -296,12 +345,20 @@ components:
         responded_at:
           type: string
           format: date-time
+          nullable: true
+          example: 2025-10-12T10:00:00Z
         comment:
           type: string
           nullable: true
+          example: Выполнено успешно
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        task:
+          $ref: '#/components/schemas/Task'
         user:
           $ref: '#/components/schemas/User'
 
@@ -315,11 +372,7 @@ components:
           type: string
           example: shift_1_start_time
         value:
-          oneOf:
-            - type: string
-            - type: integer
-            - type: boolean
-            - type: object
+          type: string
           example: "09:00"
         type:
           type: string
@@ -339,6 +392,170 @@ components:
         updated_at:
           type: string
           format: date-time
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+
+    ImportantLink:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Внутренний портал
+        url:
+          type: string
+          example: https://internal.company.com
+        description:
+          type: string
+          nullable: true
+          example: Доступ к корпоративным ресурсам
+        creator_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        creator:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+
+    ExpenseRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          example: 1
+        amount:
+          type: number
+          format: decimal
+          example: 1500.50
+        description:
+          type: string
+          example: Закупка канцелярских принадлежностей
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        requested_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+        processed_by:
+          type: integer
+          nullable: true
+          example: 2
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseApproval'
+
+    ExpenseApproval:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        expense_request_id:
+          type: integer
+          example: 1
+        approver_id:
+          type: integer
+          example: 2
+        status:
+          type: string
+          enum: [approved, rejected]
+          example: approved
+        comment:
+          type: string
+          nullable: true
+          example: Согласовано
+        approved_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        expenseRequest:
+          $ref: '#/components/schemas/ExpenseRequest'
+        approver:
+          $ref: '#/components/schemas/User'
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          nullable: true
+          example: 1
+        action:
+          type: string
+          example: user_created
+        entity_type:
+          type: string
+          example: user
+        entity_id:
+          type: integer
+          nullable: true
+          example: 123
+        old_values:
+          type: object
+          nullable: true
+        new_values:
+          type: object
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+          example: 192.168.1.1
+        user_agent:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
 
     UserRegistrationResponse:
       type: object
@@ -613,7 +830,7 @@ paths:
             type: integer
             default: 15
             example: 20
-        - name: phone
+        - name: phone_number
           in: query
           description: Фильтр по номеру телефона
           schema:
@@ -665,7 +882,7 @@ paths:
                 - login
                 - password
                 - full_name
-                - phone
+                - phone_number
                 - role
               properties:
                 login:
@@ -685,7 +902,7 @@ paths:
                   minLength: 2
                   maxLength: 255
                   example: Иван Иванов
-                phone:
+                phone_number:
                   type: string
                   pattern: '^\+?[\d\s\-\(\)]+$'
                   maxLength: 20
@@ -761,7 +978,7 @@ paths:
                 - login
                 - password
                 - full_name
-                - phone
+                - phone_number
                 - role
               properties:
                 login:
@@ -781,7 +998,7 @@ paths:
                   minLength: 2
                   maxLength: 255
                   example: Иван Иванов
-                phone:
+                phone_number:
                   type: string
                   pattern: '^\+?[\d\s\-\(\)]+$'
                   maxLength: 20
@@ -897,7 +1114,7 @@ paths:
                   type: string
                   example: 'Иван Иванов'
                   description: Полное имя пользователя
-                phone:
+                phone_number:
                   type: string
                   example: '+79991234567'
                   description: Телефон пользователя
@@ -983,6 +1200,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Users
+      summary: Удалить пользователя
+      description: Удаление пользователя (только если нет связанных данных)
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Пользователь успешно удален
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Пользователь 'Иван Иванов' успешно удален"
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Пользователь не найден
+        '422':
+          description: Невозможно удалить пользователя со связанными данными
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Невозможно удалить пользователя со связанными данными
+                  related_data:
+                    type: object
+                    properties:
+                      shifts:
+                        type: integer
+                        example: 5
+                      task_assignments:
+                        type: integer
+                        example: 12
+                      task_responses:
+                        type: integer
+                        example: 8
+                      created_tasks:
+                        type: integer
+                        example: 3
+                      created_links:
+                        type: integer
+                        example: 2
+                      replacements_as_replacing:
+                        type: integer
+                        example: 1
+                      replacements_as_replaced:
+                        type: integer
+                        example: 0
+                  errors:
+                    type: object
+                    properties:
+                      user:
+                        type: array
+                        items:
+                          type: string
+                        example: ["Пользователь имеет связанные записи: shifts, task_assignments, task_responses"]
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Ошибка при удалении пользователя
+                  error:
+                    type: string
+                    example: Database error details
 
   /dealerships:
     get:
@@ -1216,6 +1544,95 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    delete:
+      tags:
+        - Dealerships
+      summary: Удалить автосалон
+      description: Удаление автосалона (только если нет связанных данных)
+      operationId: deleteDealership
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID автосалона
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Автосалон успешно удален
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Автосалон успешно удален
+        '404':
+          description: Автосалон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Невозможно удалить автосалон с связанными данными
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Невозможно удалить автосалон с связанными данными
+                  related_data:
+                    type: object
+                    properties:
+                      users:
+                        type: integer
+                        example: 5
+                      shifts:
+                        type: integer
+                        example: 12
+                      tasks:
+                        type: integer
+                        example: 3
+                  errors:
+                    type: object
+                    properties:
+                      dealership:
+                        type: array
+                        items:
+                          type: string
+                        example: ["Автосалон имеет связанные записи: users, shifts, tasks"]
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Ошибка при удалении автосалона
+                  error:
+                    type: string
+                    example: Database error details
+
   /shifts:
     get:
       tags:
@@ -1424,7 +1841,7 @@ paths:
       tags:
         - Tasks
       summary: Получить список задач
-      description: Получение списка задач с пагинацией и фильтрацией
+      description: Получение списка задач с пагинацией и расширенной фильтрацией
       operationId: listTasks
       security:
         - bearerAuth: []
@@ -1436,6 +1853,13 @@ paths:
             type: integer
             default: 15
             example: 20
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
         - name: dealership_id
           in: query
           description: Фильтр по автосалону
@@ -1455,19 +1879,58 @@ paths:
           schema:
             type: boolean
             example: true
+        - name: response_type
+          in: query
+          description: Фильтр по типу ответа
+          schema:
+            type: string
+            enum: [acknowledge, complete]
+            example: complete
+        - name: creator_id
+          in: query
+          description: Фильтр по ID создателя
+          schema:
+            type: integer
+            example: 1
         - name: tags
           in: query
           description: Фильтр по тегам (через запятую)
           schema:
             type: string
             example: "urgent,inventory"
-        - name: page
+        - name: deadline_from
           in: query
-          description: Номер страницы
+          description: Фильтр по дедлайну (с даты)
           schema:
-            type: integer
-            default: 1
-            example: 1
+            type: string
+            format: date
+            example: "2025-10-15"
+        - name: deadline_to
+          in: query
+          description: Фильтр по дедлайну (до даты)
+          schema:
+            type: string
+            format: date
+            example: "2025-10-20"
+        - name: has_deadline
+          in: query
+          description: Фильтр по наличию дедлайна
+          schema:
+            type: boolean
+            example: true
+        - name: status
+          in: query
+          description: Фильтр по статусу задачи
+          schema:
+            type: string
+            enum: [active, completed, overdue, postponed, pending, acknowledged]
+            example: "active"
+        - name: search
+          in: query
+          description: Поиск по названию, описанию и комментарию
+          schema:
+            type: string
+            example: "инвентарь"
       responses:
         '200':
           description: Список задач

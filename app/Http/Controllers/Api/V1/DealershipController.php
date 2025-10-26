@@ -79,4 +79,55 @@ class DealershipController extends Controller
 
         return response()->json($dealership);
     }
+
+    public function destroy($id)
+    {
+        $dealership = AutoDealership::find($id);
+
+        if (!$dealership) {
+            return response()->json([
+                'message' => 'Автосалон не найден'
+            ], 404);
+        }
+
+        // Проверяем наличие связанных данных
+        $relatedData = [];
+
+        if ($dealership->users()->count() > 0) {
+            $relatedData['users'] = $dealership->users()->count();
+        }
+
+        if ($dealership->shifts()->count() > 0) {
+            $relatedData['shifts'] = $dealership->shifts()->count();
+        }
+
+        if ($dealership->tasks()->count() > 0) {
+            $relatedData['tasks'] = $dealership->tasks()->count();
+        }
+
+        if (!empty($relatedData)) {
+            return response()->json([
+                'message' => 'Невозможно удалить автосалон с связанными данными',
+                'related_data' => $relatedData,
+                'errors' => [
+                    'dealership' => ['Автосалон имеет связанные записи: ' . implode(', ', array_keys($relatedData))]
+                ]
+            ], 422);
+        }
+
+        try {
+            $dealership->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Автосалон успешно удален'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка при удалении автосалона',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
