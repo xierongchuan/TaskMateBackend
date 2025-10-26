@@ -345,7 +345,7 @@ class TaskNotificationService
         $overdueTasks = Task::where('is_active', true)
             ->whereNotNull('deadline')
             ->where('deadline', '<', $nowUTC)
-            ->where('deadline', '>', $nowUTC->copy()->subMinutes(5)) // Only if overdue within last 5 minutes
+            ->where('deadline', '>=', $nowUTC->copy()->subMinutes(5)) // Only if overdue within last 5 minutes
             ->whereDoesntHave('responses', function ($query) {
                 $query->where('status', 'completed');
             })
