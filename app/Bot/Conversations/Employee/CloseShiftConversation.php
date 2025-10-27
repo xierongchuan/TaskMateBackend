@@ -108,18 +108,27 @@ class CloseShiftConversation extends BaseConversation
 
             // Download photo from Telegram
             $file = $bot->getFile($fileId);
-            $filePath = $file->file_path;
 
-            // Download file content
-            $fileContent = file_get_contents("https://api.telegram.org/file/bot{$bot->getConfig()->token}/{$filePath}");
-
-            if ($fileContent === false) {
-                throw new \RuntimeException('Failed to download photo');
+            if (!$file || !$file->file_path) {
+                throw new \RuntimeException('Failed to get file info from Telegram');
             }
 
-            // Save photo to storage
+            // Generate filename for storage
             $filename = 'shifts/' . uniqid('shift_close_photo_', true) . '.jpg';
-            Storage::disk('public')->put($filename, $fileContent);
+            $storagePath = Storage::disk('public')->path($filename);
+
+            // Ensure directory exists
+            $directory = dirname($storagePath);
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            // Download file using Nutgram's built-in method
+            $bot->downloadFile($file, $storagePath);
+
+            if (!file_exists($storagePath)) {
+                throw new \RuntimeException('Failed to download photo from Telegram');
+            }
 
             $this->photoPath = $filename;
 
