@@ -95,7 +95,7 @@ class OpenShiftConversation extends BaseConversation
             $filePath = $file->file_path;
 
             // Download file content
-            $fileContent = file_get_contents("https://api.telegram.org/file/bot{$bot->getConfig()['token']}/{$filePath}");
+            $fileContent = file_get_contents("https://api.telegram.org/file/bot{$bot->getConfig()->token}/{$filePath}");
 
             if ($fileContent === false) {
                 throw new \RuntimeException('Failed to download photo');
