@@ -115,7 +115,6 @@ class StartConversationTest extends TestCase
             'phone' => '+79991234567',
             'role' => Role::EMPLOYEE->value,
             'telegram_id' => 123456789,
-            'company_id' => 0,
         ]);
 
         // Try to find same user by phone
@@ -139,7 +138,6 @@ class StartConversationTest extends TestCase
             'phone' => '+79991234567',
             'role' => Role::MANAGER->value,
             'telegram_id' => 123456789,
-            'company_id' => 0,
         ]);
 
         $reflection = new \ReflectionClass('\App\Bot\Conversations\Guest\StartConversation');
@@ -164,7 +162,6 @@ class StartConversationTest extends TestCase
             'phone' => '+12345678901',
             'role' => Role::EMPLOYEE->value,
             'telegram_id' => null,
-            'company_id' => 0,
         ]);
 
         $reflection = new \ReflectionClass('\App\Bot\Conversations\Guest\StartConversation');

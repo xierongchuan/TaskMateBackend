@@ -170,8 +170,8 @@ describe('ExpenseRequest Model', function () {
 
     it('can query expense requests by company', function () {
         // Arrange
-        $user1 = User::factory()->create(['company_id' => 1]);
-        $user2 = User::factory()->create(['company_id' => 2]);
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
 
         ExpenseRequest::factory()->create([
             'requester_id' => $user1->id,
