@@ -37,7 +37,7 @@ class StartCommandTest extends TestCase
             'phone' => '+79991234567',
             'role' => Role::EMPLOYEE->value,
             'telegram_id' => 123456789,
-            'auto_dealership_id' => 1,
+            'dealership_id' => 1,
         ]);
 
         $this->actingAs($user);
@@ -58,7 +58,7 @@ class StartCommandTest extends TestCase
             'phone' => '+79991234568',
             'role' => Role::MANAGER->value,
             'telegram_id' => 123456790,
-            'auto_dealership_id' => 1,
+            'dealership_id' => 1,
         ]);
 
         $this->actingAs($user);
@@ -77,7 +77,7 @@ class StartCommandTest extends TestCase
             'phone' => '+79991234569',
             'role' => Role::OBSERVER->value,
             'telegram_id' => 123456791,
-            'auto_dealership_id' => 1,
+            'dealership_id' => 1,
         ]);
 
         $this->actingAs($user);
