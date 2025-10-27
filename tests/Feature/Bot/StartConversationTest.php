@@ -72,7 +72,7 @@ class StartConversationTest extends TestCase
                 'login' => 'user2',
                 'password' => bcrypt('password'),
                 'full_name' => 'User Two',
-                'phone' => '8 (999) 234-56-78',
+                'phone' => '+79992345678',
                 'role' => Role::MANAGER->value,
                 'telegram_id' => null,
               ]),
