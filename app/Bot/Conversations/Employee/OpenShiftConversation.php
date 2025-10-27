@@ -135,7 +135,27 @@ class OpenShiftConversation extends BaseConversation
     public function handleReplacementQuestion(Nutgram $bot): void
     {
         try {
+            // Handle callback query if user somehow triggered one (shouldn't happen with ReplyKeyboard)
+            if ($bot->callbackQuery()) {
+                $bot->answerCallbackQuery();
+                $bot->sendMessage(
+                    '⚠️ Пожалуйста, используйте кнопки ниже для ответа.',
+                    reply_markup: static::yesNoKeyboard('Да', 'Нет')
+                );
+                $this->next('handleReplacementQuestion');
+                return;
+            }
+
             $answer = $bot->message()?->text;
+
+            if (!$answer) {
+                $bot->sendMessage(
+                    '⚠️ Пожалуйста, выберите "Да" или "Нет"',
+                    reply_markup: static::yesNoKeyboard('Да', 'Нет')
+                );
+                $this->next('handleReplacementQuestion');
+                return;
+            }
 
             if ($answer === 'Да') {
                 $this->isReplacement = true;
