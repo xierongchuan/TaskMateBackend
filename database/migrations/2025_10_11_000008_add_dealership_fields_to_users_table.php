@@ -12,6 +12,13 @@ return new class () extends Migration {
      */
     public function up(): void
     {
+        // dealership_id column already exists in create_users_table migration
+        // This migration was created later but the column was added to the base migration
+        // Skip this migration to avoid duplicate column errors
+        if (Schema::hasColumn('users', 'dealership_id')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             $table->bigInteger('dealership_id')->unsigned()->nullable()->after('company_id');
             $table->foreign('dealership_id')->references('id')->on('auto_dealerships')->onDelete('set null');
