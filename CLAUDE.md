@@ -325,3 +325,13 @@ Copyright: © 2023-2025 谢榕川 All rights reserved
 - [swagger.yaml](swagger.yaml) - OpenAPI спецификация
 - [docs/](docs/) - Дополнительная документация
 - [check-scheduler.md](check-scheduler.md) - Проверка планировщика задач
+
+---
+
+Issue to solve: undefined
+Your prepared branch: issue-12-c57d28bb
+Your prepared working directory: /tmp/gh-issue-solver-1761525050390
+Your forked repository: konard/TaskMateTelegramBot
+Original repository (upstream): xierongchuan/TaskMateTelegramBot
+
+Proceed.
