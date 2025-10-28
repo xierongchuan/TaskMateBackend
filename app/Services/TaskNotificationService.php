@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Task;
+use App\Models\TaskNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -100,6 +101,12 @@ class TaskNotificationService
                 return false;
             }
 
+            // Check if this notification was already sent to prevent duplicates
+            if (TaskNotification::wasAlreadySent($task->id, $user->id, TaskNotification::TYPE_UPCOMING_DEADLINE)) {
+                Log::info("Upcoming deadline notification already sent for task #{$task->id} to user #{$user->id}, skipping");
+                return false;
+            }
+
             $message = $this->formatUpcomingDeadlineMessage($task);
             $keyboard = $this->getTaskKeyboard($task);
 
@@ -109,6 +116,9 @@ class TaskNotificationService
                 parse_mode: 'Markdown',
                 reply_markup: $keyboard
             );
+
+            // Record that this notification was sent
+            TaskNotification::recordSent($task->id, $user->id, TaskNotification::TYPE_UPCOMING_DEADLINE);
 
             Log::info("Upcoming deadline notification sent for task #{$task->id} to user #{$user->id}");
             return true;
@@ -129,6 +139,12 @@ class TaskNotificationService
                 return false;
             }
 
+            // Check if this notification was already sent to prevent duplicates
+            if (TaskNotification::wasAlreadySent($task->id, $user->id, TaskNotification::TYPE_OVERDUE)) {
+                Log::info("Overdue notification already sent for task #{$task->id} to user #{$user->id}, skipping");
+                return false;
+            }
+
             $message = $this->formatOverdueMessage($task);
             $keyboard = $this->getTaskKeyboard($task);
 
@@ -138,6 +154,9 @@ class TaskNotificationService
                 parse_mode: 'Markdown',
                 reply_markup: $keyboard
             );
+
+            // Record that this notification was sent
+            TaskNotification::recordSent($task->id, $user->id, TaskNotification::TYPE_OVERDUE);
 
             Log::info("Overdue notification sent for task #{$task->id} to user #{$user->id}");
             return true;
@@ -158,6 +177,12 @@ class TaskNotificationService
                 return false;
             }
 
+            // Check if this notification was already sent to prevent duplicates
+            if (TaskNotification::wasAlreadySent($task->id, $user->id, TaskNotification::TYPE_HOUR_OVERDUE)) {
+                Log::info("Hour overdue notification already sent for task #{$task->id} to user #{$user->id}, skipping");
+                return false;
+            }
+
             $message = $this->formatHourOverdueMessage($task);
             $keyboard = $this->getTaskKeyboard($task);
 
@@ -167,6 +192,9 @@ class TaskNotificationService
                 parse_mode: 'Markdown',
                 reply_markup: $keyboard
             );
+
+            // Record that this notification was sent
+            TaskNotification::recordSent($task->id, $user->id, TaskNotification::TYPE_HOUR_OVERDUE);
 
             Log::info("Hour overdue notification sent for task #{$task->id} to user #{$user->id}");
             return true;
