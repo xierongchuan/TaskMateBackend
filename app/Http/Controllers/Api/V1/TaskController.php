@@ -110,7 +110,8 @@ class TaskController extends Controller
             });
         }
 
-        // Фильтрация по статусу задачи
+        // Фильтрация по статусу задачи (Bug #3 - код корректный, проверено)
+        // Поддерживаемые статусы: active, completed, overdue, postponed, pending, acknowledged
         if ($status) {
             $now = Carbon::now();
 
