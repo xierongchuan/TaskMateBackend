@@ -664,6 +664,7 @@ export interface UsersFilters {
   role?: string;
   dealership_id?: number;
   phone?: string;
+  has_telegram?: 'connected' | 'not_connected';
   per_page?: number;
   page?: number;
 }

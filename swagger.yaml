@@ -908,7 +908,7 @@ paths:
       tags:
         - Users
       summary: Получить список пользователей
-      description: Получение списка пользователей с пагинацией и фильтрацией по телефону
+      description: Получение списка пользователей с пагинацией и фильтрацией
       operationId: listUsers
       security:
         - bearerAuth: []
@@ -920,12 +920,6 @@ paths:
             type: integer
             default: 15
             example: 20
-        - name: phone_number
-          in: query
-          description: Фильтр по номеру телефона
-          schema:
-            type: string
-            example: "+79001234567"
         - name: page
           in: query
           description: Номер страницы
@@ -933,6 +927,62 @@ paths:
             type: integer
             default: 1
             example: 1
+        - name: search
+          in: query
+          description: Поиск по логину или имени пользователя
+          schema:
+            type: string
+            example: "Иван"
+        - name: login
+          in: query
+          description: Точный фильтр по логину
+          schema:
+            type: string
+            example: "ivan123"
+        - name: name
+          in: query
+          description: Фильтр по полному имени пользователя
+          schema:
+            type: string
+            example: "Иванов Иван"
+        - name: role
+          in: query
+          description: Фильтр по роли пользователя
+          schema:
+            type: string
+            enum: [employee, manager, observer, owner]
+            example: "employee"
+        - name: dealership_id
+          in: query
+          description: Фильтр по ID автосалона
+          schema:
+            type: integer
+            example: 1
+        - name: phone
+          in: query
+          description: Фильтр по номеру телефона (альтернативный параметр)
+          schema:
+            type: string
+            example: "+79001234567"
+        - name: phone_number
+          in: query
+          description: Фильтр по номеру телефона
+          schema:
+            type: string
+            example: "+79001234567"
+        - name: has_telegram
+          in: query
+          description: Фильтр по статусу подключения Telegram
+          schema:
+            type: string
+            enum: [connected, not_connected]
+            example: "not_connected"
+        - name: include_dealership
+          in: query
+          description: Включить информацию об автосалоне в ответ
+          schema:
+            type: string
+            example: "1"
       responses:
         '200':
           description: Список пользователей

@@ -33,6 +33,8 @@ class UserApiController extends Controller
             $phone = (string) $request->query('phone_number', '');
         }
 
+        $hasTelegram = (string) $request->query('has_telegram', '');
+
         $query = User::query();
 
         // Search by login or name (OR logic)
@@ -82,6 +84,16 @@ class UserApiController extends Controller
                     ["%{$normalized}%"]
                 );
             }
+        }
+
+        // Telegram connection filtering
+        if ($hasTelegram !== '') {
+            if ($hasTelegram === 'connected') {
+                $query->whereNotNull('telegram_id');
+            } elseif ($hasTelegram === 'not_connected') {
+                $query->whereNull('telegram_id');
+            }
+            // Ignore invalid values silently
         }
 
         // Eager load dealership relationship if filtering by dealership or include requested
