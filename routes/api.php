@@ -25,17 +25,6 @@ Route::prefix('v1')->group(function () {
         [SessionController::class, 'store']
     )->middleware('throttle:100,1440');
 
-    // Регистрация пользовтеля (регистрация)
-    Route::post(
-        '/register',
-        [AuthController::class, 'register']
-    )->middleware('throttle:50,1440');
-
-    // Создание сотрудника (независимая регистрация)
-    Route::post(
-        '/users/create',
-        [UserRegistrationController::class, 'store']
-    )->middleware('throttle:50,1440');
 
     // Закрытие сессии (логаут)
     Route::delete(
@@ -61,18 +50,28 @@ Route::prefix('v1')->group(function () {
         ->group(function () {
             // Users
             Route::get('/users', [UserApiController::class, 'index']);
-            Route::post('/users', [UserApiController::class, 'store']);
             Route::get('/users/{id}', [UserApiController::class, 'show']);
-            Route::put('/users/{id}', [UserApiController::class, 'update']);
-            Route::delete('/users/{id}', [UserApiController::class, 'destroy']);
             Route::get('/users/{id}/status', [UserApiController::class, 'status']);
+
+            // Only managers and owners can create, update, and delete users
+            Route::post('/users', [UserApiController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/users/{id}', [UserApiController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/users/{id}', [UserApiController::class, 'destroy'])
+                ->middleware('role:manager,owner');
 
             // Dealerships
             Route::get('/dealerships', [DealershipController::class, 'index']);
-            Route::post('/dealerships', [DealershipController::class, 'store']);
             Route::get('/dealerships/{id}', [DealershipController::class, 'show']);
-            Route::put('/dealerships/{id}', [DealershipController::class, 'update']);
-            Route::delete('/dealerships/{id}', [DealershipController::class, 'destroy']);
+
+            // Only managers and owners can manage dealerships
+            Route::post('/dealerships', [DealershipController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/dealerships/{id}', [DealershipController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/dealerships/{id}', [DealershipController::class, 'destroy'])
+                ->middleware('role:manager,owner');
 
             // Shifts
             Route::get('/shifts', [ShiftController::class, 'index']);
@@ -82,24 +81,36 @@ Route::prefix('v1')->group(function () {
 
             // Tasks
             Route::get('/tasks', [TaskController::class, 'index']);
-            Route::post('/tasks', [TaskController::class, 'store']);
             Route::get('/tasks/postponed', [TaskController::class, 'postponed']);
             Route::get('/tasks/{id}', [TaskController::class, 'show']);
-            Route::put('/tasks/{id}', [TaskController::class, 'update']);
-            Route::delete('/tasks/{id}', [TaskController::class, 'destroy']);
+
+            // Only managers and owners can manage tasks
+            Route::post('/tasks', [TaskController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/tasks/{id}', [TaskController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])
+                ->middleware('role:manager,owner');
 
             // Dashboard
             Route::get('/dashboard', [DashboardController::class, 'index']);
 
-            // Settings
+            // Settings (read-only for observers)
             Route::get('/settings', [SettingsController::class, 'index']);
             Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
-            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig']);
             Route::get('/settings/bot-config', [SettingsController::class, 'getBotConfig']);
-            Route::post('/settings/bot-config', [SettingsController::class, 'updateBotConfig']);
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
-            Route::post('/settings', [SettingsController::class, 'store']);
-            Route::put('/settings/{id}', [SettingsController::class, 'update']);
-            Route::delete('/settings/{id}', [SettingsController::class, 'destroy']);
+
+            // Only managers and owners can modify settings
+            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
+                ->middleware('role:manager,owner');
+            Route::post('/settings/bot-config', [SettingsController::class, 'updateBotConfig'])
+                ->middleware('role:manager,owner');
+            Route::post('/settings', [SettingsController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/settings/{id}', [SettingsController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/settings/{id}', [SettingsController::class, 'destroy'])
+                ->middleware('role:manager,owner');
         });
 });

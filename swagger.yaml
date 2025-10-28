@@ -882,56 +882,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /register:
-    post:
-      tags:
-        - Auth
-      summary: Регистрация нового пользователя
-      description: Создание нового пользователя и получение токена доступа
-      operationId: registerUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - login
-                - password
-              properties:
-                login:
-                  type: string
-                  minLength: 4
-                  maxLength: 255
-                  example: newuser123
-                password:
-                  type: string
-                  minLength: 12
-                  maxLength: 255
-                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
-                  description: Пароль должен содержать минимум 12 символов, включая заглавные и строчные буквы, цифры и специальные символы
-                  example: Password123!
-      responses:
-        '200':
-          description: Успешная регистрация
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Пользователь успешно зарегистрирован
-                  token:
-                    type: string
-                    example: 2|xyz789abc456
-        '422':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /up:
     get:
       tags:
@@ -1005,8 +955,13 @@ paths:
     post:
       tags:
         - Users
-      summary: Создать нового сотрудника (с аутентификацией)
-      description: Создание нового сотрудника в системе с аутентификацией
+      summary: Создать нового пользователя
+      description: |
+        Создание нового пользователя в системе.
+
+        **Требуемые роли:** Manager, Owner
+
+        ⚠️ Это единственный способ создания пользователей. Endpoint /register был удален для безопасности.
       operationId: createUser
       security:
         - bearerAuth: []
@@ -1079,96 +1034,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '422':
-          description: Ошибка валидации
+        '403':
+          description: Недостаточно прав (требуется роль Manager или Owner)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: false
                   message:
                     type: string
-                    example: Ошибка валидации
-                  errors:
-                    type: object
-                    additionalProperties:
-                      type: array
-                      items:
-                        type: string
-
-  /users/create:
-    post:
-      tags:
-        - Users
-      summary: Создать нового сотрудника (публичный эндпоинт)
-      description: Создание нового сотрудника в системе без аутентификации
-      operationId: createUserPublic
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - login
-                - password
-                - full_name
-                - phone_number
-                - role
-              properties:
-                login:
-                  type: string
-                  minLength: 4
-                  maxLength: 255
-                  example: newuser123
-                password:
-                  type: string
-                  minLength: 8
-                  maxLength: 255
-                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]'
-                  description: Пароль должен содержать минимум 8 символов, включая заглавные и строчные буквы и цифры
-                  example: Password123
-                full_name:
-                  type: string
-                  minLength: 2
-                  maxLength: 255
-                  example: Иван Иванов
-                phone_number:
-                  type: string
-                  pattern: '^\+?[\d\s\-\(\)]+$'
-                  maxLength: 20
-                  example: +79001234567
-                role:
-                  type: string
-                  enum: [employee, manager, observer, owner]
-                  example: employee
-                telegram_id:
-                  type: integer
-                  nullable: true
-                  example: 123456789
-                dealership_id:
-                  type: integer
-                  nullable: true
-                  example: 1
-      responses:
-        '201':
-          description: Сотрудник успешно создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
+                    example: Недостаточно прав для выполнения этого действия
+                  required_roles:
+                    type: array
+                    items:
+                      type: string
+                    example: ["manager", "owner"]
+                  your_role:
                     type: string
-                    example: Сотрудник успешно создан
-                  data:
-                    $ref: '#/components/schemas/User'
+                    example: employee
         '422':
           description: Ошибка валидации
           content:

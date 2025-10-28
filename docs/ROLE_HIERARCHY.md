@@ -102,49 +102,57 @@ public function updateSensitiveData(Request $request)
 }
 ```
 
-## Рекомендуемый контроль доступа к endpoints
+## Контроль доступа к endpoints
 
 ### Аутентификация (Session/Auth)
-- `POST /api/v1/session` - Нет ограничений (публичный)
-- `POST /api/v1/register` - Нет ограничений (публичный)
+- `POST /api/v1/session` - Нет ограничений (публичный логин)
 - `DELETE /api/v1/session` - Авторизованные пользователи
 - `GET /api/v1/session/current` - Авторизованные пользователи
 
+**⚠️ ВАЖНО**: Endpoint `/api/v1/register` удален. Регистрация новых пользователей возможна только через API `/api/v1/users` менеджерами и владельцами.
+
 ### Пользователи (Users)
-- `GET /api/v1/users` - Observer, Manager, Owner
-- `POST /api/v1/users` - Manager, Owner
-- `GET /api/v1/users/{id}` - Observer, Manager, Owner (+ Employee для своего профиля)
-- `PUT /api/v1/users/{id}` - Manager, Owner (+ Employee для своего профиля)
-- `DELETE /api/v1/users/{id}` - Owner
+- `GET /api/v1/users` - Все авторизованные пользователи
+- `GET /api/v1/users/{id}` - Все авторизованные пользователи
+- `GET /api/v1/users/{id}/status` - Все авторизованные пользователи
+- `POST /api/v1/users` - **Только Manager, Owner** (создание новых пользователей)
+- `PUT /api/v1/users/{id}` - **Только Manager, Owner** (редактирование пользователей)
+- `DELETE /api/v1/users/{id}` - **Только Manager, Owner** (удаление пользователей)
 
 ### Автосалоны (Dealerships)
-- `GET /api/v1/dealerships` - Все роли
-- `POST /api/v1/dealerships` - Owner
-- `PUT /api/v1/dealerships/{id}` - Owner
-- `DELETE /api/v1/dealerships/{id}` - Owner
+- `GET /api/v1/dealerships` - Все авторизованные пользователи
+- `GET /api/v1/dealerships/{id}` - Все авторизованные пользователи
+- `POST /api/v1/dealerships` - **Только Manager, Owner**
+- `PUT /api/v1/dealerships/{id}` - **Только Manager, Owner**
+- `DELETE /api/v1/dealerships/{id}` - **Только Manager, Owner**
 
 ### Задачи (Tasks)
-- `GET /api/v1/tasks` - Все роли (с фильтрацией по правам)
-- `POST /api/v1/tasks` - Manager, Owner
-- `GET /api/v1/tasks/{id}` - Все роли (с проверкой доступа)
-- `PUT /api/v1/tasks/{id}` - Manager, Owner
-- `DELETE /api/v1/tasks/{id}` - Manager, Owner
+- `GET /api/v1/tasks` - Все авторизованные пользователи
+- `GET /api/v1/tasks/postponed` - Все авторизованные пользователи
+- `GET /api/v1/tasks/{id}` - Все авторизованные пользователи
+- `POST /api/v1/tasks` - **Только Manager, Owner**
+- `PUT /api/v1/tasks/{id}` - **Только Manager, Owner**
+- `DELETE /api/v1/tasks/{id}` - **Только Manager, Owner**
 
 ### Смены (Shifts)
-- `GET /api/v1/shifts` - Все роли (с фильтрацией)
-- `GET /api/v1/shifts/current` - Все роли
-- `GET /api/v1/shifts/statistics` - Observer, Manager, Owner
+- `GET /api/v1/shifts` - Все авторизованные пользователи
+- `GET /api/v1/shifts/current` - Все авторизованные пользователи
+- `GET /api/v1/shifts/statistics` - Все авторизованные пользователи
+- `GET /api/v1/shifts/{id}` - Все авторизованные пользователи
 
 ### Настройки (Settings)
-- `GET /api/v1/settings` - Observer, Manager, Owner
-- `POST /api/v1/settings` - Manager, Owner
-- `PUT /api/v1/settings/{id}` - Manager, Owner
-- `DELETE /api/v1/settings/{id}` - Owner
-- `GET /api/v1/settings/bot-config` - Manager, Owner
-- `POST /api/v1/settings/bot-config` - Owner
+- `GET /api/v1/settings` - Все авторизованные пользователи
+- `GET /api/v1/settings/shift-config` - Все авторизованные пользователи
+- `GET /api/v1/settings/bot-config` - Все авторизованные пользователи
+- `GET /api/v1/settings/{key}` - Все авторизованные пользователи
+- `POST /api/v1/settings/shift-config` - **Только Manager, Owner**
+- `POST /api/v1/settings/bot-config` - **Только Manager, Owner**
+- `POST /api/v1/settings` - **Только Manager, Owner**
+- `PUT /api/v1/settings/{id}` - **Только Manager, Owner**
+- `DELETE /api/v1/settings/{id}` - **Только Manager, Owner**
 
 ### Dashboard
-- `GET /api/v1/dashboard` - Observer, Manager, Owner
+- `GET /api/v1/dashboard` - Все авторизованные пользователи
 
 ## Проверка в коде
 
