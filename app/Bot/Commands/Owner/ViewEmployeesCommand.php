@@ -20,7 +20,7 @@ class ViewEmployeesCommand extends BaseCommandHandler
     protected function execute(Nutgram $bot, User $user): void
     {
         // Get all users with their dealerships
-        $users = User::with('autoDealership')
+        $users = User::with('dealership')
             ->orderBy('role')
             ->get();
 
@@ -39,7 +39,7 @@ class ViewEmployeesCommand extends BaseCommandHandler
                     $message .= "*{$role->label()}*\n";
 
                     foreach ($roleUsers as $u) {
-                        $dealershipName = $u->autoDealership?->name ?? 'Не назначен';
+                        $dealershipName = $u->dealership?->name ?? 'Не назначен';
                         $message .= "• {$u->name} ({$dealershipName})\n";
                     }
 

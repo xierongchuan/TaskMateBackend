@@ -25,7 +25,6 @@ Route::prefix('v1')->group(function () {
         [SessionController::class, 'store']
     )->middleware('throttle:100,1440');
 
-
     // Закрытие сессии (логаут)
     Route::delete(
         '/session',

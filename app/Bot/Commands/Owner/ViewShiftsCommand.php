@@ -21,15 +21,15 @@ class ViewShiftsCommand extends BaseCommandHandler
     protected function execute(Nutgram $bot, User $user): void
     {
         // Get active shifts for today across all dealerships
-        $todayShifts = Shift::whereNull('actual_end')
-            ->whereDate('actual_start', Carbon::today())
-            ->with(['user', 'autoDealership'])
+        $todayShifts = Shift::whereNull('shift_end')
+            ->whereDate('shift_start', Carbon::today())
+            ->with(['user', 'dealership'])
             ->get();
 
         // Get completed shifts for today
-        $completedShifts = Shift::whereNotNull('actual_end')
-            ->whereDate('actual_start', Carbon::today())
-            ->with(['user', 'autoDealership'])
+        $completedShifts = Shift::whereNotNull('shift_end')
+            ->whereDate('shift_start', Carbon::today())
+            ->with(['user', 'dealership'])
             ->get();
 
         $message = "📊 *Все смены сегодня*\n\n";
@@ -40,9 +40,9 @@ class ViewShiftsCommand extends BaseCommandHandler
             if ($todayShifts->isNotEmpty()) {
                 $message .= "*Активные смены:*\n";
                 foreach ($todayShifts as $shift) {
-                    $startTime = $shift->actual_start->format('H:i');
+                    $startTime = $shift->shift_start->format('H:i');
                     $status = $shift->status === 'late' ? '🔴 Опоздание' : '🟢 Вовремя';
-                    $dealership = $shift->autoDealership?->name ?? 'N/A';
+                    $dealership = $shift->dealership?->name ?? 'N/A';
                     $message .= "• {$shift->user->name} - {$dealership} ({$startTime}) - {$status}\n";
                 }
                 $message .= "\n";
@@ -51,9 +51,9 @@ class ViewShiftsCommand extends BaseCommandHandler
             if ($completedShifts->isNotEmpty()) {
                 $message .= "*Завершённые смены:*\n";
                 foreach ($completedShifts as $shift) {
-                    $startTime = $shift->actual_start->format('H:i');
-                    $endTime = $shift->actual_end?->format('H:i') ?? 'N/A';
-                    $dealership = $shift->autoDealership?->name ?? 'N/A';
+                    $startTime = $shift->shift_start->format('H:i');
+                    $endTime = $shift->shift_end?->format('H:i') ?? 'N/A';
+                    $dealership = $shift->dealership?->name ?? 'N/A';
                     $message .= "• {$shift->user->name} - {$dealership} ({$startTime} - {$endTime})\n";
                 }
             }
