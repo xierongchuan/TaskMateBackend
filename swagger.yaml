@@ -246,6 +246,32 @@ components:
           enum: [daily, weekly, monthly]
           nullable: true
           example: weekly
+        recurrence_time:
+          type: string
+          format: time
+          nullable: true
+          description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM)
+          example: "09:00"
+        recurrence_day_of_week:
+          type: integer
+          minimum: 1
+          maximum: 7
+          nullable: true
+          description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье)
+          example: 1
+        recurrence_day_of_month:
+          type: integer
+          minimum: -2
+          maximum: 31
+          nullable: true
+          description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число)
+          example: 15
+        last_recurrence_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время последнего создания экземпляра повторяющейся задачи
+          example: "2025-10-28T09:00:00Z"
         task_type:
           type: string
           enum: [individual, group]
@@ -351,6 +377,37 @@ components:
           type: string
           nullable: true
           example: Выполнено успешно
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        task:
+          $ref: '#/components/schemas/Task'
+        user:
+          $ref: '#/components/schemas/User'
+
+    TaskNotification:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        notification_type:
+          type: string
+          enum: [upcoming_deadline, overdue, hour_overdue, unresponded_2h, unresponded_6h, unresponded_24h]
+          example: upcoming_deadline
+        sent_at:
+          type: string
+          format: date-time
+          example: 2025-10-28T09:00:00Z
         created_at:
           type: string
           format: date-time
@@ -915,7 +972,7 @@ paths:
                   type: integer
                   nullable: true
                   example: 123456789
-                  dealership_id:
+                dealership_id:
                   type: integer
                   nullable: true
                   example: 1
@@ -1011,7 +1068,7 @@ paths:
                   type: integer
                   nullable: true
                   example: 123456789
-                  dealership_id:
+                dealership_id:
                   type: integer
                   nullable: true
                   example: 1
@@ -1927,7 +1984,7 @@ paths:
             example: "active"
         - name: search
           in: query
-          description: Поиск по названию, описанию и комментарию
+          description: Поиск по названию, описанию, комментарию и тегам задачи
           schema:
             type: string
             example: "инвентарь"
@@ -2002,6 +2059,26 @@ paths:
                   enum: [daily, weekly, monthly]
                   nullable: true
                   example: weekly
+                recurrence_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM). Обязательно для ежедневных задач.
+                  example: "09:00"
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  nullable: true
+                  description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье). Обязательно для еженедельных задач.
+                  example: 1
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: -2
+                  maximum: 31
+                  nullable: true
+                  description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число). Обязательно для ежемесячных задач.
+                  example: 15
                 task_type:
                   type: string
                   enum: [individual, group]
@@ -2133,6 +2210,26 @@ paths:
                   enum: [daily, weekly, monthly]
                   nullable: true
                   example: daily
+                recurrence_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM)
+                  example: "09:00"
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  nullable: true
+                  description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье)
+                  example: 1
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: -2
+                  maximum: 31
+                  nullable: true
+                  description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число)
+                  example: 15
                 task_type:
                   type: string
                   enum: [individual, group]
