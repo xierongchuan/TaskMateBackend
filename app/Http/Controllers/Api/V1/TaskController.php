@@ -219,6 +219,36 @@ class TaskController extends Controller
             'assignments.*' => 'exists:users,id',
         ]);
 
+        // Custom validation for recurring tasks
+        if (!empty($validated['recurrence'])) {
+            switch ($validated['recurrence']) {
+                case 'daily':
+                    // Daily tasks require recurrence_time
+                    if (empty($validated['recurrence_time'])) {
+                        return response()->json([
+                            'message' => 'Для ежедневных задач необходимо указать время (recurrence_time)'
+                        ], 422);
+                    }
+                    break;
+                case 'weekly':
+                    // Weekly tasks require recurrence_day_of_week
+                    if (empty($validated['recurrence_day_of_week'])) {
+                        return response()->json([
+                            'message' => 'Для еженедельных задач необходимо указать день недели (recurrence_day_of_week)'
+                        ], 422);
+                    }
+                    break;
+                case 'monthly':
+                    // Monthly tasks require recurrence_day_of_month
+                    if (empty($validated['recurrence_day_of_month'])) {
+                        return response()->json([
+                            'message' => 'Для ежемесячных задач необходимо указать число месяца (recurrence_day_of_month)'
+                        ], 422);
+                    }
+                    break;
+            }
+        }
+
         $task = Task::create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -277,6 +307,38 @@ class TaskController extends Controller
             'assignments' => 'nullable|array',
             'assignments.*' => 'exists:users,id',
         ]);
+
+        // Custom validation for recurring tasks
+        $recurrence = $validated['recurrence'] ?? $task->recurrence;
+        if (!empty($recurrence)) {
+            $recurrenceTime = $validated['recurrence_time'] ?? $task->recurrence_time;
+            $recurrenceDayOfWeek = $validated['recurrence_day_of_week'] ?? $task->recurrence_day_of_week;
+            $recurrenceDayOfMonth = $validated['recurrence_day_of_month'] ?? $task->recurrence_day_of_month;
+
+            switch ($recurrence) {
+                case 'daily':
+                    if (empty($recurrenceTime)) {
+                        return response()->json([
+                            'message' => 'Для ежедневных задач необходимо указать время (recurrence_time)'
+                        ], 422);
+                    }
+                    break;
+                case 'weekly':
+                    if (empty($recurrenceDayOfWeek)) {
+                        return response()->json([
+                            'message' => 'Для еженедельных задач необходимо указать день недели (recurrence_day_of_week)'
+                        ], 422);
+                    }
+                    break;
+                case 'monthly':
+                    if (empty($recurrenceDayOfMonth)) {
+                        return response()->json([
+                            'message' => 'Для ежемесячных задач необходимо указать число месяца (recurrence_day_of_month)'
+                        ], 422);
+                    }
+                    break;
+            }
+        }
 
         $task->update($validated);
 
