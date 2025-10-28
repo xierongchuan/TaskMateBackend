@@ -24,6 +24,8 @@ tags:
     description: Управление сменами
   - name: Tasks
     description: Управление задачами
+  - name: Links
+    description: Управление важными ссылками
   - name: Dashboard
     description: Дашборд для менеджеров
   - name: Settings
@@ -2268,6 +2270,329 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /links:
+    get:
+      tags:
+        - Links
+      summary: Получить список важных ссылок
+      description: Получение списка важных ссылок с пагинацией и фильтрацией
+      operationId: listLinks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: per_page
+          in: query
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 15
+            example: 20
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: dealership_id
+          in: query
+          description: Фильтр по автосалону
+          schema:
+            type: integer
+            example: 1
+        - name: is_active
+          in: query
+          description: Фильтр по активности
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Список ссылок
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportantLink'
+                  current_page:
+                    type: integer
+                    example: 1
+                  per_page:
+                    type: integer
+                    example: 15
+                  total:
+                    type: integer
+                    example: 42
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Links
+      summary: Создать новую ссылку
+      description: Создание новой важной ссылки (только для менеджеров и владельцев)
+      operationId: createLink
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - url
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+                  example: Внутренний портал
+                url:
+                  type: string
+                  maxLength: 1000
+                  example: https://portal.company.com
+                description:
+                  type: string
+                  nullable: true
+                  example: Доступ к корпоративным ресурсам
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+                sort_order:
+                  type: integer
+                  default: 0
+                  example: 10
+                is_active:
+                  type: boolean
+                  default: true
+                  example: true
+      responses:
+        '201':
+          description: Ссылка успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportantLink'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Доступ запрещен (недостаточно прав)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /links/{id}:
+    get:
+      tags:
+        - Links
+      summary: Получить ссылку по ID
+      description: Получение информации об одной ссылке с связями
+      operationId: getLink
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID ссылки
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Информация о ссылке
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportantLink'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Ссылка не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Ссылка не найдена
+
+    put:
+      tags:
+        - Links
+      summary: Обновить ссылку
+      description: Обновление существующей ссылки (только для менеджеров и владельцев)
+      operationId: updateLink
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID ссылки
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+                  example: Обновленный портал
+                url:
+                  type: string
+                  maxLength: 1000
+                  example: https://new-portal.company.com
+                description:
+                  type: string
+                  nullable: true
+                  example: Новое описание
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+                sort_order:
+                  type: integer
+                  example: 20
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Ссылка успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportantLink'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Доступ запрещен (недостаточно прав)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Ссылка не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Ссылка не найдена
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Links
+      summary: Удалить ссылку
+      description: Удаление ссылки (только для менеджеров и владельцев)
+      operationId: deleteLink
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID ссылки
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Ссылка успешно удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Ссылка успешно удалена
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Доступ запрещен (недостаточно прав)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Ссылка не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Ссылка не найдена
+        '500':
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Ошибка при удалении ссылки
+                  error:
+                    type: string
+                    example: Database error
 
   /dashboard:
     get:

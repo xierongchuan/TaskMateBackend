@@ -2,15 +2,14 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
+use App\Http\Controllers\Api\V1\ImportantLinkController;
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
-use App\Http\Controllers\Api\V1\UserRegistrationController;
 use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +88,18 @@ Route::prefix('v1')->group(function () {
             Route::put('/tasks/{id}', [TaskController::class, 'update'])
                 ->middleware('role:manager,owner');
             Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])
+                ->middleware('role:manager,owner');
+
+            // Important Links
+            Route::get('/links', [ImportantLinkController::class, 'index']);
+            Route::get('/links/{id}', [ImportantLinkController::class, 'show']);
+
+            // Only managers and owners can manage links
+            Route::post('/links', [ImportantLinkController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/links/{id}', [ImportantLinkController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/links/{id}', [ImportantLinkController::class, 'destroy'])
                 ->middleware('role:manager,owner');
 
             // Dashboard
