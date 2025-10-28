@@ -20,10 +20,10 @@ class ViewTasksCommand extends BaseCommandHandler
     protected function execute(Nutgram $bot, User $user): void
     {
         // Get user's dealerships
-        $dealershipIds = [$user->auto_dealership_id];
+        $dealershipIds = [$user->dealership_id];
 
         // Get tasks for manager's dealerships
-        $tasks = Task::whereIn('auto_dealership_id', $dealershipIds)
+        $tasks = Task::whereIn('dealership_id', $dealershipIds)
             ->where('is_active', true)
             ->with(['assignments.user', 'assignments.responses'])
             ->latest()

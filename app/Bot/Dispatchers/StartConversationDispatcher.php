@@ -28,17 +28,18 @@ class StartConversationDispatcher
         $role = $user->role ?? 'guest';
 
         $map = [
-            'guest'      => \App\Bot\Conversations\Guest\StartConversation::class,
-            'user'      => \App\Bot\Commands\User\StartCommand::class,
-            'director'   => \App\Bot\Commands\Director\StartCommand::class,
-            'accountant' => \App\Bot\Commands\Accountant\StartCommand::class,
+            'guest'    => \App\Bot\Conversations\Guest\StartConversation::class,
+            'employee' => \App\Bot\Commands\Employee\StartCommand::class,
+            'manager'  => \App\Bot\Commands\Manager\StartCommand::class,
+            'observer' => \App\Bot\Commands\Observer\StartCommand::class,
+            'owner'    => \App\Bot\Commands\Owner\StartCommand::class,
         ];
 
         $target = $map[$role] ?? null;
 
         if (! $target) {
             $bot->sendMessage('Ваша роль не поддерживает эту команду.');
-            Log::warning('expense.command.no_handler', ['tg_id' => $telegramUserId, 'role' => $role]);
+            Log::warning('start.command.no_handler', ['tg_id' => $telegramUserId, 'role' => $role]);
             return;
         }
 
@@ -52,7 +53,7 @@ class StartConversationDispatcher
             }
 
             // Диагностический лог (полезно в проде для отладки)
-            Log::debug('expense.command.handler_resolved', [
+            Log::debug('start.command.handler_resolved', [
                 'target' => $target,
                 'handler_class' => is_object($handler) ? get_class($handler) : gettype($handler),
             ]);
@@ -96,7 +97,7 @@ class StartConversationDispatcher
             }
 
             // Ни один вариант не подошёл — логируем подробности
-            Log::error('expense.command.invalid_handler', [
+            Log::error('start.command.invalid_handler', [
                 'target' => $target,
                 'handler' => is_object($handler) ? get_class($handler) : gettype($handler),
                 'tg_id' => $telegramUserId,
@@ -105,7 +106,7 @@ class StartConversationDispatcher
             $bot->sendMessage('Неверная конфигурация обработчика команды. Свяжитесь с админом.');
         } catch (Throwable $e) {
             // Больше деталей в логе — чтобы понять, где резолв/вызов падает
-            Log::error('expense.command.exception', [
+            Log::error('start.command.exception', [
                 'message' => $e->getMessage(),
                 'target'  => $target,
                 'tg_id'   => $telegramUserId,

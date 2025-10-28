@@ -29,8 +29,8 @@ class AuthController extends Controller
             'login'     => $req->login,
             'password'  => Hash::make($req->password),
             'full_name' => '-',
-            'telegram_id' => 0,
-            'phone' => '+0000000000',
+            'telegram_id' => null,
+            'phone' => null,
             'role'      => Role::EMPLOYEE->value,
         ]);
 

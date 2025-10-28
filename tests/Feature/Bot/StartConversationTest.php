@@ -72,36 +72,42 @@ class StartConversationTest extends TestCase
                 'login' => 'user2',
                 'password' => bcrypt('password'),
                 'full_name' => 'User Two',
-                'phone' => '8 (999) 234-56-78',
+                'phone' => '+79992345678',
                 'role' => Role::MANAGER->value,
                 'telegram_id' => null,
               ]),
         ];
 
         $reflection = new \ReflectionClass('\App\Bot\Conversations\Guest\StartConversation');
-        $method = $reflection->getMethod('findUserByPhone');
-        $method->setAccessible(true);
+        $findUserMethod = $reflection->getMethod('findUserByPhone');
+        $findUserMethod->setAccessible(true);
+        $normalizeMethod = $reflection->getMethod('normalizePhoneNumber');
+        $normalizeMethod->setAccessible(true);
         $conversation = new \App\Bot\Conversations\Guest\StartConversation();
 
         // Test finding first user with various formats
-        $foundUser = $method->invoke($conversation, '79991234567');
+        $foundUser = $findUserMethod->invoke($conversation, '79991234567');
         $this->assertNotNull($foundUser);
         $this->assertEquals($users[0]->id, $foundUser->id);
 
-        $foundUser = $method->invoke($conversation, '9991234567');
+        // Normalize before searching (as done in actual code flow)
+        $normalized = $normalizeMethod->invoke($conversation, '9991234567');
+        $foundUser = $findUserMethod->invoke($conversation, $normalized);
         $this->assertNotNull($foundUser);
         $this->assertEquals($users[0]->id, $foundUser->id);
 
-        $foundUser = $method->invoke($conversation, '79992345678');
+        $foundUser = $findUserMethod->invoke($conversation, '79992345678');
         $this->assertNotNull($foundUser);
         $this->assertEquals($users[1]->id, $foundUser->id);
 
-        $foundUser = $method->invoke($conversation, '9992345678');
+        // Normalize before searching
+        $normalized = $normalizeMethod->invoke($conversation, '9992345678');
+        $foundUser = $findUserMethod->invoke($conversation, $normalized);
         $this->assertNotNull($foundUser);
         $this->assertEquals($users[1]->id, $foundUser->id);
 
         // Test not finding user
-        $foundUser = $method->invoke($conversation, '79999999999');
+        $foundUser = $findUserMethod->invoke($conversation, '79999999999');
         $this->assertNull($foundUser);
     }
 

@@ -21,17 +21,17 @@ class ViewShiftsCommand extends BaseCommandHandler
     protected function execute(Nutgram $bot, User $user): void
     {
         // Get user's dealerships (observers can view their assigned dealership)
-        $dealershipIds = [$user->auto_dealership_id];
+        $dealershipIds = [$user->dealership_id];
 
         // Get active shifts for today
-        $todayShifts = Shift::whereIn('auto_dealership_id', $dealershipIds)
+        $todayShifts = Shift::whereIn('dealership_id', $dealershipIds)
             ->whereNull('actual_end')
             ->whereDate('actual_start', Carbon::today())
             ->with('user')
             ->get();
 
         // Get completed shifts for today
-        $completedShifts = Shift::whereIn('auto_dealership_id', $dealershipIds)
+        $completedShifts = Shift::whereIn('dealership_id', $dealershipIds)
             ->whereNotNull('actual_end')
             ->whereDate('actual_start', Carbon::today())
             ->with('user')

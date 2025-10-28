@@ -92,18 +92,27 @@ class OpenShiftConversation extends BaseConversation
 
             // Download photo from Telegram
             $file = $bot->getFile($fileId);
-            $filePath = $file->file_path;
 
-            // Download file content
-            $fileContent = file_get_contents("https://api.telegram.org/file/bot{$bot->getConfig()['token']}/{$filePath}");
-
-            if ($fileContent === false) {
-                throw new \RuntimeException('Failed to download photo');
+            if (!$file || !$file->file_path) {
+                throw new \RuntimeException('Failed to get file info from Telegram');
             }
 
-            // Save photo to storage
+            // Generate filename for storage
             $filename = 'shifts/' . uniqid('shift_photo_', true) . '.jpg';
-            Storage::disk('public')->put($filename, $fileContent);
+            $storagePath = Storage::disk('public')->path($filename);
+
+            // Ensure directory exists
+            $directory = dirname($storagePath);
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            // Download file using Nutgram's built-in method
+            $bot->downloadFile($file, $storagePath);
+
+            if (!file_exists($storagePath)) {
+                throw new \RuntimeException('Failed to download photo from Telegram');
+            }
 
             $this->photoPath = $filename;
 
@@ -126,7 +135,27 @@ class OpenShiftConversation extends BaseConversation
     public function handleReplacementQuestion(Nutgram $bot): void
     {
         try {
+            // Handle callback query if user somehow triggered one (shouldn't happen with ReplyKeyboard)
+            if ($bot->callbackQuery()) {
+                $bot->answerCallbackQuery();
+                $bot->sendMessage(
+                    '⚠️ Пожалуйста, используйте кнопки ниже для ответа.',
+                    reply_markup: static::yesNoKeyboard('Да', 'Нет')
+                );
+                $this->next('handleReplacementQuestion');
+                return;
+            }
+
             $answer = $bot->message()?->text;
+
+            if (!$answer) {
+                $bot->sendMessage(
+                    '⚠️ Пожалуйста, выберите "Да" или "Нет"',
+                    reply_markup: static::yesNoKeyboard('Да', 'Нет')
+                );
+                $this->next('handleReplacementQuestion');
+                return;
+            }
 
             if ($answer === 'Да') {
                 $this->isReplacement = true;

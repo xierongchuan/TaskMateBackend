@@ -35,8 +35,8 @@ describe('Authentication Endpoints', function () {
                 ->and($user->login)->toBe('testuser123')
                 ->and($user->role)->toBe(Role::EMPLOYEE->value)
                 ->and($user->full_name)->toBe('-')
-                ->and($user->telegram_id)->toBe(0)
-                    ->and($user->phone)->toBe('+0000000000');
+                ->and($user->telegram_id)->toBeNull()
+                    ->and($user->phone)->toBeNull();
 
             // Verify password is hashed
             expect(Hash::check('SecurePass123!@#', $user->password))->toBeTrue();
@@ -222,8 +222,8 @@ describe('Authentication Endpoints', function () {
             $user = User::where('login', 'defaultstest')->first();
             expect($user->role)->toBe(Role::EMPLOYEE->value)
                 ->and($user->full_name)->toBe('-')
-                ->and($user->telegram_id)->toBe(0)
-                    ->and($user->phone)->toBe('+0000000000');
+                ->and($user->telegram_id)->toBeNull()
+                    ->and($user->phone)->toBeNull();
         });
 
         it('returns valid Sanctum token', function () {
