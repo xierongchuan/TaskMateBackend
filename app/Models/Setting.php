@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Setting extends Model
 {
     use HasFactory;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -54,9 +55,22 @@ class Setting extends Model
      */
     public function setTypedValue(mixed $value): void
     {
+        // Handle null values for different types
+        if ($value === null) {
+            match ($this->type) {
+                'integer' => $this->value = '0',
+                'boolean' => $this->value = '0',
+                'json' => $this->value = json_encode(null),
+                'time' => $this->value = '00:00',
+                default => $this->value = '',
+            };
+            return;
+        }
+
         $this->value = match ($this->type) {
             'json' => json_encode($value),
             'boolean' => $value ? '1' : '0',
+            'time' => $value, // Keep time format as-is
             default => (string) $value,
         };
     }
