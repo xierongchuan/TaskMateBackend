@@ -132,7 +132,7 @@ class UserApiController extends Controller
         $validator = Validator::make($request->all(), [
             'password' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'string',
                 'min:8',
                 'max:255',
@@ -144,6 +144,13 @@ class UserApiController extends Controller
                 'string',
                 'min:2',
                 'max:255'
+            ],
+            'phone' => [
+                'sometimes',
+                'required',
+                'string',
+                'regex:/^\+?[\d\s\-\(\)]+$/',
+                'max:20'
             ],
             'phone_number' => [
                 'sometimes',
@@ -165,11 +172,12 @@ class UserApiController extends Controller
                 'exists:auto_dealerships,id'
             ]
         ], [
-            'password.required' => 'Пароль обязателен',
             'password.min' => 'Пароль должен содержать минимум 8 символов',
             'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
             'full_name.required' => 'Полное имя обязательно',
             'full_name.min' => 'Полное имя должно содержать минимум 2 символа',
+            'phone.required' => 'Телефон обязателен',
+            'phone.regex' => 'Некорректный формат телефона',
             'phone_number.required' => 'Телефон обязателен',
             'phone_number.regex' => 'Некорректный формат телефона',
             'role.required' => 'Роль обязательна',
@@ -190,7 +198,8 @@ class UserApiController extends Controller
         try {
             $updateData = [];
 
-            if (isset($validated['password'])) {
+            // Only update password if it's provided and not empty
+            if (isset($validated['password']) && $validated['password'] !== '' && $validated['password'] !== null) {
                 $updateData['password'] = Hash::make($validated['password']);
             }
 
@@ -198,7 +207,10 @@ class UserApiController extends Controller
                 $updateData['full_name'] = $validated['full_name'];
             }
 
-            if (isset($validated['phone_number'])) {
+            // Support both 'phone' and 'phone_number' fields
+            if (isset($validated['phone'])) {
+                $updateData['phone'] = $validated['phone'];
+            } elseif (isset($validated['phone_number'])) {
                 $updateData['phone'] = $validated['phone_number'];
             }
 
