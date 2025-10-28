@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\ImportantLinkController;
@@ -11,7 +10,6 @@ use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UserApiController;
-use App\Http\Controllers\Api\V1\UserRegistrationController;
 use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -20,18 +18,6 @@ use Illuminate\Support\Facades\Route;
 Route::post('/webhook', [FrontController::class, 'webhook']);
 
 Route::prefix('v1')->group(function () {
-    // Public registration endpoint (no auth required)
-    Route::post(
-        '/register',
-        [AuthController::class, 'register']
-    )->middleware('throttle:100,1440');
-
-    // Public user creation endpoint (no auth required)
-    Route::post(
-        '/users/create',
-        [UserRegistrationController::class, 'store']
-    )->middleware('throttle:100,1440');
-
     // Открытие сессии (логин)
     Route::post(
         '/session',
