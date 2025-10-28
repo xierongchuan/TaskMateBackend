@@ -267,4 +267,80 @@ class SettingsController extends Controller
             'data' => $updated,
         ]);
     }
+
+    /**
+     * Get bot configuration
+     *
+     * GET /api/v1/settings/bot-config
+     * Query params: dealership_id (optional)
+     */
+    public function getBotConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'telegram_bot_id' => $this->settingsService->get('telegram_bot_id', $dealershipId),
+                'telegram_bot_username' => $this->settingsService->get('telegram_bot_username', $dealershipId),
+                'telegram_webhook_url' => $this->settingsService->get('telegram_webhook_url', $dealershipId),
+                'notification_enabled' => $this->settingsService->get('notification_enabled', $dealershipId, true),
+            ],
+        ]);
+    }
+
+    /**
+     * Update bot configuration
+     *
+     * POST /api/v1/settings/bot-config
+     * Body: {telegram_bot_id?, telegram_bot_username?, telegram_webhook_url?, notification_enabled?, dealership_id?}
+     */
+    public function updateBotConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'telegram_bot_id' => 'nullable|string|max:255',
+            'telegram_bot_username' => 'nullable|string|max:255',
+            'telegram_webhook_url' => 'nullable|url|max:500',
+            'notification_enabled' => 'nullable|boolean',
+            'dealership_id' => 'nullable|exists:auto_dealerships,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+        $dealershipId = $data['dealership_id'] ?? null;
+
+        $updated = [];
+
+        if (isset($data['telegram_bot_id'])) {
+            $this->settingsService->set('telegram_bot_id', $data['telegram_bot_id'], $dealershipId, 'string', 'Telegram Bot ID');
+            $updated['telegram_bot_id'] = $data['telegram_bot_id'];
+        }
+
+        if (isset($data['telegram_bot_username'])) {
+            $this->settingsService->set('telegram_bot_username', $data['telegram_bot_username'], $dealershipId, 'string', 'Telegram Bot Username');
+            $updated['telegram_bot_username'] = $data['telegram_bot_username'];
+        }
+
+        if (isset($data['telegram_webhook_url'])) {
+            $this->settingsService->set('telegram_webhook_url', $data['telegram_webhook_url'], $dealershipId, 'string', 'Telegram Webhook URL');
+            $updated['telegram_webhook_url'] = $data['telegram_webhook_url'];
+        }
+
+        if (isset($data['notification_enabled'])) {
+            $this->settingsService->set('notification_enabled', $data['notification_enabled'], $dealershipId, 'boolean', 'Enable/disable notifications');
+            $updated['notification_enabled'] = $data['notification_enabled'];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bot configuration updated successfully',
+            'data' => $updated,
+        ]);
+    }
 }

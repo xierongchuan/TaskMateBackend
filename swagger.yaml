@@ -762,6 +762,34 @@ paths:
                   token:
                     type: string
                     example: 1|abcdef123456
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      login:
+                        type: string
+                        example: user123
+                      full_name:
+                        type: string
+                        example: Иван Иванов
+                      role:
+                        type: string
+                        enum: [employee, observer, manager, owner]
+                        example: manager
+                      dealership_id:
+                        type: integer
+                        nullable: true
+                        example: 1
+                      telegram_id:
+                        type: integer
+                        nullable: true
+                        example: 123456789
+                      phone:
+                        type: string
+                        nullable: true
+                        example: +79001234567
         '401':
           description: Неверные учетные данные
           content:
@@ -794,6 +822,59 @@ paths:
                   message:
                     type: string
                     example: Сессия завершена
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /session/current:
+    get:
+      tags:
+        - Auth
+      summary: Получить информацию о текущем пользователе
+      description: Возвращает данные текущего авторизованного пользователя, включая роль
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Информация о пользователе
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      login:
+                        type: string
+                        example: user123
+                      full_name:
+                        type: string
+                        example: Иван Иванов
+                      role:
+                        type: string
+                        enum: [employee, observer, manager, owner]
+                        example: manager
+                        description: Роль пользователя в системе
+                      dealership_id:
+                        type: integer
+                        nullable: true
+                        example: 1
+                      telegram_id:
+                        type: integer
+                        nullable: true
+                        example: 123456789
+                      phone:
+                        type: string
+                        nullable: true
+                        example: +79001234567
         '401':
           description: Неавторизован
           content:
@@ -2829,6 +2910,138 @@ paths:
                       oneOf:
                         - type: string
                         - type: integer
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
+
+  /settings/bot-config:
+    get:
+      tags:
+        - Settings
+      summary: Получить конфигурацию бота
+      description: Получение настроек Telegram бота
+      operationId: getBotConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращается глобальная конфигурация)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Конфигурация бота
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      telegram_bot_id:
+                        type: string
+                        nullable: true
+                        example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                      telegram_bot_username:
+                        type: string
+                        nullable: true
+                        example: "taskmate_bot"
+                      telegram_webhook_url:
+                        type: string
+                        format: uri
+                        nullable: true
+                        example: "https://example.com/api/webhook"
+                      notification_enabled:
+                        type: boolean
+                        example: true
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Settings
+      summary: Обновить конфигурацию бота
+      description: Обновление настроек Telegram бота
+      operationId: updateBotConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_bot_id:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot ID
+                  example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                telegram_bot_username:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot Username
+                  example: "taskmate_bot"
+                telegram_webhook_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: Telegram Webhook URL
+                  example: "https://example.com/api/webhook"
+                notification_enabled:
+                  type: boolean
+                  nullable: true
+                  description: Включить/выключить уведомления
+                  example: true
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '200':
+          description: Конфигурация бота успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bot configuration updated successfully
+                  data:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: boolean
         '401':
           description: Неавторизован
           content:

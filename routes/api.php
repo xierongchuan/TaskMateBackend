@@ -43,6 +43,12 @@ Route::prefix('v1')->group(function () {
         [SessionController::class, 'destroy']
     )->middleware(['auth:sanctum', 'throttle:5,1440']);
 
+    // Получение текущего пользователя
+    Route::get(
+        '/session/current',
+        [SessionController::class, 'current']
+    )->middleware(['auth:sanctum', 'throttle:100,1440']);
+
     // Проверка работоспособности API
     Route::get('/up', function () {
         return response()->json(['success' => true], 200);
@@ -89,6 +95,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/settings', [SettingsController::class, 'index']);
             Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
             Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig']);
+            Route::get('/settings/bot-config', [SettingsController::class, 'getBotConfig']);
+            Route::post('/settings/bot-config', [SettingsController::class, 'updateBotConfig']);
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
             Route::post('/settings', [SettingsController::class, 'store']);
             Route::put('/settings/{id}', [SettingsController::class, 'update']);
