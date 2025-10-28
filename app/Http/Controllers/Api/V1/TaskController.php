@@ -206,9 +206,12 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'comment' => 'nullable|string',
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'appear_date' => 'nullable|string',
+            'appear_date' => 'nullable|string|after_or_equal:now', // Bug #4: не раньше текущего времени
             'deadline' => 'nullable|string',
             'recurrence' => 'nullable|string|in:daily,weekly,monthly',
+            'recurrence_time' => 'nullable|date_format:H:i', // Время для повторяющихся задач
+            'recurrence_day_of_week' => 'nullable|integer|min:1|max:7', // 1=Пн, 7=Вс
+            'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31', // -1=первое, -2=последнее, 1-31=число
             'task_type' => 'required|string|in:individual,group',
             'response_type' => 'required|string|in:acknowledge,complete',
             'tags' => 'nullable|array',
@@ -225,6 +228,9 @@ class TaskController extends Controller
             'appear_date' => $validated['appear_date'] ?? null,
             'deadline' => $validated['deadline'] ?? null,
             'recurrence' => $validated['recurrence'] ?? null,
+            'recurrence_time' => $validated['recurrence_time'] ?? null,
+            'recurrence_day_of_week' => $validated['recurrence_day_of_week'] ?? null,
+            'recurrence_day_of_month' => $validated['recurrence_day_of_month'] ?? null,
             'task_type' => $validated['task_type'],
             'response_type' => $validated['response_type'],
             'tags' => $validated['tags'] ?? null,
@@ -261,6 +267,9 @@ class TaskController extends Controller
             'appear_date' => 'nullable|string',
             'deadline' => 'nullable|string',
             'recurrence' => 'nullable|string|in:daily,weekly,monthly',
+            'recurrence_time' => 'nullable|date_format:H:i',
+            'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
+            'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31',
             'task_type' => 'sometimes|required|string|in:individual,group',
             'response_type' => 'sometimes|required|string|in:acknowledge,complete',
             'tags' => 'nullable|array',
