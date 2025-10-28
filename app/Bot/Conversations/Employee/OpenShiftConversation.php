@@ -192,6 +192,8 @@ class OpenShiftConversation extends BaseConversation
                     $keyboard->addRow(...$row);
                 }
 
+                // First remove the reply keyboard, then show inline keyboard
+                $bot->sendMessage('✅ Понятно', reply_markup: static::removeKeyboard());
                 $bot->sendMessage(
                     '👤 Выберите сотрудника, которого вы заменяете:',
                     reply_markup: $keyboard
@@ -200,6 +202,8 @@ class OpenShiftConversation extends BaseConversation
                 $this->next('handleEmployeeSelection');
             } elseif ($answer === 'Нет') {
                 $this->isReplacement = false;
+                // Remove the reply keyboard before creating shift
+                $bot->sendMessage('✅ Понятно, открываем смену...', reply_markup: static::removeKeyboard());
                 $this->createShift($bot);
             } else {
                 $bot->sendMessage(

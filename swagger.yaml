@@ -246,6 +246,32 @@ components:
           enum: [daily, weekly, monthly]
           nullable: true
           example: weekly
+        recurrence_time:
+          type: string
+          format: time
+          nullable: true
+          description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM)
+          example: "09:00"
+        recurrence_day_of_week:
+          type: integer
+          minimum: 1
+          maximum: 7
+          nullable: true
+          description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье)
+          example: 1
+        recurrence_day_of_month:
+          type: integer
+          minimum: -2
+          maximum: 31
+          nullable: true
+          description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число)
+          example: 15
+        last_recurrence_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время последнего создания экземпляра повторяющейся задачи
+          example: "2025-10-28T09:00:00Z"
         task_type:
           type: string
           enum: [individual, group]
@@ -351,6 +377,37 @@ components:
           type: string
           nullable: true
           example: Выполнено успешно
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        task:
+          $ref: '#/components/schemas/Task'
+        user:
+          $ref: '#/components/schemas/User'
+
+    TaskNotification:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        notification_type:
+          type: string
+          enum: [upcoming_deadline, overdue, hour_overdue, unresponded_2h, unresponded_6h, unresponded_24h]
+          example: upcoming_deadline
+        sent_at:
+          type: string
+          format: date-time
+          example: 2025-10-28T09:00:00Z
         created_at:
           type: string
           format: date-time
@@ -705,6 +762,34 @@ paths:
                   token:
                     type: string
                     example: 1|abcdef123456
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      login:
+                        type: string
+                        example: user123
+                      full_name:
+                        type: string
+                        example: Иван Иванов
+                      role:
+                        type: string
+                        enum: [employee, observer, manager, owner]
+                        example: manager
+                      dealership_id:
+                        type: integer
+                        nullable: true
+                        example: 1
+                      telegram_id:
+                        type: integer
+                        nullable: true
+                        example: 123456789
+                      phone:
+                        type: string
+                        nullable: true
+                        example: +79001234567
         '401':
           description: Неверные учетные данные
           content:
@@ -744,51 +829,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /register:
-    post:
+  /session/current:
+    get:
       tags:
         - Auth
-      summary: Регистрация нового пользователя
-      description: Создание нового пользователя и получение токена доступа
-      operationId: registerUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - login
-                - password
-              properties:
-                login:
-                  type: string
-                  minLength: 4
-                  maxLength: 255
-                  example: newuser123
-                password:
-                  type: string
-                  minLength: 12
-                  maxLength: 255
-                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
-                  description: Пароль должен содержать минимум 12 символов, включая заглавные и строчные буквы, цифры и специальные символы
-                  example: Password123!
+      summary: Получить информацию о текущем пользователе
+      description: Возвращает данные текущего авторизованного пользователя, включая роль
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: Успешная регистрация
+          description: Информация о пользователе
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
-                    type: string
-                    example: Пользователь успешно зарегистрирован
-                  token:
-                    type: string
-                    example: 2|xyz789abc456
-        '422':
-          description: Ошибка валидации
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      login:
+                        type: string
+                        example: user123
+                      full_name:
+                        type: string
+                        example: Иван Иванов
+                      role:
+                        type: string
+                        enum: [employee, observer, manager, owner]
+                        example: manager
+                        description: Роль пользователя в системе
+                      dealership_id:
+                        type: integer
+                        nullable: true
+                        example: 1
+                      telegram_id:
+                        type: integer
+                        nullable: true
+                        example: 123456789
+                      phone:
+                        type: string
+                        nullable: true
+                        example: +79001234567
+        '401':
+          description: Неавторизован
           content:
             application/json:
               schema:
@@ -867,8 +955,13 @@ paths:
     post:
       tags:
         - Users
-      summary: Создать нового сотрудника (с аутентификацией)
-      description: Создание нового сотрудника в системе с аутентификацией
+      summary: Создать нового пользователя
+      description: |
+        Создание нового пользователя в системе.
+
+        **Требуемые роли:** Manager, Owner
+
+        ⚠️ Это единственный способ создания пользователей. Endpoint /register был удален для безопасности.
       operationId: createUser
       security:
         - bearerAuth: []
@@ -915,7 +1008,7 @@ paths:
                   type: integer
                   nullable: true
                   example: 123456789
-                  dealership_id:
+                dealership_id:
                   type: integer
                   nullable: true
                   example: 1
@@ -941,96 +1034,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '422':
-          description: Ошибка валидации
+        '403':
+          description: Недостаточно прав (требуется роль Manager или Owner)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: false
                   message:
                     type: string
-                    example: Ошибка валидации
-                  errors:
-                    type: object
-                    additionalProperties:
-                      type: array
-                      items:
-                        type: string
-
-  /users/create:
-    post:
-      tags:
-        - Users
-      summary: Создать нового сотрудника (публичный эндпоинт)
-      description: Создание нового сотрудника в системе без аутентификации
-      operationId: createUserPublic
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - login
-                - password
-                - full_name
-                - phone_number
-                - role
-              properties:
-                login:
-                  type: string
-                  minLength: 4
-                  maxLength: 255
-                  example: newuser123
-                password:
-                  type: string
-                  minLength: 8
-                  maxLength: 255
-                  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]'
-                  description: Пароль должен содержать минимум 8 символов, включая заглавные и строчные буквы и цифры
-                  example: Password123
-                full_name:
-                  type: string
-                  minLength: 2
-                  maxLength: 255
-                  example: Иван Иванов
-                phone_number:
-                  type: string
-                  pattern: '^\+?[\d\s\-\(\)]+$'
-                  maxLength: 20
-                  example: +79001234567
-                role:
-                  type: string
-                  enum: [employee, manager, observer, owner]
-                  example: employee
-                telegram_id:
-                  type: integer
-                  nullable: true
-                  example: 123456789
-                  dealership_id:
-                  type: integer
-                  nullable: true
-                  example: 1
-      responses:
-        '201':
-          description: Сотрудник успешно создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
+                    example: Недостаточно прав для выполнения этого действия
+                  required_roles:
+                    type: array
+                    items:
+                      type: string
+                    example: ["manager", "owner"]
+                  your_role:
                     type: string
-                    example: Сотрудник успешно создан
-                  data:
-                    $ref: '#/components/schemas/User'
+                    example: employee
         '422':
           description: Ошибка валидации
           content:
@@ -1927,7 +1948,7 @@ paths:
             example: "active"
         - name: search
           in: query
-          description: Поиск по названию, описанию и комментарию
+          description: Поиск по названию, описанию, комментарию и тегам задачи
           schema:
             type: string
             example: "инвентарь"
@@ -2002,6 +2023,26 @@ paths:
                   enum: [daily, weekly, monthly]
                   nullable: true
                   example: weekly
+                recurrence_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM). Обязательно для ежедневных задач.
+                  example: "09:00"
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  nullable: true
+                  description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье). Обязательно для еженедельных задач.
+                  example: 1
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: -2
+                  maximum: 31
+                  nullable: true
+                  description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число). Обязательно для ежемесячных задач.
+                  example: 15
                 task_type:
                   type: string
                   enum: [individual, group]
@@ -2133,6 +2174,26 @@ paths:
                   enum: [daily, weekly, monthly]
                   nullable: true
                   example: daily
+                recurrence_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время для ежедневных/еженедельных/ежемесячных задач (формат HH:MM)
+                  example: "09:00"
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  nullable: true
+                  description: День недели для еженедельных задач (1=Понедельник, 7=Воскресенье)
+                  example: 1
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: -2
+                  maximum: 31
+                  nullable: true
+                  description: День месяца для ежемесячных задач (-1=первый день, -2=последний день, 1-31=конкретное число)
+                  example: 15
                 task_type:
                   type: string
                   enum: [individual, group]
@@ -2732,6 +2793,138 @@ paths:
                       oneOf:
                         - type: string
                         - type: integer
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
+
+  /settings/bot-config:
+    get:
+      tags:
+        - Settings
+      summary: Получить конфигурацию бота
+      description: Получение настроек Telegram бота
+      operationId: getBotConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращается глобальная конфигурация)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Конфигурация бота
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      telegram_bot_id:
+                        type: string
+                        nullable: true
+                        example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                      telegram_bot_username:
+                        type: string
+                        nullable: true
+                        example: "taskmate_bot"
+                      telegram_webhook_url:
+                        type: string
+                        format: uri
+                        nullable: true
+                        example: "https://example.com/api/webhook"
+                      notification_enabled:
+                        type: boolean
+                        example: true
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Settings
+      summary: Обновить конфигурацию бота
+      description: Обновление настроек Telegram бота
+      operationId: updateBotConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_bot_id:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot ID
+                  example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                telegram_bot_username:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot Username
+                  example: "taskmate_bot"
+                telegram_webhook_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: Telegram Webhook URL
+                  example: "https://example.com/api/webhook"
+                notification_enabled:
+                  type: boolean
+                  nullable: true
+                  description: Включить/выключить уведомления
+                  example: true
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '200':
+          description: Конфигурация бота успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bot configuration updated successfully
+                  data:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: boolean
         '401':
           description: Неавторизован
           content:

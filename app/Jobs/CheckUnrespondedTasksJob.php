@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Models\Task;
+use App\Models\TaskNotification;
 use App\Models\User;
 use App\Services\TaskNotificationService;
 use Carbon\Carbon;
@@ -105,6 +106,24 @@ class CheckUnrespondedTasksJob implements ShouldQueue
         string $timeText
     ): void {
         try {
+            // Determine notification type based on time elapsed
+            $notificationType = match ($timeText) {
+                '2 часа' => TaskNotification::TYPE_UNRESPONDED_2H,
+                '6 часов' => TaskNotification::TYPE_UNRESPONDED_6H,
+                '24 часа' => TaskNotification::TYPE_UNRESPONDED_24H,
+                default => 'unresponded_' . $timeText,
+            };
+
+            // Check if this specific reminder was already sent
+            if (TaskNotification::wasAlreadySent($task->id, $user->id, $notificationType)) {
+                Log::info("Unresponded task reminder already sent", [
+                    'task_id' => $task->id,
+                    'user_id' => $user->id,
+                    'time_elapsed' => $timeText
+                ]);
+                return;
+            }
+
             $message = "📋 *НАПОМИНАНИЕ О ЗАДАЧЕ*\n\n";
             $message .= "📌 {$task->title}\n";
 
@@ -147,6 +166,9 @@ class CheckUnrespondedTasksJob implements ShouldQueue
                 parse_mode: 'markdown',
                 reply_markup: $keyboard
             );
+
+            // Record that this notification was sent
+            TaskNotification::recordSent($task->id, $user->id, $notificationType);
 
             Log::info("Unresponded task reminder sent", [
                 'task_id' => $task->id,

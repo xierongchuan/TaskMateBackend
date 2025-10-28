@@ -39,6 +39,15 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Пользователь успешно зарегистрирован',
             'token'   => $token,
+            'user' => [
+                'id' => $user->id,
+                'login' => $user->login,
+                'full_name' => $user->full_name,
+                'role' => $user->role,
+                'dealership_id' => $user->dealership_id,
+                'telegram_id' => $user->telegram_id,
+                'phone' => $user->phone,
+            ],
         ]);
     }
 }
