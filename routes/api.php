@@ -20,6 +20,18 @@ use Illuminate\Support\Facades\Route;
 Route::post('/webhook', [FrontController::class, 'webhook']);
 
 Route::prefix('v1')->group(function () {
+    // Public registration endpoint (no auth required)
+    Route::post(
+        '/register',
+        [AuthController::class, 'register']
+    )->middleware('throttle:100,1440');
+
+    // Public user creation endpoint (no auth required)
+    Route::post(
+        '/users/create',
+        [UserRegistrationController::class, 'store']
+    )->middleware('throttle:100,1440');
+
     // Открытие сессии (логин)
     Route::post(
         '/session',
