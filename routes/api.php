@@ -108,13 +108,10 @@ Route::prefix('v1')->group(function () {
             // Settings (read-only for observers)
             Route::get('/settings', [SettingsController::class, 'index']);
             Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
-            Route::get('/settings/bot-config', [SettingsController::class, 'getBotConfig']);
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
 
             // Only managers and owners can modify settings
-            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
-                ->middleware('role:manager,owner');
-            Route::post('/settings/bot-config', [SettingsController::class, 'updateBotConfig'])
+            Route::put('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
                 ->middleware('role:manager,owner');
             Route::post('/settings', [SettingsController::class, 'store'])
                 ->middleware('role:manager,owner');
