@@ -1408,6 +1408,12 @@ paths:
           schema:
             type: boolean
             example: true
+        - name: search
+          in: query
+          description: Поиск по названию, адресу, описанию или телефону
+          schema:
+            type: string
+            example: Тестовый салон
         - name: page
           in: query
           description: Номер страницы

@@ -15,11 +15,22 @@ class DealershipController extends Controller
     {
         $perPage = (int) $request->query('per_page', '15');
         $isActive = $request->query('is_active');
+        $search = $request->query('search');
 
         $query = AutoDealership::query();
 
         if ($isActive !== null) {
             $query->where('is_active', (bool) $isActive);
+        }
+
+        // Search by name, address, description, and phone
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('address', 'LIKE', "%{$search}%")
+                  ->orWhere('description', 'LIKE', "%{$search}%")
+                  ->orWhere('phone', 'LIKE', "%{$search}%");
+            });
         }
 
         $dealerships = $query->orderBy('name')->paginate($perPage);

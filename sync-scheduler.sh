@@ -19,7 +19,7 @@ while true; do
     start_time=$(date +%s)
 
     # Run Laravel scheduler at exactly XX:XX:00
-    php artisan schedule:run
+    # php artisan schedule:run
 
     # Calculate execution time
     end_time=$(date +%s)
