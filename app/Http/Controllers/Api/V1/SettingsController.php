@@ -276,4 +276,156 @@ class SettingsController extends Controller
         ]);
     }
 
+    /**
+     * Get bot configuration
+     *
+     * GET /api/v1/settings/bot-config
+     * Query params: dealership_id (optional)
+     */
+    public function getBotConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                // Telegram bot settings
+                'telegram_bot_id' => $this->settingsService->get('telegram_bot_id', $dealershipId),
+                'telegram_bot_username' => $this->settingsService->get('telegram_bot_username', $dealershipId),
+                'telegram_webhook_url' => $this->settingsService->get('telegram_webhook_url', $dealershipId),
+                'notification_enabled' => $this->settingsService->get('notification_enabled', $dealershipId, true),
+
+                // Shift settings
+                'shift_1_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 1),
+                'shift_1_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 1),
+                'shift_2_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 2),
+                'shift_2_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 2),
+                'late_tolerance_minutes' => $this->settingsService->getLateTolerance($dealershipId),
+            ],
+        ]);
+    }
+
+    /**
+     * Update bot configuration
+     *
+     * POST /api/v1/settings/bot-config
+     * Body: {telegram_bot_id?, telegram_bot_username?, telegram_webhook_url?, notification_enabled?, dealership_id?}
+     */
+    public function updateBotConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'telegram_bot_id' => 'nullable|string|max:255',
+            'telegram_bot_username' => 'nullable|string|max:255',
+            'telegram_webhook_url' => 'nullable|url|max:500',
+            'notification_enabled' => 'nullable|boolean',
+            'shift_start_time' => 'sometimes|required|date_format:H:i',
+            'shift_end_time' => 'sometimes|required|date_format:H:i',
+            'late_tolerance_minutes' => 'sometimes|required|integer|min:0|max:120',
+            'dealership_id' => 'nullable|exists:auto_dealerships,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+        $dealershipId = $data['dealership_id'] ?? null;
+
+        $updated = [];
+
+        try {
+            if (isset($data['telegram_bot_id'])) {
+                $this->settingsService->set(
+                    'telegram_bot_id',
+                    $data['telegram_bot_id'],
+                    $dealershipId,
+                    'string',
+                    'Telegram Bot ID'
+                );
+                $updated['telegram_bot_id'] = $data['telegram_bot_id'];
+            }
+
+            if (isset($data['telegram_bot_username'])) {
+                $this->settingsService->set(
+                    'telegram_bot_username',
+                    $data['telegram_bot_username'],
+                    $dealershipId,
+                    'string',
+                    'Telegram Bot Username'
+                );
+                $updated['telegram_bot_username'] = $data['telegram_bot_username'];
+            }
+
+            if (isset($data['telegram_webhook_url'])) {
+                $this->settingsService->set(
+                    'telegram_webhook_url',
+                    $data['telegram_webhook_url'],
+                    $dealershipId,
+                    'string',
+                    'Telegram Webhook URL'
+                );
+                $updated['telegram_webhook_url'] = $data['telegram_webhook_url'];
+            }
+
+            if (isset($data['notification_enabled'])) {
+                $this->settingsService->set(
+                    'notification_enabled',
+                    $data['notification_enabled'],
+                    $dealershipId,
+                    'boolean',
+                    'Enable/disable notifications'
+                );
+                $updated['notification_enabled'] = $data['notification_enabled'];
+            }
+
+            // Handle shift settings when sent to bot-config endpoint
+            if (isset($data['shift_start_time'])) {
+                $this->settingsService->set(
+                    'shift_1_start_time',
+                    $data['shift_start_time'],
+                    $dealershipId,
+                    'time',
+                    'Shift start time'
+                );
+                $updated['shift_start_time'] = $data['shift_start_time'];
+            }
+
+            if (isset($data['shift_end_time'])) {
+                $this->settingsService->set(
+                    'shift_1_end_time',
+                    $data['shift_end_time'],
+                    $dealershipId,
+                    'time',
+                    'Shift end time'
+                );
+                $updated['shift_end_time'] = $data['shift_end_time'];
+            }
+
+            if (isset($data['late_tolerance_minutes'])) {
+                $this->settingsService->set(
+                    'late_tolerance_minutes',
+                    $data['late_tolerance_minutes'],
+                    $dealershipId,
+                    'integer',
+                    'Late tolerance in minutes'
+                );
+                $updated['late_tolerance_minutes'] = $data['late_tolerance_minutes'];
+            }
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid setting value',
+                'errors' => ['setting' => $e->getMessage()],
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bot configuration updated successfully',
+            'data' => $updated,
+        ]);
+    }
 }
