@@ -257,7 +257,7 @@ class SettingsService
      */
     public function getLateTolerance(?int $dealershipId = null): int
     {
-        return $this->get('late_tolerance_minutes', $dealershipId, 15);
+        return (int) $this->get('late_tolerance_minutes', $dealershipId, 15);
     }
 
     /**
