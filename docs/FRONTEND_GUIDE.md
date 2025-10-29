@@ -1531,19 +1531,12 @@ export interface Setting {
   updated_at: string;
 }
 
-export interface BotConfig {
-  telegram_bot_id: string | null;
-  telegram_bot_username: string | null;
-  telegram_webhook_url: string | null;
-  notification_enabled: boolean;
-}
-
 export interface ShiftConfig {
   shift_1_start_time: string;
   shift_1_end_time: string;
   shift_2_start_time: string;
   shift_2_end_time: string;
-  allowed_late_minutes: number;
+  late_tolerance_minutes: number;
 }
 
 export const settingsApi = {
@@ -1561,22 +1554,6 @@ export const settingsApi = {
       params: { dealership_id },
     });
     return response.data;
-  },
-
-  // Получить настройки бота
-  getBotConfig: async (dealership_id?: number): Promise<BotConfig> => {
-    const response = await apiClient.get<BotConfig>('/settings/bot-config', {
-      params: { dealership_id },
-    });
-    return response.data;
-  },
-
-  // Обновить настройки бота (только Manager/Owner)
-  updateBotConfig: async (data: Partial<BotConfig>, dealership_id?: number): Promise<void> => {
-    await apiClient.post('/settings/bot-config', {
-      ...data,
-      dealership_id,
-    });
   },
 
   // Получить настройки смен

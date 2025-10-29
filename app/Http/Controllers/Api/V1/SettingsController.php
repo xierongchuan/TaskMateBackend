@@ -257,4 +257,77 @@ class SettingsController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get shift configuration
+     *
+     * GET /api/v1/settings/shift-config
+     */
+    public function getShiftConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id') ? (int) $request->query('dealership_id') : null;
+
+        $shiftConfig = [
+            'shift_1_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 1),
+            'shift_1_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 1),
+            'shift_2_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 2),
+            'shift_2_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 2),
+            'late_tolerance_minutes' => $this->settingsService->getLateTolerance($dealershipId),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $shiftConfig,
+        ]);
+    }
+
+    /**
+     * Update shift configuration
+     *
+     * POST /api/v1/settings/shift-config
+     */
+    public function updateShiftConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'shift_1_start_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'shift_1_end_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'shift_2_start_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'shift_2_end_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'late_tolerance_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'dealership_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $data = $validator->validated();
+            $dealershipId = $data['dealership_id'] ?? null;
+            unset($data['dealership_id']);
+
+            $updatedSettings = [];
+            foreach ($data as $key => $value) {
+                if ($value !== null) {
+                    $type = $key === 'late_tolerance_minutes' ? 'integer' : 'time';
+                    $this->settingsService->set($key, $value, $dealershipId, $type);
+                    $updatedSettings[$key] = $value;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Shift configuration updated successfully',
+                'data' => $updatedSettings,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }

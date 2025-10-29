@@ -112,6 +112,9 @@ Route::prefix('v1')->group(function () {
 
             // Settings
             Route::get('/settings', [SettingsController::class, 'index']);
+            Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
+            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
+                ->middleware('role:manager,owner');
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
             Route::put('/settings/{key}', [SettingsController::class, 'update'])
                 ->middleware('role:manager,owner');
