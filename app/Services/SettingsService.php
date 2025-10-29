@@ -283,6 +283,126 @@ class SettingsService
     }
 
     /**
+     * Get all settings for a user with dealership context.
+     *
+     * @param User $user
+     * @return array
+     */
+    public function getUserSettings(User $user): array
+    {
+        if (!$user->dealership_id) {
+            // User not associated with dealership, return global settings only
+            return $this->getGlobalSettings();
+        }
+
+        $dealershipId = $user->dealership_id;
+        $globalSettings = $this->getGlobalSettings();
+        $dealershipSettings = $this->getDealershipSettings($dealershipId);
+
+        // Merge dealership settings with global fallbacks
+        return array_merge($globalSettings, $dealershipSettings);
+    }
+
+    /**
+     * Get global settings only.
+     *
+     * @return array
+     */
+    private function getGlobalSettings(): array
+    {
+        $settings = Setting::whereNull('dealership_id')->get();
+
+        $result = [];
+        foreach ($settings as $setting) {
+            $result[$setting->key] = $setting->getTypedValue();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get dealership-specific settings.
+     *
+     * @param int $dealershipId
+     * @return array
+     */
+    private function getDealershipSettings(int $dealershipId): array
+    {
+        $settings = Setting::where('dealership_id', $dealershipId)->get();
+
+        $result = [];
+        foreach ($settings as $setting) {
+            $result[$setting->key] = $setting->getTypedValue();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get setting with smart fallback (dealership -> global).
+     *
+     * @param string $key
+     * @param int|null $dealershipId
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getSettingWithFallback(string $key, ?int $dealershipId = null, mixed $default = null): mixed
+    {
+        // First try to get dealership-specific setting
+        if ($dealershipId) {
+            $dealershipValue = $this->get($key, $dealershipId);
+            if ($dealershipValue !== $default) {
+                return $dealershipValue;
+            }
+        }
+
+        // Fallback to global setting
+        return $this->get($key, null, $default);
+    }
+
+    /**
+     * Get multiple settings at once for efficiency.
+     *
+     * @param array $keys
+     * @param int|null $dealershipId
+     * @return array
+     */
+    public function getMultipleSettings(array $keys, ?int $dealershipId = null): array
+    {
+        $result = [];
+
+        foreach ($keys as $key) {
+            $result[$key] = $this->getSettingWithFallback($key, $dealershipId);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Set multiple settings at once for efficiency.
+     *
+     * @param array $settings  [key => value]
+     * @param int|null $dealershipId
+     * @param array $types     [key => type]
+     * @param array $descriptions [key => description]
+     * @return array
+     */
+    public function setMultipleSettings(array $settings, ?int $dealershipId = null, array $types = [], array $descriptions = []): array
+    {
+        $results = [];
+
+        foreach ($settings as $key => $value) {
+            $type = $types[$key] ?? 'string';
+            $description = $descriptions[$key] ?? null;
+
+            $setting = $this->set($key, $value, $dealershipId, $type, $description);
+            $results[$key] = $setting->getTypedValue();
+        }
+
+        return $results;
+    }
+
+    /**
      * Get cache key for a setting.
      *
      * @param string $key

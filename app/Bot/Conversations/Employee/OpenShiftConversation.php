@@ -8,7 +8,9 @@ use App\Bot\Abstracts\BaseConversation;
 use App\Models\Shift;
 use App\Models\User;
 use App\Models\ShiftReplacement;
+use App\Services\ShiftService;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use SergiX44\Nutgram\Nutgram;
 
@@ -29,12 +31,19 @@ class OpenShiftConversation extends BaseConversation
     {
         try {
             $user = $this->getAuthenticatedUser();
+            $shiftService = app(ShiftService::class);
+
+            // Validate user belongs to a dealership
+            if (!$shiftService->validateUserDealership($user)) {
+                $bot->sendMessage(
+                    '⚠️ Вы не привязаны к дилерскому центру. Обратитесь к администратору.'
+                );
+                $this->end();
+                return;
+            }
 
             // Check if user already has an open shift
-            $openShift = Shift::where('user_id', $user->id)
-                ->where('status', 'open')
-                ->whereNull('shift_end')
-                ->first();
+            $openShift = $shiftService->getUserOpenShift($user);
 
             if ($openShift) {
                 $bot->sendMessage(
@@ -97,24 +106,16 @@ class OpenShiftConversation extends BaseConversation
                 throw new \RuntimeException('Failed to get file info from Telegram');
             }
 
-            // Generate filename for storage
-            $filename = 'shifts/' . uniqid('shift_photo_', true) . '.jpg';
-            $storagePath = Storage::disk('public')->path($filename);
+            // Download file to temporary location
+            $tempPath = sys_get_temp_dir() . '/shift_photo_' . uniqid() . '.jpg';
+            $bot->downloadFile($file, $tempPath);
 
-            // Ensure directory exists
-            $directory = dirname($storagePath);
-            if (!is_dir($directory)) {
-                mkdir($directory, 0755, true);
-            }
-
-            // Download file using Nutgram's built-in method
-            $bot->downloadFile($file, $storagePath);
-
-            if (!file_exists($storagePath)) {
+            if (!file_exists($tempPath)) {
                 throw new \RuntimeException('Failed to download photo from Telegram');
             }
 
-            $this->photoPath = $filename;
+            // Store as UploadedFile for compatibility with ShiftService
+            $this->photoPath = $tempPath;
 
             // Ask if replacing another employee
             $bot->sendMessage(
@@ -268,104 +269,89 @@ class OpenShiftConversation extends BaseConversation
     }
 
     /**
-     * Create shift record
+     * Create shift record using ShiftService
      */
     private function createShift(Nutgram $bot): void
     {
         try {
             $user = $this->getAuthenticatedUser();
-            $now = Carbon::now();
-            $settingsService = app(\App\Services\SettingsService::class);
+            $shiftService = app(ShiftService::class);
 
-            // Determine which shift (1 or 2) based on current time
-            $shiftNumber = $this->determineShiftNumber($now, $settingsService, $user->dealership_id);
-
-            // Get scheduled start time for this shift
-            $scheduledStartTime = $settingsService->getShiftStartTime($user->dealership_id, $shiftNumber);
-            $scheduledStart = Carbon::parse($now->format('Y-m-d') . ' ' . $scheduledStartTime);
-
-            // Calculate late minutes
-            $lateMinutes = 0;
-            $status = 'open';
-            $lateTolerance = $settingsService->getLateTolerance($user->dealership_id);
-
-            if ($now->greaterThan($scheduledStart->addMinutes($lateTolerance))) {
-                $lateMinutes = $scheduledStart->diffInMinutes($now);
-                $status = 'late';
+            // Create UploadedFile from the temporary photo path
+            if (!$this->photoPath || !file_exists($this->photoPath)) {
+                throw new \RuntimeException('Photo file not found');
             }
 
-            // Create shift
-            $shift = Shift::create([
-                'user_id' => $user->id,
-                'dealership_id' => $user->dealership_id,
-                'shift_start' => $now,
-                'opening_photo_path' => $this->photoPath,
-                'status' => $status,
-                'late_minutes' => $lateMinutes,
-                'scheduled_start' => $scheduledStart,
-            ]);
+            $uploadedFile = new UploadedFile(
+                $this->photoPath,
+                'shift_opening_photo.jpg',
+                'image/jpeg',
+                null,
+                true
+            );
 
-            // Create replacement record if needed
+            // Get replacement user if needed
+            $replacingUser = null;
             if ($this->isReplacement && $this->replacedUserId) {
-                ShiftReplacement::create([
-                    'shift_id' => $shift->id,
-                    'replacing_user_id' => $user->id,
-                    'replaced_user_id' => $this->replacedUserId,
-                    'reason' => $this->replacementReason,
-                ]);
+                $replacingUser = User::findOrFail($this->replacedUserId);
 
-                // Notify managers about replacement
-                $replacedUser = User::find($this->replacedUserId);
-                if ($replacedUser) {
-                    $managerService = app(\App\Services\ManagerNotificationService::class);
-                    $managerService->notifyAboutReplacement($shift, $user, $replacedUser, $this->replacementReason);
+                // Validate replacement user belongs to the same dealership
+                if (!$shiftService->validateUserDealership($replacingUser, $user->dealership_id)) {
+                    $bot->sendMessage(
+                        '⚠️ Выбранный сотрудник не принадлежит вашему дилерскому центру.'
+                    );
+                    $this->end();
+                    return;
                 }
             }
 
+            // Use ShiftService to create the shift
+            $shift = $shiftService->openShift(
+                $user,
+                $uploadedFile,
+                $replacingUser,
+                $this->replacementReason
+            );
+
+            // Clean up temporary file
+            if (file_exists($this->photoPath)) {
+                unlink($this->photoPath);
+            }
+
             // Send welcome message and tasks
+            $now = Carbon::now();
             $message = "✅ Смена открыта в " . $now->format('H:i d.m.Y') . "\n\n";
             $message .= "👋 Приветствие!\n\n";
 
             if ($this->isReplacement) {
-                $replacedUser = User::find($this->replacedUserId);
-                $message .= "📝 Вы заменяете: {$replacedUser->full_name}\n";
+                $message .= "📝 Вы заменяете: {$replacingUser->full_name}\n";
                 $message .= "💬 Причина: {$this->replacementReason}\n\n";
             }
 
-            $bot->sendMessage($message, reply_markup: static::employeeMenu());
-
-            // Notify managers if late
-            if ($status === 'late') {
-                $managerService = app(\App\Services\ManagerNotificationService::class);
-                $managerService->notifyAboutLateShift($shift);
+            // Add shift status information
+            if ($shift->status === 'late') {
+                $message .= "⚠️ Смена открыта с опозданием на {$shift->late_minutes} минут.\n\n";
             }
+
+            $message .= "🕐 Планируемое время: " . $shift->scheduled_start->format('H:i') . " - " .
+                       $shift->scheduled_end->format('H:i') . "\n\n";
+
+            $bot->sendMessage($message, reply_markup: static::employeeMenu());
 
             // Send pending tasks
             $this->sendPendingTasks($bot, $user);
 
             $this->end();
         } catch (\Throwable $e) {
+            // Clean up temporary file on error
+            if ($this->photoPath && file_exists($this->photoPath)) {
+                unlink($this->photoPath);
+            }
             $this->handleError($bot, $e, 'createShift');
         }
     }
 
-    /**
-     * Determine shift number based on current time
-     */
-    private function determineShiftNumber(Carbon $now, \App\Services\SettingsService $settingsService, ?int $dealershipId): int
-    {
-        $shift1Start = Carbon::parse($now->format('Y-m-d') . ' ' . $settingsService->getShiftStartTime($dealershipId, 1));
-        $shift2Start = Carbon::parse($now->format('Y-m-d') . ' ' . $settingsService->getShiftStartTime($dealershipId, 2));
-
-        // If shift 2 starts later in the evening and we're past midnight, it's shift 2 from yesterday
-        if ($shift2Start->greaterThan($shift1Start) && $now->lessThan($shift1Start)) {
-            return 2;
-        }
-
-        // Otherwise, choose the closest shift
-        return $now->diffInMinutes($shift1Start, false) < $now->diffInMinutes($shift2Start, false) ? 1 : 2;
-    }
-
+    
     /**
      * Send pending tasks to the employee
      */

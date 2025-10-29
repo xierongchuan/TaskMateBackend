@@ -1808,6 +1808,136 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    put:
+      tags:
+        - Shifts
+      summary: Обновить смену (закрытие или изменение статуса)
+      description: Обновление существующей смены, в основном для закрытия смены
+      operationId: updateShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID смены
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                closing_photo:
+                  type: string
+                  format: binary
+                  description: Фото экрана для закрытия смены
+                status:
+                  type: string
+                  enum: [open, closed, replaced]
+                  description: Новый статус смены
+                  example: closed
+      responses:
+        '200':
+          description: Смена успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shift closed successfully
+                  data:
+                    $ref: '#/components/schemas/Shift'
+        '400':
+          description: Ошибка валидации или состояние смены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Cannot close an already closed shift
+        '404':
+          description: Смена не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Shifts
+      summary: Удалить смену
+      description: Удаление существующей смены (только для завершенных смен)
+      operationId: deleteShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID смены
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Смена успешно удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shift deleted successfully
+        '400':
+          description: Нельзя удалить активную смену
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Cannot delete an active shift
+        '404':
+          description: Смена не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /shifts/current:
     get:
       tags:
@@ -1902,6 +2032,184 @@ paths:
                         type: string
                         format: date
                         example: "2025-10-12"
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Shifts
+      summary: Открыть новую смену
+      description: Открытие новой смены с фото опциональной заменой другого сотрудника
+      operationId: createShift
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - user_id
+                - dealership_id
+                - opening_photo
+              properties:
+                user_id:
+                  type: integer
+                  description: ID пользователя открывающего смену
+                  example: 1
+                dealership_id:
+                  type: integer
+                  description: ID дилерского центра
+                  example: 1
+                opening_photo:
+                  type: string
+                  format: binary
+                  description: Фото экрана компьютера с текущим временем
+                replacing_user_id:
+                  type: integer
+                  nullable: true
+                  description: ID заменяемого сотрудника (если применимо)
+                  example: 2
+                reason:
+                  type: string
+                  nullable: true
+                  description: Причина замены (если применимо)
+                  example: "Болезнь основного сотрудника"
+      responses:
+        '201':
+          description: Смена успешно открыта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shift opened successfully
+                  data:
+                    $ref: '#/components/schemas/Shift'
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: User already has an open shift
+        '403':
+          description: Ошибка авторизации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: User does not belong to the specified dealership
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts/my:
+    get:
+      tags:
+        - Shifts
+      summary: Получить смены текущего пользователя
+      description: Получение списка смен для аутентифицированного пользователя с фильтрацией
+      operationId: getMyShifts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Фильтр по статусу смены
+          schema:
+            type: string
+            enum: [open, closed, late]
+            example: open
+        - name: date_from
+          in: query
+          description: Фильтр по начальной дате
+          schema:
+            type: string
+            format: date
+            example: "2025-10-01"
+        - name: date_to
+          in: query
+          description: Фильтр по конечной дате
+          schema:
+            type: string
+            format: date
+            example: "2025-10-31"
+      responses:
+        '200':
+          description: Список смен пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shift'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shifts/my/current:
+    get:
+      tags:
+        - Shifts
+      summary: Получить текущую открытую смену пользователя
+      description: Получение текущей активной смены аутентифицированного пользователя
+      operationId: getMyCurrentShift
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Текущая смена пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/Shift'
+                    nullable: true
+                  message:
+                    type: string
+                    nullable: true
+                    example: No active shift found
         '401':
           description: Неавторизован
           content:

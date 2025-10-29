@@ -6,13 +6,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * Settings management API
+ * RESTful Settings management API
  */
 class SettingsController extends Controller
 {
@@ -22,410 +23,238 @@ class SettingsController extends Controller
     }
 
     /**
-     * Get all settings for a dealership or global settings
+     * Get all global settings
      *
      * GET /api/v1/settings
-     * Query params: dealership_id (optional)
      */
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id');
-
-        $settings = Setting::when($dealershipId, function ($query) use ($dealershipId) {
-            return $query->where('dealership_id', $dealershipId);
-        }, function ($query) {
-            return $query->whereNull('dealership_id');
-        })->get();
+        $settings = Setting::whereNull('dealership_id')->get();
 
         return response()->json([
             'success' => true,
-            'data' => $settings->map(function ($setting) {
-                return [
-                    'id' => $setting->id,
-                    'key' => $setting->key,
-                    'value' => $setting->getTypedValue(),
-                    'type' => $setting->type,
-                    'description' => $setting->description,
-                    'dealership_id' => $setting->dealership_id,
-                ];
+            'data' => $settings->mapWithKeys(function ($setting) {
+                return [$setting->key => $setting->getTypedValue()];
             }),
         ]);
     }
 
     /**
-     * Get a specific setting
+     * Get a specific global setting
      *
      * GET /api/v1/settings/{key}
-     * Query params: dealership_id (optional)
      */
-    public function show(Request $request, string $key): JsonResponse
+    public function show(string $key): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id');
-        $default = $request->query('default');
-
-        $value = $this->settingsService->get($key, $dealershipId, $default);
+        $value = $this->settingsService->get($key);
 
         return response()->json([
             'success' => true,
             'data' => [
                 'key' => $key,
                 'value' => $value,
+                'scope' => 'global'
             ],
         ]);
     }
 
     /**
-     * Create or update a setting
+     * Update a specific global setting
      *
-     * POST /api/v1/settings
-     * Body: {key, value, type, dealership_id?, description?}
+     * PUT /api/v1/settings/{key}
      */
-    public function store(Request $request): JsonResponse
+    public function update(Request $request, string $key): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'key' => 'required|string|max:100',
-            'value' => 'required',
-            'type' => 'required|in:string,integer,boolean,json,time',
-            'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'description' => 'nullable|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $data = $validator->validated();
-
-        $setting = $this->settingsService->set(
-            $data['key'],
-            $data['value'],
-            $data['dealership_id'] ?? null,
-            $data['type'],
-            $data['description'] ?? null
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $setting->id,
-                'key' => $setting->key,
-                'value' => $setting->getTypedValue(),
-                'type' => $setting->type,
-                'description' => $setting->description,
-                'dealership_id' => $setting->dealership_id,
-            ],
-        ], 201);
-    }
-
-    /**
-     * Update a setting
-     *
-     * PUT /api/v1/settings/{id}
-     * Body: {value, description?}
-     */
-    public function update(Request $request, int $id): JsonResponse
-    {
-        $setting = Setting::findOrFail($id);
-
         $validator = Validator::make($request->all(), [
             'value' => 'required',
-            'description' => 'nullable|string',
+            'type' => 'nullable|in:string,integer,boolean,json,time',
+            'description' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
+                'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
         }
-
-        $data = $validator->validated();
-
-        $setting->setTypedValue($data['value']);
-        if (isset($data['description'])) {
-            $setting->description = $data['description'];
-        }
-        $setting->save();
-
-        // Clear cache
-        $this->settingsService->clearCache();
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $setting->id,
-                'key' => $setting->key,
-                'value' => $setting->getTypedValue(),
-                'type' => $setting->type,
-                'description' => $setting->description,
-                'dealership_id' => $setting->dealership_id,
-            ],
-        ]);
-    }
-
-    /**
-     * Delete a setting
-     *
-     * DELETE /api/v1/settings/{id}
-     */
-    public function destroy(int $id): JsonResponse
-    {
-        $setting = Setting::findOrFail($id);
-        $setting->delete();
-
-        // Clear cache
-        $this->settingsService->clearCache();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Setting deleted successfully',
-        ]);
-    }
-
-    /**
-     * Get shift configuration for a dealership
-     *
-     * GET /api/v1/settings/shift-config
-     * Query params: dealership_id (optional)
-     */
-    public function getShiftConfig(Request $request): JsonResponse
-    {
-        $dealershipId = $request->query('dealership_id');
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'shift_1_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 1),
-                'shift_1_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 1),
-                'shift_2_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 2),
-                'shift_2_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 2),
-                'late_tolerance_minutes' => $this->settingsService->getLateTolerance($dealershipId),
-            ],
-        ]);
-    }
-
-    /**
-     * Update shift configuration for a dealership
-     *
-     * POST /api/v1/settings/shift-config
-     * Body: {shift_1_start_time?, shift_1_end_time?, shift_2_start_time?, shift_2_end_time?, late_tolerance_minutes?, dealership_id?}
-     */
-    public function updateShiftConfig(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'shift_1_start_time' => 'sometimes|required|date_format:H:i',
-            'shift_1_end_time' => 'sometimes|required|date_format:H:i',
-            'shift_2_start_time' => 'sometimes|required|date_format:H:i',
-            'shift_2_end_time' => 'sometimes|required|date_format:H:i',
-            'late_tolerance_minutes' => 'sometimes|required|integer|min:0|max:120',
-            'dealership_id' => 'nullable|exists:auto_dealerships,id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $data = $validator->validated();
-        $dealershipId = $data['dealership_id'] ?? null;
-
-        $updated = [];
 
         try {
-            if (isset($data['shift_1_start_time'])) {
-                $this->settingsService->set('shift_1_start_time', $data['shift_1_start_time'], $dealershipId, 'time');
-                $updated['shift_1_start_time'] = $data['shift_1_start_time'];
-            }
+            $data = $validator->validated();
 
-            if (isset($data['shift_1_end_time'])) {
-                $this->settingsService->set('shift_1_end_time', $data['shift_1_end_time'], $dealershipId, 'time');
-                $updated['shift_1_end_time'] = $data['shift_1_end_time'];
-            }
+            $setting = $this->settingsService->set(
+                $key,
+                $data['value'],
+                null, // Global setting
+                $data['type'] ?? 'string',
+                $data['description'] ?? null
+            );
 
-            if (isset($data['shift_2_start_time'])) {
-                $this->settingsService->set('shift_2_start_time', $data['shift_2_start_time'], $dealershipId, 'time');
-                $updated['shift_2_start_time'] = $data['shift_2_start_time'];
-            }
-
-            if (isset($data['shift_2_end_time'])) {
-                $this->settingsService->set('shift_2_end_time', $data['shift_2_end_time'], $dealershipId, 'time');
-                $updated['shift_2_end_time'] = $data['shift_2_end_time'];
-            }
-
-            if (isset($data['late_tolerance_minutes'])) {
-                $this->settingsService->set('late_tolerance_minutes', $data['late_tolerance_minutes'], $dealershipId, 'integer');
-                $updated['late_tolerance_minutes'] = $data['late_tolerance_minutes'];
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Setting updated successfully',
+                'data' => [
+                    'key' => $key,
+                    'value' => $setting->getTypedValue(),
+                    'scope' => 'global'
+                ],
+            ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid setting value',
-                'errors' => ['setting' => $e->getMessage()],
-            ], 422);
+                'message' => $e->getMessage(),
+            ], 400);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Shift configuration updated successfully',
-            'data' => $updated,
-        ]);
     }
 
     /**
-     * Get bot configuration
+     * Get all settings for a specific dealership
      *
-     * GET /api/v1/settings/bot-config
-     * Query params: dealership_id (optional)
+     * GET /api/v1/settings/{dealership_id}
      */
-    public function getBotConfig(Request $request): JsonResponse
+    public function showDealership(int $dealershipId): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id');
+        $settings = Setting::where('dealership_id', $dealershipId)->get();
 
         return response()->json([
             'success' => true,
             'data' => [
-                // Telegram bot settings
-                'telegram_bot_id' => $this->settingsService->get('telegram_bot_id', $dealershipId),
-                'telegram_bot_username' => $this->settingsService->get('telegram_bot_username', $dealershipId),
-                'telegram_webhook_url' => $this->settingsService->get('telegram_webhook_url', $dealershipId),
-                'notification_enabled' => $this->settingsService->get('notification_enabled', $dealershipId, true),
-
-                // Shift settings
-                'shift_1_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 1),
-                'shift_1_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 1),
-                'shift_2_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 2),
-                'shift_2_end_time' => $this->settingsService->getShiftEndTime($dealershipId, 2),
-                'late_tolerance_minutes' => $this->settingsService->getLateTolerance($dealershipId),
+                'dealership_id' => $dealershipId,
+                'settings' => $settings->mapWithKeys(function ($setting) {
+                    return [$setting->key => $setting->getTypedValue()];
+                }),
             ],
         ]);
     }
 
     /**
-     * Update bot configuration
+     * Get a specific dealership setting
      *
-     * POST /api/v1/settings/bot-config
-     * Body: {telegram_bot_id?, telegram_bot_username?, telegram_webhook_url?, notification_enabled?, dealership_id?}
+     * GET /api/v1/settings/{dealership_id}/{key}
      */
-    public function updateBotConfig(Request $request): JsonResponse
+    public function showDealershipSetting(int $dealershipId, string $key): JsonResponse
+    {
+        $value = $this->settingsService->get($key, $dealershipId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'key' => $key,
+                'value' => $value,
+                'scope' => 'dealership',
+                'dealership_id' => $dealershipId,
+            ],
+        ]);
+    }
+
+    /**
+     * Update a specific dealership setting
+     *
+     * PUT /api/v1/settings/{dealership_id}/{key}
+     */
+    public function updateDealershipSetting(Request $request, int $dealershipId, string $key): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'telegram_bot_id' => 'nullable|string|max:255',
-            'telegram_bot_username' => 'nullable|string|max:255',
-            'telegram_webhook_url' => 'nullable|url|max:500',
-            'notification_enabled' => 'nullable|boolean',
-            'shift_start_time' => 'sometimes|required|date_format:H:i',
-            'shift_end_time' => 'sometimes|required|date_format:H:i',
-            'late_tolerance_minutes' => 'sometimes|required|integer|min:0|max:120',
-            'dealership_id' => 'nullable|exists:auto_dealerships,id',
+            'value' => 'required',
+            'type' => 'nullable|in:string,integer,boolean,json,time',
+            'description' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
+                'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
         }
 
-        $data = $validator->validated();
-        $dealershipId = $data['dealership_id'] ?? null;
-
-        $updated = [];
-
         try {
-            if (isset($data['telegram_bot_id'])) {
-                $this->settingsService->set(
-                    'telegram_bot_id',
-                    $data['telegram_bot_id'],
-                    $dealershipId,
-                    'string',
-                    'Telegram Bot ID'
-                );
-                $updated['telegram_bot_id'] = $data['telegram_bot_id'];
-            }
+            $data = $validator->validated();
 
-            if (isset($data['telegram_bot_username'])) {
-                $this->settingsService->set(
-                    'telegram_bot_username',
-                    $data['telegram_bot_username'],
-                    $dealershipId,
-                    'string',
-                    'Telegram Bot Username'
-                );
-                $updated['telegram_bot_username'] = $data['telegram_bot_username'];
-            }
+            $setting = $this->settingsService->set(
+                $key,
+                $data['value'],
+                $dealershipId,
+                $data['type'] ?? 'string',
+                $data['description'] ?? null
+            );
 
-            if (isset($data['telegram_webhook_url'])) {
-                $this->settingsService->set(
-                    'telegram_webhook_url',
-                    $data['telegram_webhook_url'],
-                    $dealershipId,
-                    'string',
-                    'Telegram Webhook URL'
-                );
-                $updated['telegram_webhook_url'] = $data['telegram_webhook_url'];
-            }
-
-            if (isset($data['notification_enabled'])) {
-                $this->settingsService->set(
-                    'notification_enabled',
-                    $data['notification_enabled'],
-                    $dealershipId,
-                    'boolean',
-                    'Enable/disable notifications'
-                );
-                $updated['notification_enabled'] = $data['notification_enabled'];
-            }
-
-            // Handle shift settings when sent to bot-config endpoint
-            if (isset($data['shift_start_time'])) {
-                $this->settingsService->set(
-                    'shift_1_start_time',
-                    $data['shift_start_time'],
-                    $dealershipId,
-                    'time',
-                    'Shift start time'
-                );
-                $updated['shift_start_time'] = $data['shift_start_time'];
-            }
-
-            if (isset($data['shift_end_time'])) {
-                $this->settingsService->set(
-                    'shift_1_end_time',
-                    $data['shift_end_time'],
-                    $dealershipId,
-                    'time',
-                    'Shift end time'
-                );
-                $updated['shift_end_time'] = $data['shift_end_time'];
-            }
-
-            if (isset($data['late_tolerance_minutes'])) {
-                $this->settingsService->set(
-                    'late_tolerance_minutes',
-                    $data['late_tolerance_minutes'],
-                    $dealershipId,
-                    'integer',
-                    'Late tolerance in minutes'
-                );
-                $updated['late_tolerance_minutes'] = $data['late_tolerance_minutes'];
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Setting updated successfully',
+                'data' => [
+                    'key' => $key,
+                    'value' => $setting->getTypedValue(),
+                    'scope' => 'dealership',
+                    'dealership_id' => $dealershipId,
+                ],
+            ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid setting value',
-                'errors' => ['setting' => $e->getMessage()],
-            ], 422);
+                'message' => $e->getMessage(),
+            ], 400);
         }
+    }
+
+    /**
+     * Get all settings for the authenticated bot user
+     *
+     * GET /api/v1/bot/settings
+     */
+    public function botSettings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || !$user->dealership_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or not associated with a dealership',
+            ], 404);
+        }
+
+        $dealershipId = $user->dealership_id;
+
+        // Get all settings with smart fallback (dealership -> global)
+        $settings = $this->settingsService->getUserSettings($user);
 
         return response()->json([
             'success' => true,
-            'message' => 'Bot configuration updated successfully',
-            'data' => $updated,
+            'data' => [
+                'dealership_id' => $dealershipId,
+                'user_id' => $user->id,
+                'settings' => $settings,
+            ],
+        ]);
+    }
+
+    /**
+     * Get a specific setting for the authenticated bot user
+     *
+     * GET /api/v1/bot/settings/{key}
+     */
+    public function botSetting(Request $request, string $key): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || !$user->dealership_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or not associated with a dealership',
+            ], 404);
+        }
+
+        $dealershipId = $user->dealership_id;
+        $value = $this->settingsService->getSettingWithFallback($key, $dealershipId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'key' => $key,
+                'value' => $value,
+                'dealership_id' => $dealershipId,
+                'user_id' => $user->id,
+            ],
         ]);
     }
 }

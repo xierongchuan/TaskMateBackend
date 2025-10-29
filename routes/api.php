@@ -73,9 +73,14 @@ Route::prefix('v1')->group(function () {
 
             // Shifts
             Route::get('/shifts', [ShiftController::class, 'index']);
+            Route::post('/shifts', [ShiftController::class, 'store']);
             Route::get('/shifts/current', [ShiftController::class, 'current']);
             Route::get('/shifts/statistics', [ShiftController::class, 'statistics']);
+            Route::get('/shifts/my', [ShiftController::class, 'myShifts']);
+            Route::get('/shifts/my/current', [ShiftController::class, 'myCurrentShift']);
             Route::get('/shifts/{id}', [ShiftController::class, 'show']);
+            Route::put('/shifts/{id}', [ShiftController::class, 'update']);
+            Route::delete('/shifts/{id}', [ShiftController::class, 'destroy']);
 
             // Tasks
             Route::get('/tasks', [TaskController::class, 'index']);
@@ -105,22 +110,20 @@ Route::prefix('v1')->group(function () {
             // Dashboard
             Route::get('/dashboard', [DashboardController::class, 'index']);
 
-            // Settings (read-only for observers)
+            // Settings
             Route::get('/settings', [SettingsController::class, 'index']);
-            Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
-            Route::get('/settings/bot-config', [SettingsController::class, 'getBotConfig']);
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
+            Route::put('/settings/{key}', [SettingsController::class, 'update'])
+                ->middleware('role:manager,owner');
 
-            // Only managers and owners can modify settings
-            Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
+            // Dealership-specific settings
+            Route::get('/settings/{dealership_id}', [SettingsController::class, 'showDealership']);
+            Route::get('/settings/{dealership_id}/{key}', [SettingsController::class, 'showDealershipSetting']);
+            Route::put('/settings/{dealership_id}/{key}', [SettingsController::class, 'updateDealershipSetting'])
                 ->middleware('role:manager,owner');
-            Route::post('/settings/bot-config', [SettingsController::class, 'updateBotConfig'])
-                ->middleware('role:manager,owner');
-            Route::post('/settings', [SettingsController::class, 'store'])
-                ->middleware('role:manager,owner');
-            Route::put('/settings/{id}', [SettingsController::class, 'update'])
-                ->middleware('role:manager,owner');
-            Route::delete('/settings/{id}', [SettingsController::class, 'destroy'])
-                ->middleware('role:manager,owner');
+
+            // Bot user settings (automatic dealership detection)
+            Route::get('/bot/settings', [SettingsController::class, 'botSettings']);
+            Route::get('/bot/settings/{key}', [SettingsController::class, 'botSetting']);
         });
 });
