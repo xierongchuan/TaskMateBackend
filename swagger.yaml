@@ -3099,7 +3099,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-    put:
+    post:
       tags:
         - Settings
       summary: Обновить конфигурацию смен
@@ -3167,6 +3167,180 @@ paths:
                     additionalProperties:
                       oneOf:
                         - type: string
+                        - type: integer
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: object
+
+  /settings/bot-config:
+    get:
+      tags:
+        - Settings
+      summary: Получить конфигурацию бота
+      description: Получение настроек Telegram бота и смен
+      operationId: getBotConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dealership_id
+          in: query
+          description: ID автосалона (если не указан, возвращается глобальная конфигурация)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Конфигурация бота
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      telegram_bot_id:
+                        type: string
+                        nullable: true
+                        example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                      telegram_bot_username:
+                        type: string
+                        nullable: true
+                        example: "taskmate_bot"
+                      telegram_webhook_url:
+                        type: string
+                        format: uri
+                        nullable: true
+                        example: "https://example.com/api/webhook"
+                      notification_enabled:
+                        type: boolean
+                        example: true
+                      shift_1_start_time:
+                        type: string
+                        format: time
+                        example: "09:00"
+                        description: Время начала первой смены
+                      shift_1_end_time:
+                        type: string
+                        format: time
+                        example: "18:00"
+                        description: Время окончания первой смены
+                      shift_2_start_time:
+                        type: string
+                        format: time
+                        example: "18:00"
+                        description: Время начала второй смены
+                      shift_2_end_time:
+                        type: string
+                        format: time
+                        example: "02:00"
+                        description: Время окончания второй смены
+                      late_tolerance_minutes:
+                        type: integer
+                        example: 15
+                        description: Допустимое время опоздания в минутах
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Settings
+      summary: Обновить конфигурацию бота
+      description: Обновление настроек Telegram бота и смен
+      operationId: updateBotConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_bot_id:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot ID
+                  example: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                telegram_bot_username:
+                  type: string
+                  nullable: true
+                  description: Telegram Bot Username
+                  example: "taskmate_bot"
+                telegram_webhook_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: Telegram Webhook URL
+                  example: "https://example.com/api/webhook"
+                notification_enabled:
+                  type: boolean
+                  nullable: true
+                  description: Включить/выключить уведомления
+                  example: true
+                shift_start_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время начала смены (формат HH:MM)
+                  example: "09:00"
+                shift_end_time:
+                  type: string
+                  format: time
+                  nullable: true
+                  description: Время окончания смены (формат HH:MM)
+                  example: "18:00"
+                late_tolerance_minutes:
+                  type: integer
+                  nullable: true
+                  description: Допустимое время опоздания в минутах
+                  example: 15
+                dealership_id:
+                  type: integer
+                  nullable: true
+                  example: 1
+      responses:
+        '200':
+          description: Конфигурация бота успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bot configuration updated successfully
+                  data:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: boolean
                         - type: integer
         '401':
           description: Неавторизован
