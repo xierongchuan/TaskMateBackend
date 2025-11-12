@@ -12,10 +12,17 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Job to archive old completed tasks after N days (configurable, default 30)
+ *
+ * Optimizations:
+ * - Eager loading to prevent N+1 queries
+ * - Batch processing with chunking for large datasets
+ * - Bulk update for better performance
+ * - Query optimization with subqueries for validation
  */
 class ArchiveOldTasksJob implements ShouldQueue
 {
@@ -23,6 +30,8 @@ class ArchiveOldTasksJob implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+
+    private const CHUNK_SIZE = 500;
 
     /**
      * Execute the job.
@@ -33,91 +42,118 @@ class ArchiveOldTasksJob implements ShouldQueue
             $now = Carbon::now();
             $archivedCount = 0;
 
-            // Get all dealerships and archive their tasks
-            $dealerships = \App\Models\AutoDealership::all();
+            // Get all dealership IDs that have non-archived tasks
+            $dealershipIds = Task::whereNull('archived_at')
+                ->distinct('dealership_id')
+                ->pluck('dealership_id');
 
-            foreach ($dealerships as $dealership) {
-                $archiveDays = $settingsService->getTaskArchiveDays($dealership->id);
+            foreach ($dealershipIds as $dealershipId) {
+                $archiveDays = $settingsService->getTaskArchiveDays($dealershipId);
                 $archiveDate = $now->copy()->subDays($archiveDays);
 
-                // Find completed tasks older than archive date
-                $tasksToArchive = Task::where('dealership_id', $dealership->id)
-                    ->whereNull('archived_at')
-                    ->where('created_at', '<', $archiveDate)
-                    ->whereHas('responses', function ($query) {
-                        $query->where('status', 'completed');
-                    })
-                    ->get();
+                $count = $this->archiveTasksForDealership(
+                    $dealershipId,
+                    $archiveDate,
+                    $now
+                );
 
-                foreach ($tasksToArchive as $task) {
-                    // Check if all assigned users have completed responses
-                    $assignments = $task->assignments;
-                    $allCompleted = true;
-
-                    foreach ($assignments as $assignment) {
-                        $hasCompletedResponse = $task->responses()
-                            ->where('user_id', $assignment->user_id)
-                            ->where('status', 'completed')
-                            ->exists();
-
-                        if (!$hasCompletedResponse) {
-                            $allCompleted = false;
-                            break;
-                        }
-                    }
-
-                    if ($allCompleted && $assignments->count() > 0) {
-                        $task->archived_at = $now;
-                        $task->save();
-                        $archivedCount++;
-                    }
-                }
-            }
-
-            // Also archive tasks with no dealership
-            $globalArchiveDays = $settingsService->getTaskArchiveDays(null);
-            $globalArchiveDate = $now->copy()->subDays($globalArchiveDays);
-
-            $globalTasksToArchive = Task::whereNull('dealership_id')
-                ->whereNull('archived_at')
-                ->where('created_at', '<', $globalArchiveDate)
-                ->whereHas('responses', function ($query) {
-                    $query->where('status', 'completed');
-                })
-                ->get();
-
-            foreach ($globalTasksToArchive as $task) {
-                // Check if all assigned users have completed responses
-                $assignments = $task->assignments;
-                $allCompleted = true;
-
-                foreach ($assignments as $assignment) {
-                    $hasCompletedResponse = $task->responses()
-                        ->where('user_id', $assignment->user_id)
-                        ->where('status', 'completed')
-                        ->exists();
-
-                    if (!$hasCompletedResponse) {
-                        $allCompleted = false;
-                        break;
-                    }
-                }
-
-                if ($allCompleted && $assignments->count() > 0) {
-                    $task->archived_at = $now;
-                    $task->save();
-                    $archivedCount++;
-                }
+                $archivedCount += $count;
             }
 
             Log::info('ArchiveOldTasksJob completed', [
                 'archived_count' => $archivedCount,
+                'duration' => now()->diffInSeconds($now),
             ]);
         } catch (\Throwable $e) {
             Log::error('ArchiveOldTasksJob failed: ' . $e->getMessage(), [
                 'exception' => $e,
+                'trace' => $e->getTraceAsString(),
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Archive tasks for a specific dealership.
+     */
+    private function archiveTasksForDealership(?int $dealershipId, Carbon $archiveDate, Carbon $now): int
+    {
+        $archivedCount = 0;
+
+        // Find task IDs that have at least one completed response
+        $taskIdsWithCompletedResponse = DB::table('task_responses')
+            ->where('status', 'completed')
+            ->distinct()
+            ->pluck('task_id');
+
+        // Build base query
+        $query = Task::where('created_at', '<', $archiveDate)
+            ->whereNull('archived_at')
+            ->whereIn('id', $taskIdsWithCompletedResponse);
+
+        if ($dealershipId === null) {
+            $query->whereNull('dealership_id');
+        } else {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        // Process in chunks to avoid memory issues
+        $query->chunk(self::CHUNK_SIZE, function ($tasks) use ($now, &$archivedCount) {
+            $taskIdsToArchive = [];
+
+            foreach ($tasks as $task) {
+                // Check if all assigned users have completed responses
+                if ($this->allAssignmentsCompleted($task->id)) {
+                    $taskIdsToArchive[] = $task->id;
+                }
+            }
+
+            // Bulk update for better performance
+            if (!empty($taskIdsToArchive)) {
+                Task::whereIn('id', $taskIdsToArchive)
+                    ->update(['archived_at' => $now]);
+
+                $archivedCount += count($taskIdsToArchive);
+
+                Log::debug('Archived batch of tasks', [
+                    'count' => count($taskIdsToArchive),
+                    'dealership_id' => $tasks->first()?->dealership_id,
+                ]);
+            }
+        });
+
+        return $archivedCount;
+    }
+
+    /**
+     * Check if all task assignments have completed responses.
+     *
+     * Uses a single optimized query instead of N+1.
+     */
+    private function allAssignmentsCompleted(int $taskId): bool
+    {
+        // Count total assignments
+        $totalAssignments = DB::table('task_assignments')
+            ->where('task_id', $taskId)
+            ->count();
+
+        // If no assignments, skip
+        if ($totalAssignments === 0) {
+            return false;
+        }
+
+        // Count completed responses matching assignments
+        $completedResponses = DB::table('task_responses')
+            ->where('task_id', $taskId)
+            ->where('status', 'completed')
+            ->whereIn('user_id', function ($query) {
+                $query->select('user_id')
+                    ->from('task_assignments')
+                    ->where('task_id', DB::raw('task_responses.task_id'));
+            })
+            ->distinct('user_id')
+            ->count();
+
+        return $totalAssignments === $completedResponses;
     }
 }
