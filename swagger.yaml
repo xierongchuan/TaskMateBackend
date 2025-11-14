@@ -245,7 +245,7 @@ components:
           example: 2025-10-15T18:00:00Z
         recurrence:
           type: string
-          enum: [daily, weekly, monthly]
+          enum: [none, daily, weekly, monthly]
           nullable: true
           example: weekly
         recurrence_time:
@@ -2386,7 +2386,7 @@ paths:
                   example: "2025-10-15T18:00:00Z"
                 recurrence:
                   type: string
-                  enum: [daily, weekly, monthly]
+                  enum: [none, daily, weekly, monthly]
                   nullable: true
                   example: weekly
                 recurrence_time:
@@ -2537,7 +2537,7 @@ paths:
                   example: "2025-10-16T18:00:00Z"
                 recurrence:
                   type: string
-                  enum: [daily, weekly, monthly]
+                  enum: [none, daily, weekly, monthly]
                   nullable: true
                   example: daily
                 recurrence_time:

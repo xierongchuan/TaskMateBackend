@@ -208,7 +208,7 @@ class TaskController extends Controller
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
             'appear_date' => 'nullable|string|after_or_equal:now', // Bug #4: не раньше текущего времени
             'deadline' => 'nullable|string',
-            'recurrence' => 'nullable|string|in:daily,weekly,monthly',
+            'recurrence' => 'nullable|string|in:none,daily,weekly,monthly',
             'recurrence_time' => 'nullable|date_format:H:i', // Время для повторяющихся задач
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7', // 1=Пн, 7=Вс
             'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31', // -1=первое, -2=последнее, 1-31=число
@@ -220,7 +220,7 @@ class TaskController extends Controller
         ]);
 
         // Custom validation for recurring tasks
-        if (!empty($validated['recurrence'])) {
+        if (!empty($validated['recurrence']) && $validated['recurrence'] !== 'none') {
             switch ($validated['recurrence']) {
                 case 'daily':
                     // Daily tasks require recurrence_time
@@ -296,7 +296,7 @@ class TaskController extends Controller
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
             'appear_date' => 'nullable|string',
             'deadline' => 'nullable|string',
-            'recurrence' => 'nullable|string|in:daily,weekly,monthly',
+            'recurrence' => 'nullable|string|in:none,daily,weekly,monthly',
             'recurrence_time' => 'nullable|date_format:H:i',
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
             'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31',
@@ -310,7 +310,7 @@ class TaskController extends Controller
 
         // Custom validation for recurring tasks
         $recurrence = $validated['recurrence'] ?? $task->recurrence;
-        if (!empty($recurrence)) {
+        if (!empty($recurrence) && $recurrence !== 'none') {
             $recurrenceTime = $validated['recurrence_time'] ?? $task->recurrence_time;
             $recurrenceDayOfWeek = $validated['recurrence_day_of_week'] ?? $task->recurrence_day_of_week;
             $recurrenceDayOfMonth = $validated['recurrence_day_of_month'] ?? $task->recurrence_day_of_month;
