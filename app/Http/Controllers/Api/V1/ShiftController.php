@@ -29,10 +29,10 @@ class ShiftController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = (int) $request->query('per_page', '15');
-        $dealershipId = $request->query('dealership_id');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $status = $request->query('status');
         $date = $request->query('date');
-        $userId = $request->query('user_id');
+        $userId = $request->query('user_id') !== null && $request->query('user_id') !== '' ? (int) $request->query('user_id') : null;
 
         $query = Shift::with(['user', 'dealership', 'replacement.replacingUser', 'replacement.replacedUser']);
 
@@ -263,7 +263,7 @@ class ShiftController extends Controller
      */
     public function current(Request $request): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $currentShifts = $this->shiftService->getCurrentShifts($dealershipId);
 
         return response()->json([
@@ -279,7 +279,7 @@ class ShiftController extends Controller
      */
     public function statistics(Request $request): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $startDate = $request->query('start_date')
             ? Carbon::parse($request->query('start_date'))
             : Carbon::now()->subDays(7);

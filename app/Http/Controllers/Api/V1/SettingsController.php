@@ -265,7 +265,7 @@ class SettingsController extends Controller
      */
     public function getShiftConfig(Request $request): JsonResponse
     {
-        $dealershipId = $request->query('dealership_id') ? (int) $request->query('dealership_id') : null;
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
 
         $shiftConfig = [
             'shift_1_start_time' => $this->settingsService->getShiftStartTime($dealershipId, 1),
