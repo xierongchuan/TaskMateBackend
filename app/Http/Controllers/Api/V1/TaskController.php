@@ -17,11 +17,11 @@ class TaskController extends Controller
         $perPage = (int) $request->query('per_page', '15');
 
         // Получаем все параметры фильтрации
-        $dealershipId = $request->query('dealership_id') ? (int) $request->query('dealership_id') : null;
+        $dealershipId = $request->query('dealership_id') !== null ? (int) $request->query('dealership_id') : null;
         $taskType = $request->query('task_type');
         $isActive = $request->query('is_active');
         $tags = $request->query('tags');
-        $creatorId = $request->query('creator_id') ? (int) $request->query('creator_id') : null;
+        $creatorId = $request->query('creator_id') !== null ? (int) $request->query('creator_id') : null;
         $responseType = $request->query('response_type');
         $deadlineFrom = $request->query('deadline_from');
         $deadlineTo = $request->query('deadline_to');
@@ -384,7 +384,7 @@ class TaskController extends Controller
 
     public function postponed(Request $request)
     {
-        $dealershipId = $request->query('dealership_id') ? (int) $request->query('dealership_id') : null;
+        $dealershipId = $request->query('dealership_id') !== null ? (int) $request->query('dealership_id') : null;
 
         $query = Task::with(['creator', 'dealership', 'responses'])
             ->where('postpone_count', '>', 0)
