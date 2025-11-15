@@ -14,9 +14,14 @@ function oldBuggyLogic($queryValue) {
     return $queryValue ? (int) $queryValue : null;
 }
 
-// Simulate the NEW FIXED behavior
-function newFixedLogic($queryValue) {
+// Simulate the INTERMEDIATE behavior (from previous commit)
+function intermediateLogic($queryValue) {
     return $queryValue !== null ? (int) $queryValue : null;
+}
+
+// Simulate the NEW FULLY FIXED behavior
+function newFixedLogic($queryValue) {
+    return ($queryValue !== null && $queryValue !== '') ? (int) $queryValue : null;
 }
 
 // Test cases
@@ -37,7 +42,16 @@ foreach ($testCases as $test) {
     echo sprintf("Input: %-20s => Result: %-10s\n", $displayValue, $displayResult);
 }
 
-echo "\n=== NEW FIXED LOGIC ===\n";
+echo "\n=== INTERMEDIATE LOGIC (still buggy with empty strings) ===\n";
+foreach ($testCases as $test) {
+    $result = intermediateLogic($test['value']);
+    $displayValue = var_export($test['value'], true);
+    $displayResult = var_export($result, true);
+    $warning = ($test['value'] === '' && $result === 0) ? ' ⚠️  ISSUE: Empty string -> 0' : '';
+    echo sprintf("Input: %-20s => Result: %-10s%s\n", $displayValue, $displayResult, $warning);
+}
+
+echo "\n=== NEW FULLY FIXED LOGIC ===\n";
 foreach ($testCases as $test) {
     $result = newFixedLogic($test['value']);
     $displayValue = var_export($test['value'], true);
@@ -46,11 +60,15 @@ foreach ($testCases as $test) {
 }
 
 echo "\n=== ANALYSIS ===\n";
-echo "The bug was that '0' (string) or 0 (integer) evaluated as falsy in PHP,\n";
+echo "FIRST BUG: '0' (string) or 0 (integer) evaluated as falsy in PHP,\n";
 echo "so the ternary operator `condition ? value : null` returned null instead of 0.\n\n";
-echo "The fix checks `!== null` explicitly, which correctly distinguishes between:\n";
-echo "  - 0 (valid dealership ID) => returns 0\n";
-echo "  - null (no filter applied) => returns null\n\n";
+echo "SECOND BUG (discovered after user feedback): Empty string '' is cast to 0,\n";
+echo "then the 'if (0)' check fails, causing filter not to be applied.\n\n";
+echo "The complete fix checks both `!== null` AND `!== ''`, which correctly handles:\n";
+echo "  - 0 (valid dealership ID) => returns 0 ✓\n";
+echo "  - 1 (valid dealership ID) => returns 1 ✓\n";
+echo "  - '' (empty string) => returns null (no filter) ✓\n";
+echo "  - null (no filter applied) => returns null ✓\n\n";
 
 // Test query parameter simulation
 echo "=== SIMULATING REQUEST QUERY ===\n";
@@ -70,28 +88,45 @@ class FakeRequest {
 // Test with dealership_id=0
 $request1 = new FakeRequest(['dealership_id' => '0']);
 $oldResult1 = $request1->query('dealership_id') ? (int) $request1->query('dealership_id') : null;
-$newResult1 = $request1->query('dealership_id') !== null ? (int) $request1->query('dealership_id') : null;
+$intermediateResult1 = $request1->query('dealership_id') !== null ? (int) $request1->query('dealership_id') : null;
+$newResult1 = ($request1->query('dealership_id') !== null && $request1->query('dealership_id') !== '') ? (int) $request1->query('dealership_id') : null;
 
 echo "Query param: dealership_id=0\n";
 echo "  Old logic: " . var_export($oldResult1, true) . " (BUG: should be 0!)\n";
+echo "  Intermediate: " . var_export($intermediateResult1, true) . " (CORRECT!)\n";
 echo "  New logic: " . var_export($newResult1, true) . " (CORRECT!)\n\n";
 
-// Test with no dealership_id
-$request2 = new FakeRequest([]);
+// Test with dealership_id=1
+$request2 = new FakeRequest(['dealership_id' => '1']);
 $oldResult2 = $request2->query('dealership_id') ? (int) $request2->query('dealership_id') : null;
-$newResult2 = $request2->query('dealership_id') !== null ? (int) $request2->query('dealership_id') : null;
+$intermediateResult2 = $request2->query('dealership_id') !== null ? (int) $request2->query('dealership_id') : null;
+$newResult2 = ($request2->query('dealership_id') !== null && $request2->query('dealership_id') !== '') ? (int) $request2->query('dealership_id') : null;
 
-echo "Query param: (no dealership_id)\n";
+echo "Query param: dealership_id=1\n";
 echo "  Old logic: " . var_export($oldResult2, true) . " (correct)\n";
+echo "  Intermediate: " . var_export($intermediateResult2, true) . " (correct)\n";
 echo "  New logic: " . var_export($newResult2, true) . " (correct)\n\n";
 
-// Test with dealership_id=5
-$request3 = new FakeRequest(['dealership_id' => '5']);
+// Test with dealership_id= (empty string)
+$request3 = new FakeRequest(['dealership_id' => '']);
 $oldResult3 = $request3->query('dealership_id') ? (int) $request3->query('dealership_id') : null;
-$newResult3 = $request3->query('dealership_id') !== null ? (int) $request3->query('dealership_id') : null;
+$intermediateResult3 = $request3->query('dealership_id') !== null ? (int) $request3->query('dealership_id') : null;
+$newResult3 = ($request3->query('dealership_id') !== null && $request3->query('dealership_id') !== '') ? (int) $request3->query('dealership_id') : null;
 
-echo "Query param: dealership_id=5\n";
-echo "  Old logic: " . var_export($oldResult3, true) . " (correct)\n";
-echo "  New logic: " . var_export($newResult3, true) . " (correct)\n\n";
+echo "Query param: dealership_id= (empty string)\n";
+echo "  Old logic: " . var_export($oldResult3, true) . " (returns null, which is correct)\n";
+echo "  Intermediate: " . var_export($intermediateResult3, true) . " (BUG: '' cast to 0!)\n";
+echo "  New logic: " . var_export($newResult3, true) . " (CORRECT: returns null)\n\n";
 
-echo "✓ All tests demonstrate the fix correctly handles dealership_id=0\n";
+// Test with no dealership_id
+$request4 = new FakeRequest([]);
+$oldResult4 = $request4->query('dealership_id') ? (int) $request4->query('dealership_id') : null;
+$intermediateResult4 = $request4->query('dealership_id') !== null ? (int) $request4->query('dealership_id') : null;
+$newResult4 = ($request4->query('dealership_id') !== null && $request4->query('dealership_id') !== '') ? (int) $request4->query('dealership_id') : null;
+
+echo "Query param: (no dealership_id)\n";
+echo "  Old logic: " . var_export($oldResult4, true) . " (correct)\n";
+echo "  Intermediate: " . var_export($intermediateResult4, true) . " (correct)\n";
+echo "  New logic: " . var_export($newResult4, true) . " (correct)\n\n";
+
+echo "✓ The new logic correctly handles all edge cases!\n";

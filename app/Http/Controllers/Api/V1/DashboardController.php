@@ -18,7 +18,7 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $dealershipId = $request->query('dealership_id');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
 
         $currentShifts = $this->getCurrentShifts($dealershipId);
         $taskStats = $this->getTaskStatistics($dealershipId);

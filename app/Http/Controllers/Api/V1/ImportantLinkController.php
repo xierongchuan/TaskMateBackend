@@ -14,7 +14,7 @@ class ImportantLinkController extends Controller
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', '15');
-        $dealershipId = $request->query('dealership_id');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $isActive = $request->query('is_active');
 
         $query = ImportantLink::with(['creator', 'dealership']);
