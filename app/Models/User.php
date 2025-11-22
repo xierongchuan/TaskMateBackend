@@ -33,7 +33,15 @@ class User extends Authenticatable
 
     public function dealership()
     {
+        // For backward compatibility, if dealership_id is set, return it.
+        // Otherwise, return the first dealership from the pivot table.
         return $this->belongsTo(AutoDealership::class, 'dealership_id');
+    }
+
+    public function dealerships()
+    {
+        return $this->belongsToMany(AutoDealership::class, 'dealership_user', 'user_id', 'dealership_id')
+            ->withTimestamps();
     }
 
     public function shifts()

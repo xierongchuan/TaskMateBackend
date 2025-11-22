@@ -60,6 +60,10 @@ class ShiftService
         // Determine shift status
         $status = $isLate ? 'late' : 'open';
 
+        // Determine shift type based on day of week
+        $dayOfWeek = $now->dayOfWeek; // 0 = Sunday, 6 = Saturday
+        $shiftType = ($dayOfWeek === 0 || $dayOfWeek === 6) ? 'weekend' : 'regular';
+
         // Store photo
         $photoPath = $this->storeShiftPhoto($photo, 'opening', $user->id, $dealershipId);
 
@@ -75,6 +79,7 @@ class ShiftService
                 'scheduled_end' => $scheduledEnd,
                 'opening_photo_path' => $photoPath,
                 'status' => $status,
+                'shift_type' => $shiftType,
                 'late_minutes' => $lateMinutes,
             ]);
 

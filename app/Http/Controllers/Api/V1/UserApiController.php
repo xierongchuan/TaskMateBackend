@@ -40,8 +40,9 @@ class UserApiController extends Controller
         // Search by login or name (OR logic)
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
-                $q->where('login', 'LIKE', "%{$search}%")
-                  ->orWhere('full_name', 'LIKE', "%{$search}%");
+                $q->where('login', 'ILIKE', "%{$search}%")
+                  ->orWhere('full_name', 'ILIKE', "%{$search}%")
+                  ->orWhere('phone', 'ILIKE', "%{$search}%");
             });
         }
 
@@ -182,6 +183,15 @@ class UserApiController extends Controller
                 'nullable',
                 'integer',
                 'exists:auto_dealerships,id'
+            ],
+            'dealership_ids' => [
+                'sometimes',
+                'nullable',
+                'array'
+            ],
+            'dealership_ids.*' => [
+                'integer',
+                'exists:auto_dealerships,id'
             ]
         ], [
             'password.min' => 'Пароль должен содержать минимум 8 символов',
@@ -232,6 +242,10 @@ class UserApiController extends Controller
 
             if (isset($validated['dealership_id'])) {
                 $updateData['dealership_id'] = $validated['dealership_id'];
+            }
+
+            if (isset($validated['dealership_ids'])) {
+                $user->dealerships()->sync($validated['dealership_ids']);
             }
 
             $user->update($updateData);
@@ -293,6 +307,14 @@ class UserApiController extends Controller
                 'nullable',
                 'integer',
                 'exists:auto_dealerships,id'
+            ],
+            'dealership_ids' => [
+                'nullable',
+                'array'
+            ],
+            'dealership_ids.*' => [
+                'integer',
+                'exists:auto_dealerships,id'
             ]
         ], [
             'login.required' => 'Логин обязателен',
@@ -331,6 +353,10 @@ class UserApiController extends Controller
                 'telegram_id' => $validated['telegram_id'] ?? 0,
                 'dealership_id' => $validated['dealership_id'] ?? null,
             ]);
+
+            if (!empty($validated['dealership_ids'])) {
+                $user->dealerships()->sync($validated['dealership_ids']);
+            }
 
             return response()->json([
                 'success' => true,

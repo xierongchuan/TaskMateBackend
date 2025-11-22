@@ -102,11 +102,11 @@ class TaskController extends Controller
         // Поиск по названию, описанию, комментарию и тегам
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'LIKE', "%{$search}%")
-                  ->orWhere('description', 'LIKE', "%{$search}%")
-                  ->orWhere('comment', 'LIKE', "%{$search}%")
+                $q->where('title', 'ILIKE', "%{$search}%")
+                  ->orWhere('description', 'ILIKE', "%{$search}%")
+                  ->orWhere('comment', 'ILIKE', "%{$search}%")
                   // Search in tags JSON array - cast to text for PostgreSQL
-                  ->orWhereRaw("tags::text LIKE ?", ["%{$search}%"]);
+                  ->orWhereRaw("tags::text ILIKE ?", ["%{$search}%"]);
             });
         }
 

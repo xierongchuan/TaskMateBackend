@@ -21,6 +21,7 @@ class Shift extends Model
         'opening_photo_path',
         'closing_photo_path',
         'status',
+        'shift_type',
         'late_minutes',
         'scheduled_start',
         'scheduled_end',

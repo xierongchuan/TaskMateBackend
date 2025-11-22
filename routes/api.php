@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\ImportantLinkController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
@@ -108,6 +109,9 @@ Route::prefix('v1')->group(function () {
 
             // Dashboard
             Route::get('/dashboard', [DashboardController::class, 'index']);
+
+            // Reports
+            Route::get('/reports', [ReportController::class, 'index']);
 
             // Settings - READ операции
             Route::get('/settings', [SettingsController::class, 'index']);

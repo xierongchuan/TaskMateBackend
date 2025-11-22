@@ -17,6 +17,7 @@ class ImportantLink extends Model
         'title',
         'url',
         'description',
+        'category',
         'dealership_id',
         'creator_id',
         'sort_order',

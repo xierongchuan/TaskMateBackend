@@ -35,6 +35,7 @@ class SessionController extends Controller
                 'dealership_id' => $user->dealership_id,
                 'telegram_id' => $user->telegram_id,
                 'phone' => $user->phone,
+                'dealerships' => $user->dealerships,
             ],
         ]);
     }
@@ -63,6 +64,7 @@ class SessionController extends Controller
                 'dealership_id' => $user->dealership_id,
                 'telegram_id' => $user->telegram_id,
                 'phone' => $user->phone,
+                'dealerships' => $user->dealerships,
             ],
         ]);
     }

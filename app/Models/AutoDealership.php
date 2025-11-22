@@ -29,7 +29,8 @@ class AutoDealership extends Model
 
     public function users()
     {
-        return $this->hasMany(User::class, 'dealership_id');
+        return $this->belongsToMany(User::class, 'dealership_user', 'dealership_id', 'user_id')
+            ->withTimestamps();
     }
 
     public function shifts()
