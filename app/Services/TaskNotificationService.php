@@ -390,7 +390,7 @@ class TaskNotificationService
             ->whereDoesntHave('responses', function ($query) {
                 $query->where('status', 'completed');
             })
-            ->with(['assignedUsers'])
+            ->with(['assignedUsers', 'dealership'])
             ->get();
 
         $results = [
@@ -399,6 +399,18 @@ class TaskNotificationService
         ];
 
         foreach ($overdueTasks as $task) {
+            // Check if this notification channel is enabled for the dealership
+            if ($task->dealership_id && !\App\Models\NotificationSetting::isChannelEnabled(
+                $task->dealership_id,
+                \App\Models\NotificationSetting::CHANNEL_TASK_OVERDUE
+            )) {
+                Log::info('Overdue task notification skipped (channel disabled)', [
+                    'task_id' => $task->id,
+                    'dealership_id' => $task->dealership_id
+                ]);
+                continue;
+            }
+
             Log::info("Overdue task detected", [
                 'task_id' => $task->id,
                 'title' => $task->title,
@@ -434,39 +446,60 @@ class TaskNotificationService
         // Use UTC for consistent time comparisons
         $nowUTC = Carbon::now('UTC');
 
-        // Find tasks with deadlines in 25-35 minutes from now (30-min window)
+        // Get all active tasks with deadlines
         $upcomingTasks = Task::where('is_active', true)
             ->whereNotNull('deadline')
-            ->where('deadline', '>', $nowUTC->copy()->addMinutes(25))
-            ->where('deadline', '<', $nowUTC->copy()->addMinutes(35))
             ->whereDoesntHave('responses', function ($query) {
                 $query->where('status', 'completed');
             })
-            ->with(['assignedUsers'])
+            ->with(['assignedUsers', 'dealership'])
             ->get();
 
         $results = [
-            'tasks_processed' => $upcomingTasks->count(),
+            'tasks_processed' => 0,
             'notifications_sent' => 0,
         ];
 
         foreach ($upcomingTasks as $task) {
-            Log::info("Upcoming deadline detected", [
-                'task_id' => $task->id,
-                'title' => $task->title,
-                'deadline' => $task->deadline_for_bot,
-                'current_time' => $nowUTC->format('Y-m-d H:i:s')
-            ]);
+            // Check if this notification channel is enabled for the dealership
+            if (!$task->dealership_id || !\App\Models\NotificationSetting::isChannelEnabled(
+                $task->dealership_id,
+                \App\Models\NotificationSetting::CHANNEL_TASK_DEADLINE_30MIN
+            )) {
+                continue;
+            }
 
-            foreach ($task->assignedUsers as $user) {
-                if (!$task->responses()->where('user_id', $user->id)->where('status', 'completed')->exists() && $user->telegram_id) {
-                    try {
-                        $sent = $this->sendUpcomingDeadlineNotification($task, $user);
-                        if ($sent) {
-                            $results['notifications_sent']++;
+            // Get configurable offset (default 30 minutes)
+            $offset = \App\Models\NotificationSetting::getNotificationOffset(
+                $task->dealership_id,
+                \App\Models\NotificationSetting::CHANNEL_TASK_DEADLINE_30MIN
+            ) ?? 30;
+
+            // Check if deadline is in the configured time window (offset ± 5 minutes)
+            $minutesUntilDeadline = $nowUTC->diffInMinutes($task->deadline, false);
+
+            if ($minutesUntilDeadline <= ($offset + 5) && $minutesUntilDeadline >= ($offset - 5)) {
+                $results['tasks_processed']++;
+
+                Log::info("Upcoming deadline detected", [
+                    'task_id' => $task->id,
+                    'title' => $task->title,
+                    'deadline' => $task->deadline_for_bot,
+                    'offset_minutes' => $offset,
+                    'minutes_until_deadline' => round($minutesUntilDeadline),
+                    'current_time' => $nowUTC->format('Y-m-d H:i:s')
+                ]);
+
+                foreach ($task->assignedUsers as $user) {
+                    if (!$task->responses()->where('user_id', $user->id)->where('status', 'completed')->exists() && $user->telegram_id) {
+                        try {
+                            $sent = $this->sendUpcomingDeadlineNotification($task, $user, $offset);
+                            if ($sent) {
+                                $results['notifications_sent']++;
+                            }
+                        } catch (\Throwable $e) {
+                            Log::error("Failed to send upcoming deadline notification to user #{$user->id}: " . $e->getMessage());
                         }
-                    } catch (\Throwable $e) {
-                        Log::error("Failed to send upcoming deadline notification to user #{$user->id}: " . $e->getMessage());
                     }
                 }
             }
@@ -491,7 +524,7 @@ class TaskNotificationService
             ->whereDoesntHave('responses', function ($query) {
                 $query->where('status', 'completed');
             })
-            ->with(['assignedUsers'])
+            ->with(['assignedUsers', 'dealership'])
             ->get();
 
         $results = [
@@ -500,6 +533,18 @@ class TaskNotificationService
         ];
 
         foreach ($hourlyOverdueTasks as $task) {
+            // Check if this notification channel is enabled for the dealership
+            if ($task->dealership_id && !\App\Models\NotificationSetting::isChannelEnabled(
+                $task->dealership_id,
+                \App\Models\NotificationSetting::CHANNEL_TASK_HOUR_LATE
+            )) {
+                Log::info('Hour-late overdue notification skipped (channel disabled)', [
+                    'task_id' => $task->id,
+                    'dealership_id' => $task->dealership_id
+                ]);
+                continue;
+            }
+
             Log::info("Hourly overdue task detected", [
                 'task_id' => $task->id,
                 'title' => $task->title,

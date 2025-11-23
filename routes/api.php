@@ -131,5 +131,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/settings/{dealership_id}/{key}', [SettingsController::class, 'showDealershipSetting']);
             Route::put('/settings/{dealership_id}/{key}', [SettingsController::class, 'updateDealershipSetting'])
                 ->middleware('role:manager,owner');
+
+            // Notification Settings - only managers and owners
+            Route::get('/notification-settings', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'index'])
+                ->middleware('role:manager,owner');
+            Route::put('/notification-settings/{channelType}', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::post('/notification-settings/bulk', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'bulkUpdate'])
+                ->middleware('role:manager,owner');
+            Route::post('/notification-settings/reset', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'resetToDefaults'])
+                ->middleware('role:manager,owner');
         });
 });
