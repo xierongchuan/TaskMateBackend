@@ -60,7 +60,12 @@ class UserApiController extends Controller
         }
 
         if ($dealershipId !== '') {
-            $query->where('dealership_id', $dealershipId);
+            $query->where(function ($q) use ($dealershipId) {
+                $q->where('dealership_id', $dealershipId)
+                  ->orWhereHas('dealerships', function ($subQ) use ($dealershipId) {
+                      $subQ->where('auto_dealerships.id', $dealershipId);
+                  });
+            });
         }
 
         // Phone filtering with normalization (existing logic)
@@ -97,10 +102,8 @@ class UserApiController extends Controller
             // Ignore invalid values silently
         }
 
-        // Eager load dealership relationship if filtering by dealership or include requested
-        if ($dealershipId !== '' || $request->query('include_dealership', '') !== '') {
-            $query->with('dealership');
-        }
+        // Always eager load dealership and dealerships relationships
+        $query->with(['dealership', 'dealerships']);
 
         $users = $query->orderByDesc('created_at')->paginate($perPage);
         return UserResource::collection($users);

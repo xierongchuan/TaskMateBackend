@@ -27,13 +27,44 @@ class TaskResponseHandler
 
             $user = auth()->user();
             if (!$user) {
-                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации', show_alert: true);
+                Log::warning('Task OK callback: User not authenticated', ['callback_data' => $callbackData]);
+                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации. Пожалуйста, войдите снова через /start', show_alert: true);
                 return;
             }
 
-            $task = Task::find($taskId);
+            $task = Task::with('assignments')->find($taskId);
             if (!$task) {
+                Log::warning('Task OK callback: Task not found', ['task_id' => $taskId, 'user_id' => $user->id]);
                 $bot->answerCallbackQuery('⚠️ Задача не найдена', show_alert: true);
+                return;
+            }
+
+            // Check if task is active
+            if (!$task->is_active) {
+                Log::info('Task OK callback: Task is not active', ['task_id' => $taskId, 'user_id' => $user->id]);
+                $bot->answerCallbackQuery('⚠️ Эта задача больше не активна', show_alert: true);
+                return;
+            }
+
+            // Check if user is assigned to this task
+            $isAssigned = $task->assignments()->where('user_id', $user->id)->exists();
+            if (!$isAssigned) {
+                Log::warning('Task OK callback: User not assigned to task', [
+                    'task_id' => $taskId,
+                    'user_id' => $user->id,
+                    'task_title' => $task->title
+                ]);
+                $bot->answerCallbackQuery('⚠️ Вы не назначены на эту задачу', show_alert: true);
+                return;
+            }
+
+            // Check if user already responded
+            $existingResponse = TaskResponse::where('task_id', $taskId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existingResponse && $existingResponse->status === 'acknowledged') {
+                $bot->answerCallbackQuery('ℹ️ Вы уже ответили на эту задачу');
                 return;
             }
 
@@ -56,10 +87,19 @@ class TaskResponseHandler
                 reply_markup: null
             );
 
-            Log::info("Task #{$taskId} acknowledged by user #{$user->id}");
+            Log::info('Task acknowledged successfully', [
+                'task_id' => $taskId,
+                'user_id' => $user->id,
+                'task_title' => $task->title
+            ]);
         } catch (\Throwable $e) {
-            Log::error('Error handling task OK: ' . $e->getMessage());
-            $bot->answerCallbackQuery('⚠️ Произошла ошибка', show_alert: true);
+            Log::error('Error handling task OK', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->user()?->id,
+                'callback_data' => $bot->callbackQuery()?->data
+            ]);
+            $bot->answerCallbackQuery('⚠️ Произошла ошибка при обработке ответа', show_alert: true);
         }
     }
 
@@ -74,13 +114,61 @@ class TaskResponseHandler
 
             $user = auth()->user();
             if (!$user) {
-                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации', show_alert: true);
+                Log::warning('Task Done callback: User not authenticated', ['callback_data' => $callbackData]);
+                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации. Пожалуйста, войдите снова через /start', show_alert: true);
                 return;
             }
 
-            $task = Task::find($taskId);
+            $task = Task::with('assignments')->find($taskId);
             if (!$task) {
+                Log::warning('Task Done callback: Task not found', ['task_id' => $taskId, 'user_id' => $user->id]);
                 $bot->answerCallbackQuery('⚠️ Задача не найдена', show_alert: true);
+                return;
+            }
+
+            // Check if task is active
+            if (!$task->is_active) {
+                Log::info('Task Done callback: Task is not active', ['task_id' => $taskId, 'user_id' => $user->id]);
+                $bot->answerCallbackQuery('⚠️ Эта задача больше не активна', show_alert: true);
+                return;
+            }
+
+            // Check if user is assigned to this task
+            $isAssigned = $task->assignments()->where('user_id', $user->id)->exists();
+            if (!$isAssigned) {
+                Log::warning('Task Done callback: User not assigned to task', [
+                    'task_id' => $taskId,
+                    'user_id' => $user->id,
+                    'task_title' => $task->title
+                ]);
+                $bot->answerCallbackQuery('⚠️ Вы не назначены на эту задачу', show_alert: true);
+                return;
+            }
+
+            // For group tasks, check if someone already completed it
+            if ($task->task_type === 'group') {
+                $alreadyCompleted = TaskResponse::where('task_id', $taskId)
+                    ->where('status', 'completed')
+                    ->exists();
+
+                if ($alreadyCompleted) {
+                    $bot->answerCallbackQuery('ℹ️ Эта задача уже была выполнена другим сотрудником');
+                    $bot->editMessageReplyMarkup(
+                        chat_id: $bot->chatId(),
+                        message_id: $bot->messageId(),
+                        reply_markup: null
+                    );
+                    return;
+                }
+            }
+
+            // Check if user already completed this task
+            $existingResponse = TaskResponse::where('task_id', $taskId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existingResponse && $existingResponse->status === 'completed') {
+                $bot->answerCallbackQuery('ℹ️ Вы уже отметили эту задачу как выполненную');
                 return;
             }
 
@@ -103,10 +191,21 @@ class TaskResponseHandler
                 reply_markup: null
             );
 
-            Log::info("Task #{$taskId} completed by user #{$user->id}");
+            Log::info('Task completed successfully', [
+                'task_id' => $taskId,
+                'user_id' => $user->id,
+                'user_name' => $user->full_name,
+                'task_title' => $task->title,
+                'task_type' => $task->task_type
+            ]);
         } catch (\Throwable $e) {
-            Log::error('Error handling task done: ' . $e->getMessage());
-            $bot->answerCallbackQuery('⚠️ Произошла ошибка', show_alert: true);
+            Log::error('Error handling task done', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->user()?->id,
+                'callback_data' => $bot->callbackQuery()?->data
+            ]);
+            $bot->answerCallbackQuery('⚠️ Произошла ошибка при обработке ответа', show_alert: true);
         }
     }
 
@@ -121,13 +220,34 @@ class TaskResponseHandler
 
             $user = auth()->user();
             if (!$user) {
-                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации', show_alert: true);
+                Log::warning('Task Postpone callback: User not authenticated', ['callback_data' => $callbackData]);
+                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации. Пожалуйста, войдите снова через /start', show_alert: true);
                 return;
             }
 
-            $task = Task::find($taskId);
+            $task = Task::with('assignments')->find($taskId);
             if (!$task) {
+                Log::warning('Task Postpone callback: Task not found', ['task_id' => $taskId, 'user_id' => $user->id]);
                 $bot->answerCallbackQuery('⚠️ Задача не найдена', show_alert: true);
+                return;
+            }
+
+            // Check if task is active
+            if (!$task->is_active) {
+                Log::info('Task Postpone callback: Task is not active', ['task_id' => $taskId, 'user_id' => $user->id]);
+                $bot->answerCallbackQuery('⚠️ Эта задача больше не активна', show_alert: true);
+                return;
+            }
+
+            // Check if user is assigned to this task
+            $isAssigned = $task->assignments()->where('user_id', $user->id)->exists();
+            if (!$isAssigned) {
+                Log::warning('Task Postpone callback: User not assigned to task', [
+                    'task_id' => $taskId,
+                    'user_id' => $user->id,
+                    'task_title' => $task->title
+                ]);
+                $bot->answerCallbackQuery('⚠️ Вы не назначены на эту задачу', show_alert: true);
                 return;
             }
 
@@ -139,9 +259,20 @@ class TaskResponseHandler
                 taskId: $taskId,
                 messageId: $bot->messageId()
             );
+
+            Log::info('Task postpone conversation started', [
+                'task_id' => $taskId,
+                'user_id' => $user->id,
+                'task_title' => $task->title
+            ]);
         } catch (\Throwable $e) {
-            Log::error('Error handling task postpone: ' . $e->getMessage());
-            $bot->answerCallbackQuery('⚠️ Произошла ошибка', show_alert: true);
+            Log::error('Error handling task postpone', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->user()?->id,
+                'callback_data' => $bot->callbackQuery()?->data
+            ]);
+            $bot->answerCallbackQuery('⚠️ Произошла ошибка при обработке ответа', show_alert: true);
         }
     }
 }

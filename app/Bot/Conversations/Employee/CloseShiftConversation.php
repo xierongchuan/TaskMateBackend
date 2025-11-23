@@ -179,7 +179,12 @@ class CloseShiftConversation extends BaseConversation
             }
 
             // Use ShiftService to close the shift
-            $updatedShift = $shiftService->closeShift($user, $closingPhoto);
+            $shift = $shiftService->getUserOpenShift($user);
+            if (!$shift) {
+                $bot->sendMessage('У вас нет открытой смены.');
+                return;
+            }
+            $updatedShift = $shiftService->closeShift($shift, $closingPhoto);
 
             // Clean up temporary file
             if ($this->photoPath && file_exists($this->photoPath)) {

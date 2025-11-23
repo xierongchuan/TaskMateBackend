@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Auth\Access\AuthorizationException;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class ShiftController extends Controller
 {
@@ -88,7 +89,7 @@ class ShiftController extends Controller
             $user = User::findOrFail($data['user_id']);
 
             // Validate user belongs to the specified dealership
-            if (!$this->shiftService->validateUserDealership($user, $data['dealership_id'])) {
+            if (!$this->shiftService->validateUserDealership($user, (int) $data['dealership_id'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User does not belong to the specified dealership'
@@ -100,7 +101,7 @@ class ShiftController extends Controller
                 $replacingUser = User::findOrFail($data['replacing_user_id']);
 
                 // Validate replacement user belongs to the same dealership
-                if (!$this->shiftService->validateUserDealership($replacingUser, $data['dealership_id'])) {
+                if (!$this->shiftService->validateUserDealership($replacingUser, (int) $data['dealership_id'])) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Replacement user does not belong to the specified dealership'
@@ -112,7 +113,8 @@ class ShiftController extends Controller
                 $user,
                 $data['opening_photo'],
                 $replacingUser,
-                $data['reason'] ?? null
+                $data['reason'] ?? null,
+                (int) $data['dealership_id']
             );
 
             return response()->json([
@@ -127,6 +129,10 @@ class ShiftController extends Controller
                 'message' => $e->getMessage()
             ], 400);
         } catch (\Exception $e) {
+            Log::error('Failed to open shift', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to open shift'
@@ -184,8 +190,7 @@ class ShiftController extends Controller
         try {
             // If closing photo is provided, close the shift
             if (isset($data['closing_photo'])) {
-                $user = $shift->user;
-                $updatedShift = $this->shiftService->closeShift($user, $data['closing_photo']);
+                $updatedShift = $this->shiftService->closeShift($shift, $data['closing_photo']);
 
                 return response()->json([
                     'success' => true,
@@ -196,7 +201,11 @@ class ShiftController extends Controller
 
             // If only status is being updated
             if (isset($data['status'])) {
-                $shift->update(['status' => $data['status']]);
+                if ($data['status'] === 'closed') {
+                    $this->shiftService->closeShiftWithoutPhoto($shift, 'closed');
+                } else {
+                    $shift->update(['status' => $data['status']]);
+                }
 
                 return response()->json([
                     'success' => true,
@@ -345,7 +354,8 @@ class ShiftController extends Controller
             ], 401);
         }
 
-        $shift = $this->shiftService->getUserOpenShift($user);
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
+        $shift = $this->shiftService->getUserOpenShift($user, $dealershipId);
 
         if (!$shift) {
             return response()->json([

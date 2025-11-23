@@ -68,7 +68,23 @@ abstract class BaseCommandHandler extends Command implements CommandHandlerInter
      */
     protected function getErrorMessage(Throwable $e): string
     {
-        return 'Произошла ошибка при выполнении команды. Попробуйте позже.';
+        // Check for authentication errors
+        if ($e->getMessage() === 'User not authenticated') {
+            return '⚠️ Требуется авторизация. Пожалуйста, используйте /start для входа в систему.';
+        }
+
+        // Check for permission/authorization errors
+        if (str_contains($e->getMessage(), 'permission') || str_contains($e->getMessage(), 'forbidden')) {
+            return '⚠️ У вас нет прав для выполнения этой команды.';
+        }
+
+        // Check for validation errors
+        if (str_contains($e->getMessage(), 'validation') || str_contains($e->getMessage(), 'invalid')) {
+            return '⚠️ Некорректные данные. Пожалуйста, проверьте введенную информацию.';
+        }
+
+        // Generic error message
+        return '⚠️ Произошла ошибка при выполнении команды. Попробуйте позже или обратитесь к администратору.';
     }
 
     /**
@@ -76,10 +92,16 @@ abstract class BaseCommandHandler extends Command implements CommandHandlerInter
      */
     protected function getLogContext(Throwable $e): array
     {
+        $user = auth()->user();
+
         return [
             'handler' => static::class,
             'command' => $this->command,
-            'message' => $e->getMessage(),
+            'user_id' => $user?->id,
+            'user_role' => $user?->role,
+            'telegram_id' => $user?->telegram_id,
+            'error' => $e->getMessage(),
+            'error_class' => get_class($e),
             'trace' => $e->getTraceAsString(),
         ];
     }

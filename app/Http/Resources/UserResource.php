@@ -38,6 +38,19 @@ class UserResource extends JsonResource
             ];
         }
 
+        // Include dealerships data if loaded (for many-to-many)
+        if ($this->relationLoaded('dealerships') && $this->dealerships->isNotEmpty()) {
+            $data['dealerships'] = $this->dealerships->map(function ($dealership) {
+                return [
+                    'id' => $dealership->id,
+                    'name' => $dealership->name,
+                    'address' => $dealership->address,
+                    'phone' => $dealership->phone,
+                    'is_active' => $dealership->is_active,
+                ];
+            });
+        }
+
         return $data;
     }
 }

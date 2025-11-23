@@ -32,21 +32,23 @@ class ShiftService
      * @return Shift
      * @throws \InvalidArgumentException
      */
-    public function openShift(User $user, UploadedFile $photo, ?User $replacingUser = null, ?string $reason = null): Shift
+    public function openShift(User $user, UploadedFile $photo, ?User $replacingUser = null, ?string $reason = null, ?int $dealershipId = null): Shift
     {
+        // Use provided dealershipId or fallback to user's primary dealership
+        $dealershipId = $dealershipId ?? $user->dealership_id;
+
         // Validate user belongs to a dealership
-        if (!$user->dealership_id) {
+        if (!$dealershipId) {
             throw new \InvalidArgumentException('User must belong to a dealership to open a shift');
         }
 
-        // Check for existing open shift
-        $existingShift = $this->getUserOpenShift($user);
+        // Check for existing open shift in this dealership
+        $existingShift = $this->getUserOpenShift($user, $dealershipId);
         if ($existingShift) {
-            throw new \InvalidArgumentException('User already has an open shift');
+            throw new \InvalidArgumentException('User already has an open shift in this dealership');
         }
 
         $now = Carbon::now();
-        $dealershipId = $user->dealership_id;
 
         // Get dealership-specific settings
         $scheduledStart = $this->getScheduledStartTime($now, $dealershipId);
@@ -54,7 +56,7 @@ class ShiftService
         $lateTolerance = $this->settingsService->getLateTolerance($dealershipId);
 
         // Calculate if user is late
-        $lateMinutes = max(0, $now->diffInMinutes($scheduledStart));
+        $lateMinutes = (int) max(0, $now->diffInMinutes($scheduledStart));
         $isLate = $lateMinutes > $lateTolerance;
 
         // Determine shift status
@@ -122,18 +124,17 @@ class ShiftService
     }
 
     /**
-     * Close a shift for a user
+     * Close a shift
      *
-     * @param User $user
+     * @param Shift $shift
      * @param UploadedFile $photo
      * @return Shift
      * @throws \InvalidArgumentException
      */
-    public function closeShift(User $user, UploadedFile $photo): Shift
+    public function closeShift(Shift $shift, UploadedFile $photo): Shift
     {
-        $shift = $this->getUserOpenShift($user);
-        if (!$shift) {
-            throw new \InvalidArgumentException('No open shift found for user');
+        if ($shift->status === 'closed') {
+            throw new \InvalidArgumentException('Shift is already closed');
         }
 
         $now = Carbon::now();
@@ -183,13 +184,19 @@ class ShiftService
      * Get user's current open shift
      *
      * @param User $user
+     * @param int|null $dealershipId
      * @return Shift|null
      */
-    public function getUserOpenShift(User $user): ?Shift
+    public function getUserOpenShift(User $user, ?int $dealershipId = null): ?Shift
     {
-        return Shift::where('user_id', $user->id)
-            ->where('status', '!=', 'closed')
-            ->first();
+        $query = Shift::where('user_id', $user->id)
+            ->where('status', '!=', 'closed');
+
+        if ($dealershipId) {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        return $query->first();
     }
 
     /**
@@ -282,13 +289,13 @@ class ShiftService
     }
 
     /**
-     * Close shift without photo (for replacement scenarios)
+     * Close shift without photo (for replacement scenarios or manual close)
      *
      * @param Shift $shift
      * @param string $status
      * @return Shift
      */
-    private function closeShiftWithoutPhoto(Shift $shift, string $status): Shift
+    public function closeShiftWithoutPhoto(Shift $shift, string $status): Shift
     {
         $shift->update([
             'shift_end' => Carbon::now(),
@@ -419,15 +426,22 @@ class ShiftService
      */
     public function validateUserDealership(User $user, ?int $dealershipId = null): bool
     {
-        if (!$user->dealership_id) {
-            return false;
+        if (!$dealershipId) {
+            return (bool) $user->dealership_id;
         }
 
-        if ($dealershipId && $user->dealership_id !== $dealershipId) {
-            return false;
+        // Check primary dealership
+        if ($user->dealership_id === $dealershipId) {
+            return true;
         }
 
-        return true;
+        // Allow admins and owners to operate in any dealership
+        if (in_array($user->role, ['admin', 'owner'])) {
+            return true;
+        }
+
+        // Check attached dealerships (many-to-many)
+        return $user->dealerships()->where('auto_dealerships.id', $dealershipId)->exists();
     }
 
     /**

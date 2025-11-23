@@ -45,7 +45,11 @@ class TaskNotificationService
     {
         try {
             if (!$user->telegram_id) {
-                Log::warning("User #{$user->id} has no telegram_id");
+                // Use debug level to avoid log spam
+                Log::debug("User has no telegram_id, skipping task notification", [
+                    'user_id' => $user->id,
+                    'task_id' => $task->id
+                ]);
                 return false;
             }
 
@@ -59,10 +63,19 @@ class TaskNotificationService
                 reply_markup: $keyboard
             );
 
-            Log::info("Task #{$task->id} sent to user #{$user->id}");
+            Log::info('Task notification sent successfully', [
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'task_title' => $task->title
+            ]);
             return true;
         } catch (\Throwable $e) {
-            Log::error("Failed to send task #{$task->id} to user #{$user->id}: " . $e->getMessage());
+            Log::error('Failed to send task notification', [
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getCode()
+            ]);
             return false;
         }
     }
