@@ -32,6 +32,8 @@ class ShiftController extends Controller
         $perPage = (int) $request->query('per_page', '15');
         $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $status = $request->query('status');
+        $shiftType = $request->query('shift_type');
+        $isLate = $request->query('is_late');
         $date = $request->query('date');
         $userId = $request->query('user_id') !== null && $request->query('user_id') !== '' ? (int) $request->query('user_id') : null;
 
@@ -47,6 +49,17 @@ class ShiftController extends Controller
 
         if ($status) {
             $query->where('status', $status);
+        }
+
+        if ($shiftType) {
+            $query->where('shift_type', $shiftType);
+        }
+
+        if ($isLate !== null && $isLate !== '') {
+            $isLateValue = filter_var($isLate, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isLateValue !== null) {
+                $query->where('is_late', $isLateValue);
+            }
         }
 
         if ($date) {

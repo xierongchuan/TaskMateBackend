@@ -28,6 +28,7 @@ class TaskController extends Controller
         $hasDeadline = $request->query('has_deadline');
         $search = $request->query('search');
         $status = $request->query('status');
+        $recurrence = $request->query('recurrence');
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
 
@@ -96,6 +97,17 @@ class TaskController extends Controller
                 } else {
                     $query->whereNull('deadline');
                 }
+            }
+        }
+
+        // Фильтрация по повторяемости
+        if ($recurrence) {
+            if ($recurrence === 'recurring') {
+                // Show only recurring tasks (daily, weekly, monthly)
+                $query->whereIn('recurrence', ['daily', 'weekly', 'monthly']);
+            } else {
+                // Show tasks with specific recurrence type
+                $query->where('recurrence', $recurrence);
             }
         }
 
