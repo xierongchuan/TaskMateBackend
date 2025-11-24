@@ -29,39 +29,50 @@ return new class extends Migration
         });
 
         // Create default settings for existing dealerships
-        DB::statement("
-            INSERT INTO notification_settings (dealership_id, channel_type, is_enabled, notification_time, created_at, updated_at)
-            SELECT
-                id as dealership_id,
-                channel_type,
-                true as is_enabled,
-                CASE
-                    WHEN channel_type = 'daily_summary' THEN '20:00:00'::time
-                    WHEN channel_type = 'weekly_report' THEN '09:00:00'::time
-                    ELSE NULL
-                END as notification_time,
-                NOW() as created_at,
-                NOW() as updated_at
-            FROM auto_dealerships
-            CROSS JOIN (
-                SELECT 'task_assigned' as channel_type UNION ALL
-                SELECT 'task_deadline_30min' UNION ALL
-                SELECT 'task_overdue' UNION ALL
-                SELECT 'task_hour_late' UNION ALL
-                SELECT 'shift_late' UNION ALL
-                SELECT 'task_postponed' UNION ALL
-                SELECT 'shift_replacement' UNION ALL
-                SELECT 'daily_summary' UNION ALL
-                SELECT 'weekly_report'
-            ) AS channels
-        ");
+        // Create default settings for existing dealerships
+        $dealerships = DB::table('auto_dealerships')->pluck('id');
+        $channels = [
+            'task_assigned',
+            'task_deadline_30min',
+            'task_overdue',
+            'task_hour_late',
+            'shift_late',
+            'task_postponed',
+            'shift_replacement',
+            'daily_summary',
+            'weekly_report',
+        ];
 
-        // Set weekly report day to Monday
-        DB::statement("
-            UPDATE notification_settings
-            SET notification_day = 'monday'
-            WHERE channel_type = 'weekly_report'
-        ");
+        $now = now();
+        $data = [];
+
+        foreach ($dealerships as $dealershipId) {
+            foreach ($channels as $channel) {
+                $notificationTime = null;
+                $notificationDay = null;
+
+                if ($channel === 'daily_summary') {
+                    $notificationTime = '20:00:00';
+                } elseif ($channel === 'weekly_report') {
+                    $notificationTime = '09:00:00';
+                    $notificationDay = 'monday';
+                }
+
+                $data[] = [
+                    'dealership_id' => $dealershipId,
+                    'channel_type' => $channel,
+                    'is_enabled' => true,
+                    'notification_time' => $notificationTime,
+                    'notification_day' => $notificationDay,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+
+        if (!empty($data)) {
+            DB::table('notification_settings')->insert($data);
+        }
     }
 
     /**

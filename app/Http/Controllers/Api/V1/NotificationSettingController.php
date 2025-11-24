@@ -54,6 +54,7 @@ class NotificationSettingController extends Controller
      */
     public function update(Request $request, string $channelType): JsonResponse
     {
+        dump("Update called with channelType: " . $channelType);
         $user = $request->user();
 
         // Verify user has access

@@ -140,7 +140,7 @@ class ShiftService
         $now = Carbon::now();
 
         // Store photo
-        $photoPath = $this->storeShiftPhoto($photo, 'closing', $user->id, $shift->dealership_id);
+        $photoPath = $this->storeShiftPhoto($photo, 'closing', $shift->user_id, $shift->dealership_id);
 
         try {
             DB::beginTransaction();
@@ -153,11 +153,11 @@ class ShiftService
             ]);
 
             // Log incomplete tasks
-            $this->logIncompleteTasks($shift, $user);
+            $this->logIncompleteTasks($shift, $shift->user);
 
             DB::commit();
 
-            Log::info("Shift closed for user {$user->id}", [
+            Log::info("Shift closed for user {$shift->user_id}", [
                 'shift_id' => $shift->id,
                 'duration' => $shift->shift_start->diffInMinutes($now),
             ]);
@@ -171,7 +171,7 @@ class ShiftService
                 Storage::delete($photoPath);
             }
 
-            Log::error("Failed to close shift for user {$user->id}", [
+            Log::error("Failed to close shift for user {$shift->user_id}", [
                 'error' => $e->getMessage(),
                 'shift_id' => $shift->id,
             ]);
