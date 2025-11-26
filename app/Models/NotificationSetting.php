@@ -18,10 +18,12 @@ class NotificationSetting extends Model
         'notification_time',
         'notification_day',
         'notification_offset',
+        'recipient_roles',
     ];
 
     protected $casts = [
         'is_enabled' => 'boolean',
+        'recipient_roles' => 'array',
     ];
 
     // Notification channel types
@@ -100,6 +102,18 @@ class NotificationSetting extends Model
             ->first();
 
         return $setting?->notification_offset;
+    }
+
+    /**
+     * Get recipient roles for a channel
+     */
+    public static function getRecipientRoles(int $dealershipId, string $channelType): ?array
+    {
+        $setting = static::where('dealership_id', $dealershipId)
+            ->where('channel_type', $channelType)
+            ->first();
+
+        return $setting?->recipient_roles;
     }
 
     /**

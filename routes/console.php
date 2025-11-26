@@ -35,12 +35,15 @@ Schedule::job(new \App\Jobs\CheckOverdueTasksJob())->cron('*/5 * * * *');
 // Check for tasks overdue by 1 hour - runs every 10 minutes at exactly 0 seconds
 Schedule::job(new \App\Jobs\CheckHourlyOverdueJob())->cron('*/10 * * * *');
 
+// Process recurring tasks - runs hourly
+Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->hourly();
+
 // Additional tasks for management
-// Check for tasks without response - DISABLED for now
-// Schedule::job(new \App\Jobs\CheckUnrespondedTasksJob())->everyThirtyMinutes();
+// Check for tasks without response
+Schedule::job(new \App\Jobs\CheckUnrespondedTasksJob())->everyThirtyMinutes();
 
 // Archive old completed tasks - runs daily at 2:00 AM
-Schedule::job(new \App\Jobs\ArchiveOldTasksJob())->dailyAt('02:00');
+// Schedule::job(new \App\Jobs\ArchiveOldTasksJob())->dailyAt('02:00');
 
 // Send daily summary to managers - runs daily at end of business day (20:00)
 Schedule::job(new \App\Jobs\SendDailySummaryJob())->dailyAt('20:00');

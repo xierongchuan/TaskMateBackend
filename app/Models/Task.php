@@ -33,6 +33,7 @@ class Task extends Model
         'is_active',
         'postpone_count',
         'archived_at',
+        'notification_settings',
     ];
 
     protected $casts = [
@@ -47,6 +48,7 @@ class Task extends Model
         'recurrence_day_of_month' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'notification_settings' => 'array',
     ];
 
     /**

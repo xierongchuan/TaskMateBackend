@@ -229,6 +229,7 @@ class TaskController extends Controller
             'tags' => 'nullable|array',
             'assignments' => 'nullable|array',
             'assignments.*' => 'exists:users,id',
+            'notification_settings' => 'nullable|array',
         ]);
 
         // Custom validation for recurring tasks
@@ -276,6 +277,7 @@ class TaskController extends Controller
             'task_type' => $validated['task_type'],
             'response_type' => $validated['response_type'],
             'tags' => $validated['tags'] ?? null,
+            'notification_settings' => $validated['notification_settings'] ?? null,
         ]);
 
         // Assign users
@@ -318,6 +320,7 @@ class TaskController extends Controller
             'is_active' => 'boolean',
             'assignments' => 'nullable|array',
             'assignments.*' => 'exists:users,id',
+            'notification_settings' => 'nullable|array',
         ]);
 
         // Custom validation for recurring tasks
