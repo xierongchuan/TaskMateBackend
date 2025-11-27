@@ -41,6 +41,7 @@ class NotificationSettingController extends Controller
                     'notification_time' => $setting->notification_time,
                     'notification_day' => $setting->notification_day,
                     'notification_offset' => $setting->notification_offset,
+                    'recipient_roles' => $setting->recipient_roles ?? [],
                 ];
             });
 
@@ -54,7 +55,6 @@ class NotificationSettingController extends Controller
      */
     public function update(Request $request, string $channelType): JsonResponse
     {
-        dump("Update called with channelType: " . $channelType);
         $user = $request->user();
 
         // Verify user has access
@@ -70,6 +70,8 @@ class NotificationSettingController extends Controller
             'notification_time' => 'nullable|date_format:H:i',
             'notification_day' => 'nullable|string|in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
             'notification_offset' => 'nullable|integer|min:1|max:1440', // 1 minute to 24 hours
+            'recipient_roles' => 'nullable|array',
+            'recipient_roles.*' => 'string|in:employee,manager,owner,observer',
         ]);
 
         $dealershipId = $validated['dealership_id'] ?? $user->dealership_id;
@@ -89,6 +91,7 @@ class NotificationSettingController extends Controller
             'notification_time' => $validated['notification_time'] ?? $setting->notification_time,
             'notification_day' => $validated['notification_day'] ?? $setting->notification_day,
             'notification_offset' => $validated['notification_offset'] ?? $setting->notification_offset,
+            'recipient_roles' => $validated['recipient_roles'] ?? $setting->recipient_roles,
         ]);
 
         Log::info('Notification setting updated', [
@@ -107,6 +110,7 @@ class NotificationSettingController extends Controller
                 'notification_time' => $setting->notification_time,
                 'notification_day' => $setting->notification_day,
                 'notification_offset' => $setting->notification_offset,
+                'recipient_roles' => $setting->recipient_roles ?? [],
             ]
         ]);
     }
