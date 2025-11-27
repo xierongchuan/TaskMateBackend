@@ -41,7 +41,7 @@ class AuthUser
         app()->instance('telegram_user', $user);
         auth()->setUser($user);
 
-        Log::debug('AuthUser: User authenticated successfully', [
+        \Log::debug('AuthUser: User authenticated successfully', [
             'user_id' => $user->id,
             'telegram_id' => $tgId,
             'role' => $user->role
