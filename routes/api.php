@@ -94,6 +94,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:manager,owner');
             Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])
                 ->middleware('role:manager,owner');
+            Route::patch('/tasks/{id}/status', [TaskController::class, 'updateStatus'])
+                ->middleware('role:manager,owner');
 
             // Important Links - READ операции
             Route::get('/links', [ImportantLinkController::class, 'index']);

@@ -123,7 +123,7 @@ class TaskController extends Controller
         }
 
         // Фильтрация по статусу задачи (Bug #3 - код корректный, проверено)
-        // Поддерживаемые статусы: active, completed, overdue, postponed, pending, acknowledged
+        // Поддерживаемые статусы: active, completed, overdue, pending, acknowledged
         if ($status) {
             $now = Carbon::now();
 
@@ -148,9 +148,7 @@ class TaskController extends Controller
                           });
                     break;
 
-                case 'postponed':
-                    $query->where('postpone_count', '>', 0)
-                          ->where('is_active', true);
+
                     break;
 
                 case 'pending':
@@ -395,6 +393,47 @@ class TaskController extends Controller
         return response()->json([
             'message' => 'Задача успешно удалена'
         ]);
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $task = Task::find($id);
+
+        if (!$task) {
+            return response()->json([
+                'message' => 'Задача не найдена'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:pending,acknowledged,completed',
+        ]);
+
+        $status = $validated['status'];
+        $user = auth()->user();
+
+        switch ($status) {
+            case 'pending':
+                // Reset task: remove all responses
+                $task->responses()->delete();
+                break;
+
+            case 'acknowledged':
+            case 'completed':
+                // Update or create response for current user
+                $task->responses()->updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'status' => $status,
+                        'responded_at' => Carbon::now(),
+                    ]
+                );
+                break;
+
+
+        }
+
+        return response()->json($task->refresh()->load(['assignments.user', 'responses.user'])->toApiArray());
     }
 
     public function postponed(Request $request)

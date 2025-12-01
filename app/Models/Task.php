@@ -126,11 +126,40 @@ class Task extends Model
     }
 
     /**
+     * Get the calculated status of the task
+     */
+    public function getStatusAttribute()
+    {
+        // Check for completion first
+        $hasCompleted = $this->responses->contains('status', 'completed');
+        if ($hasCompleted) {
+            return 'completed';
+        }
+
+        // Check for acknowledgement
+        $hasAcknowledged = $this->responses->contains('status', 'acknowledged');
+        if ($hasAcknowledged) {
+            return 'acknowledged';
+        }
+
+        // Check for overdue
+        if ($this->is_active && $this->deadline && $this->deadline->isPast()) {
+            return 'overdue';
+        }
+
+        // Default to pending
+        return 'pending';
+    }
+
+    /**
      * Convert task to array with UTC+5 times for API response
      */
     public function toApiArray()
     {
         $data = $this->toArray();
+
+        // Add calculated status
+        $data['status'] = $this->status;
 
         // Convert datetime fields to UTC+5
         if ($this->appear_date) {
