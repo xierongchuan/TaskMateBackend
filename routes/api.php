@@ -61,13 +61,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/dealerships', [DealershipController::class, 'index']);
             Route::get('/dealerships/{id}', [DealershipController::class, 'show']);
 
-            // Dealerships - WRITE операции (только managers и owners)
+            // Dealerships - WRITE операции (только owner)
             Route::post('/dealerships', [DealershipController::class, 'store'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
             Route::put('/dealerships/{id}', [DealershipController::class, 'update'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
             Route::delete('/dealerships/{id}', [DealershipController::class, 'destroy'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
 
             // Shifts - READ операции
             Route::get('/shifts', [ShiftController::class, 'index']);
@@ -84,7 +84,6 @@ Route::prefix('v1')->group(function () {
 
             // Tasks - READ операции
             Route::get('/tasks', [TaskController::class, 'index']);
-            Route::get('/tasks/postponed', [TaskController::class, 'postponed']);
             Route::get('/tasks/{id}', [TaskController::class, 'show']);
 
             // Tasks - WRITE операции (только managers и owners)
@@ -122,26 +121,26 @@ Route::prefix('v1')->group(function () {
             Route::get('/bot/settings', [SettingsController::class, 'botSettings']);
             Route::get('/bot/settings/{key}', [SettingsController::class, 'botSetting']);
 
-            // Settings - WRITE операции (только managers и owners)
+            // Settings - WRITE операции (только owner)
             Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
             Route::put('/settings/{key}', [SettingsController::class, 'update'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
 
             // Dealership-specific settings
             Route::get('/settings/{dealership_id}', [SettingsController::class, 'showDealership']);
             Route::get('/settings/{dealership_id}/{key}', [SettingsController::class, 'showDealershipSetting']);
             Route::put('/settings/{dealership_id}/{key}', [SettingsController::class, 'updateDealershipSetting'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
 
-            // Notification Settings - only managers and owners
+            // Notification Settings - only owners
             Route::get('/notification-settings', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'index'])
                 ->middleware('role:manager,owner');
             Route::put('/notification-settings/{channelType}', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'update'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
             Route::post('/notification-settings/bulk', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'bulkUpdate'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
             Route::post('/notification-settings/reset', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'resetToDefaults'])
-                ->middleware('role:manager,owner');
+                ->middleware('role:owner');
         });
 });

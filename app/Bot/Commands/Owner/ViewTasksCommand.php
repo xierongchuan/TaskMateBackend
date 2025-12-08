@@ -37,7 +37,7 @@ class ViewTasksCommand extends BaseCommandHandler
 
                 // Count statuses
                 $completed = 0;
-                $postponed = 0;
+                $acknowledged = 0;
                 $pending = 0;
 
                 foreach ($task->assignments as $assignment) {
@@ -45,8 +45,8 @@ class ViewTasksCommand extends BaseCommandHandler
                     if ($latestResponse) {
                         if ($latestResponse->status === 'completed') {
                             $completed++;
-                        } elseif ($latestResponse->status === 'postponed') {
-                            $postponed++;
+                        } elseif ($latestResponse->status === 'acknowledged') {
+                            $acknowledged++;
                         } else {
                             $pending++;
                         }
@@ -56,7 +56,7 @@ class ViewTasksCommand extends BaseCommandHandler
                 }
 
                 $total = $task->assignments->count();
-                $message .= "Назначено: {$total} | ✅ {$completed} | ⏳ {$postponed} | ⏸️ {$pending}\n\n";
+                $message .= "Назначено: {$total} | ✅ {$completed} | 👁️ {$acknowledged} | ⏸️ {$pending}\n\n";
             }
         }
 

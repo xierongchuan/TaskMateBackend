@@ -140,22 +140,18 @@ class CheckUnrespondedTasksJob implements ShouldQueue
 
             // Add appropriate keyboard based on response type
             $keyboard = null;
-            if ($task->response_type === 'notification') {
+            if ($task->response_type === 'acknowledge') {
                 $keyboard = \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
                     ->addRow(\SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
                         text: '✅ OK',
                         callback_data: 'task_ok_' . $task->id
                     ));
-            } elseif ($task->response_type === 'execution') {
+            } elseif ($task->response_type === 'complete') {
                 $keyboard = \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
                     ->addRow(
                         \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
                             text: '✅ Выполнено',
                             callback_data: 'task_done_' . $task->id
-                        ),
-                        \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
-                            text: '⏭️ Перенести',
-                            callback_data: 'task_postpone_' . $task->id
                         )
                     );
             }

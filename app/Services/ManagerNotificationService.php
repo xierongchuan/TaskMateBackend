@@ -47,31 +47,6 @@ class ManagerNotificationService
         }
     }
 
-    /**
-     * Notify managers about task postponement
-     */
-    public function notifyAboutTaskPostponement(Task $task, User $employee, string $reason): void
-    {
-        try {
-            $managers = $this->getManagersForDealership($employee->dealership_id);
-
-            $message = "⚠️ *Задача перенесена*\n\n";
-            $message .= "👤 Сотрудник: {$employee->full_name}\n";
-            $message .= "📋 Задача: {$task->title}\n";
-            $message .= "💬 Причина: {$reason}\n";
-            $message .= "🔢 Количество переносов: {$task->postpone_count}\n";
-
-            if ($task->postpone_count > 1) {
-                $message .= "\n⚠️ *Внимание: задача переносилась более 1 раза!*";
-            }
-
-            $this->sendToManagers($managers, $message);
-
-            Log::info("Managers notified about task #{$task->id} postponement");
-        } catch (\Throwable $e) {
-            Log::error('Error notifying about task postponement: ' . $e->getMessage());
-        }
-    }
 
     /**
      * Notify managers about overdue task
@@ -90,9 +65,7 @@ class ManagerNotificationService
                 $message .= "⏱️ Просрочено на: " . $this->getOverdueTime($task->deadline) . "\n";
             }
 
-            if ($task->postpone_count > 0) {
-                $message .= "🔢 Было переносов: {$task->postpone_count}\n";
-            }
+
 
             $this->sendToManagers($managers, $message);
 
@@ -157,12 +130,7 @@ class ManagerNotificationService
                     ->exists();
             })->count();
 
-            $postponedTasks = $tasks->filter(function ($task) use ($today) {
-                return $task->responses()
-                    ->where('status', 'postponed')
-                    ->whereDate('responded_at', $today)
-                    ->exists();
-            })->count();
+
 
             $overdueTasks = $tasks->filter(function ($task) {
                 return $task->deadline && $task->deadline->lt(Carbon::now()) &&
@@ -181,9 +149,7 @@ class ManagerNotificationService
 
             $message .= "\n📋 *Задачи:*\n";
             $message .= "• ✅ Выполнено: {$completedTasks}\n";
-            if ($postponedTasks > 0) {
-                $message .= "• ⏭️ Перенесено: {$postponedTasks}\n";
-            }
+
             if ($overdueTasks > 0) {
                 $message .= "• 🚨 Просрочено: {$overdueTasks}\n";
             }

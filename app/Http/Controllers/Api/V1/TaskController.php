@@ -435,26 +435,4 @@ class TaskController extends Controller
 
         return response()->json($task->refresh()->load(['assignments.user', 'responses.user'])->toApiArray());
     }
-
-    public function postponed(Request $request)
-    {
-        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
-
-        $query = Task::with(['creator', 'dealership', 'responses'])
-            ->where('postpone_count', '>', 0)
-            ->where('is_active', true);
-
-        if ($dealershipId) {
-            $query->where('dealership_id', $dealershipId);
-        }
-
-        $postponedTasks = $query->orderByDesc('postpone_count')->get();
-
-        // Transform tasks to use UTC+5 timezone
-        $tasksData = $postponedTasks->map(function ($task) {
-            return $task->toApiArray();
-        });
-
-        return response()->json($tasksData);
-    }
 }

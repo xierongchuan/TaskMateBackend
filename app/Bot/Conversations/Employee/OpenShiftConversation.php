@@ -351,7 +351,7 @@ class OpenShiftConversation extends BaseConversation
         }
     }
 
-    
+
     /**
      * Send pending tasks to the employee
      */
@@ -408,20 +408,16 @@ class OpenShiftConversation extends BaseConversation
 
         // Create response keyboard based on response_type
         $keyboard = match ($task->response_type) {
-            'notification' => \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
+            'acknowledge' => \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
                 ->addRow(\SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
                     text: '✅ OK',
                     callback_data: 'task_ok_' . $task->id
                 )),
-            'execution' => \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
+            'complete' => \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup::make()
                 ->addRow(
                     \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
                         text: '✅ Выполнено',
                         callback_data: 'task_done_' . $task->id
-                    ),
-                    \SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton::make(
-                        text: '⏭️ Перенести',
-                        callback_data: 'task_postpone_' . $task->id
                     )
                 ),
             default => null,

@@ -114,12 +114,7 @@ class GenerateWeeklyReport extends Command
                    $task->responses->where('status', 'completed')->isEmpty();
         });
 
-        $postponedTasks = $tasks->filter(function ($task) {
-            return $task->postpone_count > 0;
-        });
 
-        // Get top problems (most postponed tasks)
-        $topProblems = $tasks->sortByDesc('postpone_count')->take(5);
 
         // Per-employee statistics
         $employeeStats = [];
@@ -138,7 +133,6 @@ class GenerateWeeklyReport extends Command
                 'shifts' => $employeeShifts->count(),
                 'late_shifts' => $employeeShifts->where('status', 'late')->count(),
                 'completed_tasks' => $employeeTasks->where('status', 'completed')->count(),
-                'postponed_tasks' => $employeeTasks->where('status', 'postponed')->count(),
             ];
         }
 
@@ -155,9 +149,7 @@ class GenerateWeeklyReport extends Command
                 'total_tasks' => $tasks->count(),
                 'completed_tasks' => $completedTasks->count(),
                 'overdue_tasks' => $overdueTasks->count(),
-                'postponed_tasks' => $postponedTasks->count(),
             ],
-            'top_problems' => $topProblems,
             'employee_stats' => $employeeStats,
             'late_shifts' => $lateShifts,
             'replacements' => $replacements,
@@ -209,16 +201,7 @@ class GenerateWeeklyReport extends Command
         $message .= "*Задачи:*\n";
         $message .= "• Всего задач: {$summary['total_tasks']}\n";
         $message .= "• Выполнено: {$summary['completed_tasks']}\n";
-        $message .= "• Просрочено: {$summary['overdue_tasks']}\n";
-        $message .= "• Перенесено: {$summary['postponed_tasks']}\n\n";
-
-        if (!empty($data['top_problems']) && $data['top_problems']->count() > 0) {
-            $message .= "*Топ-проблемы недели:*\n";
-            foreach ($data['top_problems'] as $idx => $task) {
-                $message .= ($idx + 1) . ". {$task->title} (переносов: {$task->postpone_count})\n";
-            }
-            $message .= "\n";
-        }
+        $message .= "• Просрочено: {$summary['overdue_tasks']}\n\n";
 
         $message .= "*По сотрудникам:*\n";
         foreach (array_slice($data['employee_stats'], 0, 10) as $stat) {

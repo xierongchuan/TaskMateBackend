@@ -127,19 +127,39 @@ class Task extends Model
 
     /**
      * Get the calculated status of the task
+     *
+     * For group tasks: 'completed' only when ALL assignees have completed
+     * For individual tasks: first response determines status
      */
     public function getStatusAttribute()
     {
-        // Check for completion first
-        $hasCompleted = $this->responses->contains('status', 'completed');
-        if ($hasCompleted) {
-            return 'completed';
-        }
+        $responses = $this->responses;
+        $assignments = $this->assignments;
 
-        // Check for acknowledgement
-        $hasAcknowledged = $this->responses->contains('status', 'acknowledged');
-        if ($hasAcknowledged) {
-            return 'acknowledged';
+        if ($this->task_type === 'group') {
+            // For group tasks: check that ALL assignees have completed
+            $assignedUserIds = $assignments->pluck('user_id')->unique()->values()->toArray();
+            $completedUserIds = $responses->where('status', 'completed')->pluck('user_id')->unique()->values()->toArray();
+
+            // All assigned users must have completed
+            if (count($assignedUserIds) > 0 && count(array_diff($assignedUserIds, $completedUserIds)) === 0) {
+                return 'completed';
+            }
+
+            // Check if at least one has acknowledged
+            $acknowledgedUserIds = $responses->where('status', 'acknowledged')->pluck('user_id')->unique()->values()->toArray();
+            if (count($acknowledgedUserIds) > 0) {
+                return 'acknowledged';
+            }
+        } else {
+            // For individual tasks: first response determines status
+            if ($responses->contains('status', 'completed')) {
+                return 'completed';
+            }
+
+            if ($responses->contains('status', 'acknowledged')) {
+                return 'acknowledged';
+            }
         }
 
         // Check for overdue
@@ -212,5 +232,32 @@ class Task extends Model
     {
         return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'user_id')
             ->withTimestamps();
+    }
+
+    /**
+     * Scope to get only active tasks
+     * Currently uses is_active field, but prepares for future migration to archived_at
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true)->whereNull('archived_at');
+    }
+
+    /**
+     * Scope to get archived tasks
+     */
+    public function scopeArchived($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_active', false)->orWhereNotNull('archived_at');
+        });
+    }
+
+    /**
+     * Auto-dealership relationship (alias for dealership)
+     */
+    public function autoDealership()
+    {
+        return $this->belongsTo(AutoDealership::class, 'dealership_id');
     }
 }

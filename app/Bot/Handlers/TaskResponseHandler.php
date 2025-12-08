@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 
 /**
- * Handler for task response callbacks (OK, Done, Postpone)
+ * Handler for task response callbacks (OK, Done)
  */
 class TaskResponseHandler
 {
@@ -200,73 +200,6 @@ class TaskResponseHandler
             ]);
         } catch (\Throwable $e) {
             Log::error('Error handling task done', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'user_id' => auth()->user()?->id,
-                'callback_data' => $bot->callbackQuery()?->data
-            ]);
-            $bot->answerCallbackQuery('⚠️ Произошла ошибка при обработке ответа', show_alert: true);
-        }
-    }
-
-    /**
-     * Handle task postpone response - start conversation for comment
-     */
-    public static function handlePostpone(Nutgram $bot): void
-    {
-        try {
-            $callbackData = $bot->callbackQuery()->data;
-            $taskId = (int) str_replace('task_postpone_', '', $callbackData);
-
-            $user = auth()->user();
-            if (!$user) {
-                Log::warning('Task Postpone callback: User not authenticated', ['callback_data' => $callbackData]);
-                $bot->answerCallbackQuery('⚠️ Ошибка аутентификации. Пожалуйста, войдите снова через /start', show_alert: true);
-                return;
-            }
-
-            $task = Task::with('assignments')->find($taskId);
-            if (!$task) {
-                Log::warning('Task Postpone callback: Task not found', ['task_id' => $taskId, 'user_id' => $user->id]);
-                $bot->answerCallbackQuery('⚠️ Задача не найдена', show_alert: true);
-                return;
-            }
-
-            // Check if task is active
-            if (!$task->is_active) {
-                Log::info('Task Postpone callback: Task is not active', ['task_id' => $taskId, 'user_id' => $user->id]);
-                $bot->answerCallbackQuery('⚠️ Эта задача больше не активна', show_alert: true);
-                return;
-            }
-
-            // Check if user is assigned to this task
-            $isAssigned = $task->assignments()->where('user_id', $user->id)->exists();
-            if (!$isAssigned) {
-                Log::warning('Task Postpone callback: User not assigned to task', [
-                    'task_id' => $taskId,
-                    'user_id' => $user->id,
-                    'task_title' => $task->title
-                ]);
-                $bot->answerCallbackQuery('⚠️ Вы не назначены на эту задачу', show_alert: true);
-                return;
-            }
-
-            $bot->answerCallbackQuery();
-
-            // Start postpone conversation
-            \App\Bot\Conversations\Employee\PostponeTaskConversation::begin(
-                $bot,
-                taskId: $taskId,
-                messageId: $bot->messageId()
-            );
-
-            Log::info('Task postpone conversation started', [
-                'task_id' => $taskId,
-                'user_id' => $user->id,
-                'task_title' => $task->title
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error handling task postpone', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'user_id' => auth()->user()?->id,

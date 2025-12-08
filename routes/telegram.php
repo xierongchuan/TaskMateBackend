@@ -50,8 +50,4 @@ $bot->group(function (Nutgram $bot) {
         'task_done_{taskId}',
         \App\Bot\Handlers\TaskResponseHandler::class . '@handleDone'
     )->middleware(AuthUser::class);
-    $bot->onCallbackQueryData(
-        'task_postpone_{taskId}',
-        \App\Bot\Handlers\TaskResponseHandler::class . '@handlePostpone'
-    )->middleware(AuthUser::class);
 });

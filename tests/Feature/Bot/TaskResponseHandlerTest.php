@@ -56,11 +56,6 @@ test('task done response is recorded correctly', function () {
     expect($this->task)->toBeInstanceOf(Task::class);
 });
 
-test('task postpone starts conversation', function () {
-    // This would test the handlePostpone method
-    expect($this->task)->toBeInstanceOf(Task::class);
-});
-
 test('task response updates existing response if already exists', function () {
     // Create initial response
     $response = TaskResponse::create([
