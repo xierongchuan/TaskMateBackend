@@ -80,6 +80,11 @@ class ShiftController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $currentUser = $request->user();
+        if (!$currentUser) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
             'dealership_id' => 'required|exists:auto_dealerships,id',
@@ -97,6 +102,33 @@ class ShiftController extends Controller
         }
 
         $data = $validator->validated();
+
+        // SECURITY CHECK: Opening shift for another user
+        if ((int)$data['user_id'] !== $currentUser->id) {
+            // Only Owner can open shift for others
+            if ($currentUser->role !== 'owner') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Только Владелец может открывать смены за других пользователей'
+                ], 403);
+            }
+        }
+
+        // SECURITY CHECK: Role restriction
+        // Only Employee and Owner can open shifts. Managers and Observers cannot.
+        // If current user is owner opening for employee, check the target user's role?
+        // Usually we check the *actor's* permission to perform the action.
+        // If actor is Manager/Observer -> Denied.
+        if (in_array($currentUser->role, ['manager', 'observer'])) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Менеджеры и Наблюдатели не могут открывать смены'
+            ], 403);
+        }
+
+        // Also check target user role if Owner is opening?
+        // Assuming Owner knows what they are doing.
+        // But if a Manager tries to open their own shift -> Denied above.
 
         try {
             $user = User::findOrFail($data['user_id']);
@@ -184,6 +216,33 @@ class ShiftController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $shift = Shift::findOrFail($id);
+        $currentUser = $request->user();
+
+        // SECURITY CHECK: Closing/Editing shift
+        if (!$currentUser) {
+             return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        // 1. If trying to close/edit someone else's shift -> Only Owner allowed
+        if ($shift->user_id !== $currentUser->id) {
+             if ($currentUser->role !== 'owner') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Редактирование смен других пользователей доступно только Владельцу'
+                ], 403);
+             }
+        }
+
+        // 2. If Manager/Observer tries to close shift -> Denied (per requirements)
+        // Even if it's their own shift (which shouldn't exist due to store block),
+        // or if they somehow have one, they can't close it?
+        // Prompt: "Так же открывать и закрывать смену могут только обычные сотрудники и главный амин."
+        if (in_array($currentUser->role, ['manager', 'observer'])) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Менеджеры и Наблюдатели не могут управлять сменами'
+            ], 403);
+        }
 
         $validator = Validator::make($request->all(), [
             'closing_photo' => 'sometimes|required|file|image|mimes:jpeg,png,jpg|max:5120',

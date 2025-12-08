@@ -16,6 +16,7 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
 
@@ -26,51 +27,71 @@ class ReportController extends Controller
         $from = Carbon::parse($dateFrom)->startOfDay();
         $to = Carbon::parse($dateTo)->endOfDay();
 
+        // Determine Dealership Filter
+        $dealershipId = null;
+        if ($user->role === 'manager' && $user->dealership_id) {
+            $dealershipId = $user->dealership_id;
+        }
+
+        // Helper to apply dealership filter to Task query
+        // Assuming Tasks have dealership_id or we filter by assigned users in dealership
+        // Inspecting Task model or migrations earlier, we saw 'dealership_id' in Task migrations?
+        // Let's rely on tasks.dealership_id if it exists, or relation.
+        // Given earlier UI filters had 'dealership_id', column likely exists.
+        $applyTaskFilter = function ($query) use ($dealershipId) {
+            if ($dealershipId) {
+                $query->where('dealership_id', $dealershipId);
+            }
+        };
+
+        // Helper for Shift filter
+        $applyShiftFilter = function ($query) use ($dealershipId) {
+            if ($dealershipId) {
+                $query->where('dealership_id', $dealershipId);
+            }
+        };
+
         // Summary Statistics
-        $totalTasks = Task::whereBetween('created_at', [$from, $to])->count();
+        $totalTasksQuery = Task::whereBetween('created_at', [$from, $to]);
+        $applyTaskFilter($totalTasksQuery);
+        $totalTasks = $totalTasksQuery->count();
 
-        // Completed tasks: tasks created in period and completed (is_active = false)
-        // Note: logic might vary depending on how completion is tracked.
-        // Assuming is_active=false means completed for now, or we check status if available.
-        // Based on Task model, there isn't a specific 'status' field like 'completed',
-        // but there is 'is_active' and 'archived_at'.
-        // Let's assume non-active tasks are completed.
-        $completedTasks = Task::whereBetween('created_at', [$from, $to])
-            ->where('is_active', false)
-            ->count();
+        $completedTasksQuery = Task::whereBetween('created_at', [$from, $to])->where('is_active', false);
+        $applyTaskFilter($completedTasksQuery);
+        $completedTasks = $completedTasksQuery->count();
 
-        // Overdue tasks: tasks with deadline in period and deadline < now and is_active = true
-        $overdueTasks = Task::whereBetween('deadline', [$from, $to])
+        $overdueTasksQuery = Task::whereBetween('deadline', [$from, $to])
             ->where('deadline', '<', Carbon::now())
-            ->where('is_active', true)
-            ->count();
+            ->where('is_active', true);
+        $applyTaskFilter($overdueTasksQuery);
+        $overdueTasks = $overdueTasksQuery->count();
 
-        $postponedTasks = Task::whereBetween('created_at', [$from, $to])
-            ->where('postpone_count', '>', 0)
-            ->count();
+        $postponedTasksQuery = Task::whereBetween('created_at', [$from, $to])
+            ->where('postpone_count', '>', 0);
+        $applyTaskFilter($postponedTasksQuery);
+        $postponedTasks = $postponedTasksQuery->count();
 
-        $totalShifts = Shift::whereBetween('shift_start', [$from, $to])->count();
+        $totalShiftsQuery = Shift::whereBetween('shift_start', [$from, $to]);
+        $applyShiftFilter($totalShiftsQuery);
+        $totalShifts = $totalShiftsQuery->count();
 
-        $lateShifts = Shift::whereBetween('shift_start', [$from, $to])
-            ->where('late_minutes', '>', 0)
-            ->count();
+        $lateShiftsQuery = Shift::whereBetween('shift_start', [$from, $to])
+            ->where('late_minutes', '>', 0);
+        $applyShiftFilter($lateShiftsQuery);
+        $lateShifts = $lateShiftsQuery->count();
 
-        // Replacements logic (assuming Shift has replacement relationship)
-        // We can count shifts that have a replacement
-        $totalReplacements = Shift::whereBetween('shift_start', [$from, $to])
-            ->has('replacement')
-            ->count();
+        $totalReplacementsQuery = Shift::whereBetween('shift_start', [$from, $to])->has('replacement');
+        $applyShiftFilter($totalReplacementsQuery);
+        $totalReplacements = $totalReplacementsQuery->count();
 
         // Tasks by Status
-        // Since we don't have a strict status enum, we derive it.
-        // Active, Completed (inactive), Overdue (active + past deadline)
-        // This is a simplification.
-        $activeTasksCount = Task::whereBetween('created_at', [$from, $to])
+        $activeTasksQuery = Task::whereBetween('created_at', [$from, $to])
             ->where('is_active', true)
             ->where(function($q) {
                 $q->whereNull('deadline')->orWhere('deadline', '>=', Carbon::now());
-            })
-            ->count();
+            });
+        $applyTaskFilter($activeTasksQuery);
+        $activeTasksCount = $activeTasksQuery->count();
 
         $tasksByStatus = [
             [
@@ -84,19 +105,31 @@ class ReportController extends Controller
                 'percentage' => $totalTasks > 0 ? round(($overdueTasks / $totalTasks) * 100, 1) : 0
             ],
             [
-                'status' => 'active', // treating others as active
+                'status' => 'active',
                 'count' => $activeTasksCount,
                 'percentage' => $totalTasks > 0 ? round(($activeTasksCount / $totalTasks) * 100, 1) : 0
             ]
         ];
 
         // Employee Performance
-        $employees = User::where('role', '!=', 'owner')->get(); // Exclude owners from stats usually
+        $employeesQuery = User::where('role', '!=', 'owner');
+        if ($dealershipId) {
+            $employeesQuery->where('dealership_id', $dealershipId);
+        }
+        $employees = $employeesQuery->get();
+
         $employeesPerformance = $employees->map(function ($user) use ($from, $to) {
-            // Base query for tasks assigned to the user
+            // Task filter handles user specific logic, but tasks are usually assigned to a user or dealership
+            // Here we look at tasks specifically assigned to the user
             $userTasksQuery = Task::whereHas('assignedUsers', function($q) use ($user) {
                 $q->where('user_id', $user->id);
             });
+            // Note: Assigned tasks might be from any dealership if user moved, but typically strict.
+            // We count specific tasks regardless of dealership ID on the TASK itself,
+            // because they are assigned to THIS user who is in THIS dealership.
+            // So we don't strictly need to filter tasks by dealership_id here again if we trust the user assignment scope.
+            // But if we want to be strict about 'tasks within this dealership context', we could add it.
+            // Let's stick to user assignment.
 
             $userTasks = (clone $userTasksQuery)
                 ->whereBetween('created_at', [$from, $to])
@@ -121,13 +154,9 @@ class ReportController extends Controller
             // Simple score calculation
             $score = 100;
             if ($userTasks > 0) {
-                // Penalty for overdue tasks (weighted)
                 $score -= ($userOverdue * 5);
             }
-            // Penalty for late shifts
             $score -= ($userLateShifts * 10);
-
-            // Normalize score
             $score = max(0, min(100, $score));
 
             return [
@@ -147,18 +176,20 @@ class ReportController extends Controller
             $dayStart = $current->copy()->startOfDay();
             $dayEnd = $current->copy()->endOfDay();
 
-            $dayCompleted = Task::whereBetween('created_at', [$dayStart, $dayEnd])
-                ->where('is_active', false)
-                ->count();
+            $dayCompletedQuery = Task::whereBetween('created_at', [$dayStart, $dayEnd])->where('is_active', false);
+            $applyTaskFilter($dayCompletedQuery);
+            $dayCompleted = $dayCompletedQuery->count();
 
-            $dayOverdue = Task::whereBetween('deadline', [$dayStart, $dayEnd])
+            $dayOverdueQuery = Task::whereBetween('deadline', [$dayStart, $dayEnd])
                 ->where('deadline', '<', Carbon::now())
-                ->where('is_active', true)
-                ->count();
+                ->where('is_active', true);
+            $applyTaskFilter($dayOverdueQuery);
+            $dayOverdue = $dayOverdueQuery->count();
 
-            $dayLateShifts = Shift::whereBetween('shift_start', [$dayStart, $dayEnd])
-                ->where('late_minutes', '>', 0)
-                ->count();
+            $dayLateShiftsQuery = Shift::whereBetween('shift_start', [$dayStart, $dayEnd])
+                ->where('late_minutes', '>', 0);
+            $applyShiftFilter($dayLateShiftsQuery);
+            $dayLateShifts = $dayLateShiftsQuery->count();
 
             $dailyStats[] = [
                 'date' => $current->format('Y-m-d'),
@@ -192,7 +223,6 @@ class ReportController extends Controller
                 'description' => 'Частые переносы задач'
             ];
         }
-        // Sort by count desc
         usort($topIssues, function($a, $b) {
             return $b['count'] <=> $a['count'];
         });
