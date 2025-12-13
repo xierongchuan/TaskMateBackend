@@ -15,6 +15,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        //
-    }
+        User::firstOrCreate(
+            ['login' => 'admin'],
+            [
+                'full_name' => 'Admin User',
+                'password' => bcrypt('password'),
+                'role' => \App\Enums\Role::OWNER,
+            ]
+        );
+      }
 }
