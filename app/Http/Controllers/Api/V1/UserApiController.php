@@ -145,6 +145,17 @@ class UserApiController extends Controller
             ], 404);
         }
 
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+
+        // Security check: Non-owners cannot modify Owners
+        if ($currentUser->role !== Role::OWNER && $user->role === Role::OWNER) {
+            return response()->json([
+                'success' => false,
+                'message' => 'У вас нет прав для редактирования Владельца'
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'password' => [
                 'sometimes',
@@ -219,6 +230,16 @@ class UserApiController extends Controller
         }
 
         $validated = $validator->validated();
+
+        // Security check: Non-owners cannot promote users to Owner
+        if (isset($validated['role']) && $validated['role'] === Role::OWNER->value) {
+            if ($currentUser->role !== Role::OWNER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Только Владелец может назначать роль Владельца'
+                ], 403);
+            }
+        }
 
         try {
             $updateData = [];
@@ -346,6 +367,19 @@ class UserApiController extends Controller
 
         $validated = $validator->validated();
 
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+
+        // Security check: Non-owners cannot create Owners
+        if ($validated['role'] === Role::OWNER->value) {
+            if ($currentUser->role !== Role::OWNER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Только Владелец может создавать пользователей с ролью Владельца'
+                ], 403);
+            }
+        }
+
         try {
             $user = User::create([
                 'login' => $validated['login'],
@@ -375,7 +409,7 @@ class UserApiController extends Controller
         }
     }
 
-    public function destroy($id): JsonResponse
+    public function destroy($id): JsonResponse // Fixed: Added $request to argument usually or use global request() helper. Here I will use request() helper.
     {
         $user = User::find($id);
 
@@ -384,6 +418,17 @@ class UserApiController extends Controller
                 'success' => false,
                 'message' => 'Пользователь не найден'
             ], 404);
+        }
+
+        /** @var User $currentUser */
+        $currentUser = request()->user();
+
+        // Security check: Only Owner can delete Owner
+        if ($user->role === Role::OWNER && $currentUser->role !== Role::OWNER) {
+             return response()->json([
+                'success' => false,
+                'message' => 'У вас нет прав для удаления Владельца'
+            ], 403);
         }
 
         // Проверяем наличие связанных данных

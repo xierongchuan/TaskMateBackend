@@ -22,6 +22,17 @@ enum Role: string
         };
     }
 
+    /** Уровень доступа (больше = выше права) */
+    public function level(): int
+    {
+        return match ($this) {
+            self::OWNER => 4,
+            self::MANAGER => 3,
+            self::OBSERVER => 2,
+            self::EMPLOYEE => 1,
+        };
+    }
+
     /** все значения для миграции / проверок */
     public static function values(): array
     {
