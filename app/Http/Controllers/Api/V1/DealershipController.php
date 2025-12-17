@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AutoDealership;
 use Illuminate\Http\Request;
 use Log;
+use App\Enums\Role;
 
 class DealershipController extends Controller
 {
@@ -36,7 +37,7 @@ class DealershipController extends Controller
         // Scope access for non-owners
         /** @var \App\Models\User $currentUser */
         $currentUser = $request->user();
-        if ($currentUser && $currentUser->role !== 'owner') {
+        if ($currentUser && $currentUser->role !== Role::OWNER) {
              $accessibleIds = $currentUser->getAccessibleDealershipIds();
              $query->whereIn('id', $accessibleIds);
         }
