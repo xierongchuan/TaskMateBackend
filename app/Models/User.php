@@ -78,4 +78,24 @@ class User extends Authenticatable
     {
         return $this->hasMany(ShiftReplacement::class, 'replaced_user_id');
     }
+
+    /**
+     * Get IDs of all dealerships accessible to this user.
+     * Includes primary dealership_id and attached dealerships.
+     *
+     * @return array<int>
+     */
+    public function getAccessibleDealershipIds(): array
+    {
+        $ids = [];
+
+        if ($this->dealership_id) {
+            $ids[] = $this->dealership_id;
+        }
+
+        $attachedIds = $this->dealerships()->pluck('auto_dealerships.id')->toArray();
+        $ids = array_merge($ids, $attachedIds);
+
+        return array_unique($ids);
+    }
 }

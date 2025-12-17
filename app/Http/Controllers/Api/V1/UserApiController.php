@@ -105,6 +105,22 @@ class UserApiController extends Controller
         // Always eager load dealership and dealerships relationships
         $query->with(['dealership', 'dealerships']);
 
+        // Scope by accessible dealerships for non-owners
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+        if ($currentUser->role !== Role::OWNER) {
+            $accessibleIds = $currentUser->getAccessibleDealershipIds();
+
+            // Allow viewing users who belong to any of the accessible dealerships
+            // EITHER via primary dealership_id OR via pivot table
+            $query->where(function ($q) use ($accessibleIds) {
+                $q->whereIn('dealership_id', $accessibleIds)
+                  ->orWhereHas('dealerships', function ($subQ) use ($accessibleIds) {
+                      $subQ->whereIn('auto_dealerships.id', $accessibleIds);
+                  });
+            });
+        }
+
         $users = $query->orderByDesc('created_at')->paginate($perPage);
         return UserResource::collection($users);
     }
@@ -136,7 +152,7 @@ class UserApiController extends Controller
 
     public function update(Request $request, $id): JsonResponse
     {
-        $user = User::find($id);
+        $user = User::with('dealerships')->find($id);
 
         if (! $user) {
             return response()->json([
@@ -154,6 +170,26 @@ class UserApiController extends Controller
                 'success' => false,
                 'message' => 'У вас нет прав для редактирования Владельца'
             ], 403);
+        }
+
+        // Security check: Scope access to assigned dealerships
+        if ($currentUser->role !== Role::OWNER) {
+            $accessibleIds = $currentUser->getAccessibleDealershipIds();
+            $userDealerships = array_merge(
+                $user->dealership_id ? [$user->dealership_id] : [],
+                $user->dealerships->pluck('id')->toArray()
+            );
+
+            // If user has NO dealerships, they might be global/unassigned.
+            // Policy choice: Managers can only edit users who share at least one dealership.
+            // If target has no dealerships, maybe Manager shouldn't see them?
+            // Let's assume strict intersection.
+            if (empty(array_intersect($userDealerships, $accessibleIds)) && !empty($userDealerships)) {
+                 return response()->json([
+                    'success' => false,
+                    'message' => 'У вас нет прав для редактирования сотрудника другого автосалона'
+                ], 403);
+            }
         }
 
         $validator = Validator::make($request->all(), [
@@ -239,6 +275,29 @@ class UserApiController extends Controller
                     'message' => 'Только Владелец может назначать роль Владельца'
                 ], 403);
             }
+        }
+
+        // Security check: Ensure new dealerships are accessible
+        if ($currentUser->role !== Role::OWNER) {
+             $accessibleIds = $currentUser->getAccessibleDealershipIds();
+
+             if (isset($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
+                 return response()->json([
+                    'success' => false,
+                    'message' => 'Вы не можете привязать сотрудника к чужому автосалону'
+                ], 403);
+             }
+
+             if (isset($validated['dealership_ids'])) {
+                 foreach ($validated['dealership_ids'] as $did) {
+                     if (!in_array($did, $accessibleIds)) {
+                         return response()->json([
+                            'success' => false,
+                            'message' => 'Вы не можете управлять доступом к чужому автосалону'
+                        ], 403);
+                     }
+                 }
+             }
         }
 
         try {
@@ -380,6 +439,29 @@ class UserApiController extends Controller
             }
         }
 
+        // Security check: Ensure new dealerships are accessible
+        if ($currentUser->role !== Role::OWNER) {
+             $accessibleIds = $currentUser->getAccessibleDealershipIds();
+
+             if (!empty($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
+                 return response()->json([
+                    'success' => false,
+                    'message' => 'Вы не можете создать сотрудника в чужом автосалоне'
+                ], 403);
+             }
+
+             if (!empty($validated['dealership_ids'])) {
+                 foreach ($validated['dealership_ids'] as $did) {
+                     if (!in_array($did, $accessibleIds)) {
+                         return response()->json([
+                            'success' => false,
+                            'message' => 'Вы не можете дать доступ к чужому автосалону'
+                        ], 403);
+                     }
+                 }
+             }
+        }
+
         try {
             $user = User::create([
                 'login' => $validated['login'],
@@ -411,7 +493,7 @@ class UserApiController extends Controller
 
     public function destroy($id): JsonResponse // Fixed: Added $request to argument usually or use global request() helper. Here I will use request() helper.
     {
-        $user = User::find($id);
+        $user = User::with('dealerships')->find($id);
 
         if (!$user) {
             return response()->json([
@@ -429,6 +511,23 @@ class UserApiController extends Controller
                 'success' => false,
                 'message' => 'У вас нет прав для удаления Владельца'
             ], 403);
+        }
+
+        // Security check: Scope access to assigned dealerships for deletion
+        if ($currentUser->role !== Role::OWNER) {
+            $accessibleIds = $currentUser->getAccessibleDealershipIds();
+            $userDealerships = array_merge(
+                $user->dealership_id ? [$user->dealership_id] : [],
+                $user->dealerships->pluck('id')->toArray()
+            );
+
+            // Can only delete if user is in your dealership
+            if (empty(array_intersect($userDealerships, $accessibleIds)) && !empty($userDealerships)) {
+                 return response()->json([
+                    'success' => false,
+                    'message' => 'У вас нет прав для удаления сотрудника другого автосалона'
+                ], 403);
+            }
         }
 
         // Проверяем наличие связанных данных
