@@ -5,7 +5,7 @@ FROM php:8.4.13-fpm AS build
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends \
   git unzip zip \
-  libzip-dev libonig-dev libxml2-dev \
+  libzip-dev libonig-dev libxml2-dev libicu-dev \
   libpng-dev libjpeg-dev libfreetype6-dev \
   libmemcached-tools \
   libpq-dev postgresql-client \
@@ -18,7 +18,7 @@ WORKDIR /var/www/src_telegram_bot_api
 # 2) PHP-расширения: PostgreSQL, GD и т.д.
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j$(nproc) \
-  mbstring exif pcntl bcmath zip \
+  mbstring exif pcntl bcmath zip intl \
   pdo pdo_pgsql gd \
   && docker-php-ext-install pgsql
 
@@ -52,7 +52,7 @@ WORKDIR /var/www/src_telegram_bot_api
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends \
   libpng-dev libjpeg-dev libfreetype6-dev \
-  libzip-dev libonig-dev libxml2-dev \
+  libzip-dev libonig-dev libxml2-dev libicu-dev \
   sqlite3 libsqlite3-dev \
   libpq-dev \
   supervisor \
@@ -62,7 +62,7 @@ RUN apt-get update -y \
 # Включаем необходимые расширения в runtime
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j$(nproc) \
-  mbstring exif pcntl bcmath zip \
+  mbstring exif pcntl bcmath zip intl \
   pdo pdo_pgsql gd \
   && docker-php-ext-install pgsql
 
