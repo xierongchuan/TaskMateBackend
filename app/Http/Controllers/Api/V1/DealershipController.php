@@ -33,6 +33,14 @@ class DealershipController extends Controller
             });
         }
 
+        // Scope access for non-owners
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+        if ($currentUser && $currentUser->role !== 'owner') {
+             $accessibleIds = $currentUser->getAccessibleDealershipIds();
+             $query->whereIn('id', $accessibleIds);
+        }
+
         $dealerships = $query->orderBy('name')->paginate($perPage);
 
         return response()->json($dealerships);
