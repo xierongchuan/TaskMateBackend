@@ -50,7 +50,14 @@ class CheckRole
             ], 401);
         }
 
-        $userRole = $request->user()->role;
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $userRole = $user->role;
+
+        // Если роль - Enum, получаем значение
+        if ($userRole instanceof Role) {
+            $userRole = $userRole->value;
+        }
 
         // Проверяем, что у пользователя есть одна из разрешенных ролей
         if (!in_array($userRole, $roles)) {

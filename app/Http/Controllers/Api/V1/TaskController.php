@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\TaskAssignment;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use App\Enums\Role;
 
 class TaskController extends Controller
 {
@@ -307,6 +308,8 @@ class TaskController extends Controller
         }
 
         // Security check: Ensure dealership is accessible
+        /** @var User $currentUser */
+        $currentUser = $request->user();
         if ($currentUser->role !== Role::OWNER) {
              $accessibleIds = $currentUser->getAccessibleDealershipIds();
 

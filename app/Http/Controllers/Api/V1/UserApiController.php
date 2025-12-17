@@ -362,7 +362,7 @@ class UserApiController extends Controller
                 'string',
                 'min:8',
                 'max:255',
-                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]/'
+                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/'
             ],
             'full_name' => [
                 'required',

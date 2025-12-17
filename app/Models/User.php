@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Enums\Role;
 
 class User extends Authenticatable
 {
@@ -25,6 +26,10 @@ class User extends Authenticatable
         'role',
         'dealership_id',
         'password'
+    ];
+
+    protected $casts = [
+        'role' => Role::class,
     ];
 
     protected $hidden = [
