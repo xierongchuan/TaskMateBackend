@@ -117,6 +117,7 @@ Route::prefix('v1')->group(function () {
             // Settings - READ операции
             Route::get('/settings', [SettingsController::class, 'index']);
             Route::get('/settings/shift-config', [SettingsController::class, 'getShiftConfig']);
+            Route::get('/settings/bot-config', [SettingsController::class, 'getBotConfig']);
             Route::get('/settings/{key}', [SettingsController::class, 'show']);
             Route::get('/bot/settings', [SettingsController::class, 'botSettings']);
             Route::get('/bot/settings/{key}', [SettingsController::class, 'botSetting']);
@@ -124,6 +125,8 @@ Route::prefix('v1')->group(function () {
             // Settings - WRITE операции (только owner)
             Route::post('/settings/shift-config', [SettingsController::class, 'updateShiftConfig'])
                 ->middleware('role:owner');
+            Route::put('/settings/bot-config', [SettingsController::class, 'updateBotConfig'])
+                ->middleware('role:manager,owner');
             Route::put('/settings/{key}', [SettingsController::class, 'update'])
                 ->middleware('role:owner');
 
@@ -133,14 +136,14 @@ Route::prefix('v1')->group(function () {
             Route::put('/settings/{dealership_id}/{key}', [SettingsController::class, 'updateDealershipSetting'])
                 ->middleware('role:owner');
 
-            // Notification Settings - only owners
+            // Notification Settings - managers and owners
             Route::get('/notification-settings', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'index'])
                 ->middleware('role:manager,owner');
             Route::put('/notification-settings/{channelType}', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'update'])
-                ->middleware('role:owner');
+                ->middleware('role:manager,owner');
             Route::post('/notification-settings/bulk', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'bulkUpdate'])
-                ->middleware('role:owner');
+                ->middleware('role:manager,owner');
             Route::post('/notification-settings/reset', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'resetToDefaults'])
-                ->middleware('role:owner');
+                ->middleware('role:manager,owner');
         });
 });

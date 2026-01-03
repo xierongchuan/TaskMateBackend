@@ -330,4 +330,89 @@ class SettingsController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Get bot configuration
+     *
+     * GET /api/v1/settings/bot-config
+     */
+    public function getBotConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id');
+
+        $botConfig = [
+            'notification_enabled' => (bool) $this->settingsService->get('notification_enabled', $dealershipId) ?? true,
+            'auto_close_shifts' => (bool) $this->settingsService->get('auto_close_shifts', $dealershipId) ?? false,
+            'shift_reminder_minutes' => (int) ($this->settingsService->get('shift_reminder_minutes', $dealershipId) ?? 15),
+            'maintenance_mode' => (bool) $this->settingsService->get('maintenance_mode', $dealershipId) ?? false,
+            'rows_per_page' => (int) ($this->settingsService->get('rows_per_page', $dealershipId) ?? 10),
+            'notification_types' => $this->settingsService->get('notification_types', $dealershipId) ?? [
+                'task_overdue' => true,
+                'shift_late' => true,
+                'task_completed' => true,
+                'system_errors' => true,
+            ],
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $botConfig,
+        ]);
+    }
+
+    /**
+     * Update bot configuration
+     *
+     * PUT /api/v1/settings/bot-config
+     */
+    public function updateBotConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'notification_enabled' => ['nullable', 'boolean'],
+            'auto_close_shifts' => ['nullable', 'boolean'],
+            'shift_reminder_minutes' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'maintenance_mode' => ['nullable', 'boolean'],
+            'rows_per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+            'notification_types' => ['nullable', 'array'],
+            'dealership_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $data = $validator->validated();
+            $dealershipId = $data['dealership_id'] ?? null;
+            unset($data['dealership_id']);
+
+            $updatedSettings = [];
+            foreach ($data as $key => $value) {
+                if ($value !== null) {
+                    $type = 'string';
+                    if (is_bool($value)) $type = 'boolean';
+                    elseif (is_int($value)) $type = 'integer';
+                    elseif (is_array($value)) $type = 'json';
+
+                    $this->settingsService->set($key, $value, $dealershipId, $type);
+                    $updatedSettings[$key] = $value;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Bot configuration updated successfully',
+                'data' => $updatedSettings,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\NotificationSetting;
+use App\Enums\Role;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -20,14 +21,18 @@ class NotificationSettingController extends Controller
         $user = $request->user();
 
         // Get dealership ID - managers can manage their own dealership
-        $dealershipId = $request->input('dealership_id', $user->dealership_id);
+        $dealershipId = (int) $request->input('dealership_id', $user->dealership_id);
 
         // Verify user has access to this dealership
-        if (!in_array($user->role, ['owner', 'manager'])) {
+        // Verify user has access to this dealership
+        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
         }
+
+        // Ensure default settings exist for all channels
+        $this->ensureSettingsExist($dealershipId);
 
         $settings = NotificationSetting::where('dealership_id', $dealershipId)
             ->orderBy('channel_type')
@@ -51,6 +56,47 @@ class NotificationSettingController extends Controller
     }
 
     /**
+     * Ensure notification settings exist for the dealership
+     */
+    private function ensureSettingsExist(int $dealershipId): void
+    {
+        $existingChannels = NotificationSetting::where('dealership_id', $dealershipId)
+            ->pluck('channel_type')
+            ->toArray();
+
+        $allChannels = NotificationSetting::getAllChannelTypes();
+        $missingChannels = array_diff($allChannels, $existingChannels);
+
+        foreach ($missingChannels as $channel) {
+            $defaultRoles = [Role::MANAGER->value, Role::OWNER->value];
+            if ($channel === NotificationSetting::CHANNEL_TASK_ASSIGNED) {
+                $defaultRoles[] = Role::EMPLOYEE->value;
+            }
+
+            $defaults = [
+                'dealership_id' => $dealershipId,
+                'channel_type' => $channel,
+                'is_enabled' => true,
+                'recipient_roles' => $defaultRoles,
+            ];
+
+            // Set specific defaults
+            if ($channel === NotificationSetting::CHANNEL_DAILY_SUMMARY) {
+                $defaults['notification_time'] = '20:00';
+            } elseif ($channel === NotificationSetting::CHANNEL_WEEKLY_REPORT) {
+                $defaults['notification_time'] = '09:00';
+                $defaults['notification_day'] = 'monday';
+            } elseif ($channel === NotificationSetting::CHANNEL_TASK_DEADLINE_30MIN) {
+                $defaults['notification_offset'] = 30;
+            } elseif ($channel === NotificationSetting::CHANNEL_TASK_HOUR_LATE) {
+                $defaults['notification_offset'] = 60;
+            }
+
+            NotificationSetting::create($defaults);
+        }
+    }
+
+    /**
      * Update a specific notification setting
      */
     public function update(Request $request, string $channelType): JsonResponse
@@ -58,7 +104,7 @@ class NotificationSettingController extends Controller
         $user = $request->user();
 
         // Verify user has access
-        if (!in_array($user->role, ['owner', 'manager'])) {
+        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
@@ -123,7 +169,7 @@ class NotificationSettingController extends Controller
         $user = $request->user();
 
         // Verify user has access
-        if (!in_array($user->role, ['owner', 'manager'])) {
+        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
@@ -176,7 +222,7 @@ class NotificationSettingController extends Controller
         $user = $request->user();
 
         // Verify user has access
-        if (!in_array($user->role, ['owner', 'manager'])) {
+        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
