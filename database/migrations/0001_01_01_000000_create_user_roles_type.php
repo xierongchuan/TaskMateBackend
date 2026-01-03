@@ -19,12 +19,16 @@ return new class () extends Migration {
         }
 
         DB::statement("
-            CREATE TYPE user_roles AS ENUM (
-              'owner',
-              'manager',
-              'observer',
-              'employee'
-            );
+            DO \$\$ BEGIN
+                CREATE TYPE user_roles AS ENUM (
+                  'owner',
+                  'manager',
+                  'observer',
+                  'employee'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END \$\$;
         ");
     }
 

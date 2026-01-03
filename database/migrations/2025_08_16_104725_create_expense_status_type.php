@@ -19,13 +19,17 @@ return new class () extends Migration {
         }
 
         DB::statement("
-            CREATE TYPE expense_status AS ENUM (
-              'pending',
-              'approved',
-              'declined',
-              'issued',
-              'cancelled'
-            );
+            DO \$\$ BEGIN
+                CREATE TYPE expense_status AS ENUM (
+                  'pending',
+                  'approved',
+                  'declined',
+                  'issued',
+                  'cancelled'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END \$\$;
         ");
     }
 

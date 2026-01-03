@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Auth\Access\AuthorizationException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Enums\Role;
 
 class ShiftController extends Controller
 {
@@ -106,7 +107,7 @@ class ShiftController extends Controller
         // SECURITY CHECK: Opening shift for another user
         if ((int)$data['user_id'] !== $currentUser->id) {
             // Only Owner can open shift for others
-            if ($currentUser->role !== 'owner') {
+            if ($currentUser->role !== Role::OWNER) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Только Владелец может открывать смены за других пользователей'
@@ -115,14 +116,12 @@ class ShiftController extends Controller
         }
 
         // SECURITY CHECK: Role restriction
-        // Only Employee and Owner can open shifts. Managers and Observers cannot.
-        // If current user is owner opening for employee, check the target user's role?
-        // Usually we check the *actor's* permission to perform the action.
-        // If actor is Manager/Observer -> Denied.
-        if (in_array($currentUser->role, ['manager', 'observer'])) {
+        // Via API (admin panel): Only Owner can open shifts
+        // Employees must use Telegram bot to open/close shifts
+        if ($currentUser->role !== Role::OWNER) {
              return response()->json([
                 'success' => false,
-                'message' => 'Менеджеры и Наблюдатели не могут открывать смены'
+                'message' => 'Открытие смен через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
             ], 403);
         }
 
@@ -225,7 +224,7 @@ class ShiftController extends Controller
 
         // 1. If trying to close/edit someone else's shift -> Only Owner allowed
         if ($shift->user_id !== $currentUser->id) {
-             if ($currentUser->role !== 'owner') {
+             if ($currentUser->role !== Role::OWNER) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Редактирование смен других пользователей доступно только Владельцу'
@@ -233,14 +232,12 @@ class ShiftController extends Controller
              }
         }
 
-        // 2. If Manager/Observer tries to close shift -> Denied (per requirements)
-        // Even if it's their own shift (which shouldn't exist due to store block),
-        // or if they somehow have one, they can't close it?
-        // Prompt: "Так же открывать и закрывать смену могут только обычные сотрудники и главный амин."
-        if (in_array($currentUser->role, ['manager', 'observer'])) {
+        // 2. Via API (admin panel): Only Owner can close/edit shifts
+        // Employees must use Telegram bot to open/close shifts
+        if ($currentUser->role !== Role::OWNER) {
              return response()->json([
                 'success' => false,
-                'message' => 'Менеджеры и Наблюдатели не могут управлять сменами'
+                'message' => 'Управление сменами через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
             ], 403);
         }
 
