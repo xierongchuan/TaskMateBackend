@@ -25,7 +25,7 @@ class UserApiController extends Controller
         $login = (string) $request->query('login', '');
         $name = (string) $request->query('name', '');
         $role = (string) $request->query('role', '');
-        $dealershipId = (string) $request->query('dealership_id', '');
+
         $phone = (string) $request->query('phone', '');
 
         // Support both 'phone' and 'phone_number' parameters
@@ -59,9 +59,12 @@ class UserApiController extends Controller
             $query->where('role', $role);
         }
 
-        if ($dealershipId !== '') {
+        if ($request->filled('dealership_id')) {
+            $dealershipId = $request->input('dealership_id');
+
             $query->where(function ($q) use ($dealershipId) {
-                $q->where('dealership_id', $dealershipId)
+                // Change 'dealership_id' to 'users.dealership_id' to avoid any ambiguity
+                $q->where('users.dealership_id', $dealershipId)
                   ->orWhereHas('dealerships', function ($subQ) use ($dealershipId) {
                       $subQ->where('auto_dealerships.id', $dealershipId);
                   });
