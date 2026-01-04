@@ -10,8 +10,11 @@ use Carbon\Carbon;
 
 describe('Task API', function () {
     beforeEach(function () {
-        $this->manager = User::factory()->create(['role' => Role::MANAGER->value]);
         $this->dealership = AutoDealership::factory()->create();
+        $this->manager = User::factory()->create([
+            'role' => Role::MANAGER->value,
+            'dealership_id' => $this->dealership->id
+        ]);
     });
 
     it('returns tasks list', function () {

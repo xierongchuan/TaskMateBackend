@@ -112,7 +112,7 @@ class ReportController extends Controller
         ];
 
         // Employee Performance
-        $employeesQuery = User::where('role', '!=', 'owner');
+        $employeesQuery = User::where('role', 'employee');
         if ($dealershipId) {
             $employeesQuery->where('dealership_id', $dealershipId);
         }

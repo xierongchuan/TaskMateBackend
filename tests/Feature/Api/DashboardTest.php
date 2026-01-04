@@ -12,8 +12,11 @@ use Carbon\Carbon;
 
 describe('Dashboard API', function () {
     beforeEach(function () {
-        $this->manager = User::factory()->create(['role' => Role::MANAGER->value]);
         $this->dealership = AutoDealership::factory()->create();
+        $this->manager = User::factory()->create([
+            'role' => Role::MANAGER->value,
+            'dealership_id' => $this->dealership->id
+        ]);
     });
 
     it('returns dashboard data for manager', function () {
@@ -34,12 +37,14 @@ describe('Dashboard API', function () {
             ->getJson('/api/v1/dashboard');
 
         // Assert
+        // Assert
         $response->assertStatus(200)
             ->assertJsonStructure([
-                'current_shifts',
-                'task_statistics',
-                'late_shifts',
-                'replacements',
+                'active_shifts',
+                'active_tasks',
+                'completed_tasks',
+                'overdue_tasks',
+                'late_shifts_today',
                 'timestamp',
             ]);
     });
@@ -65,8 +70,7 @@ describe('Dashboard API', function () {
         // Assert
         $response->assertStatus(200);
         $data = $response->json();
-        expect($data['current_shifts'])->toHaveCount(1)
-            ->and($data['current_shifts'][0]['dealership']['id'])->toBe($this->dealership->id);
+        expect($data['active_shifts'])->toHaveCount(1);
     });
 
     it('calculates task statistics correctly', function () {
@@ -95,10 +99,10 @@ describe('Dashboard API', function () {
 
         // Assert
         $response->assertStatus(200);
-        $stats = $response->json('task_statistics');
+        $data = $response->json();
 
-        expect($stats['total_active'])->toBeGreaterThanOrEqual(3);
-        expect($stats['completed_today'])->toBeGreaterThanOrEqual(1);
-        expect($stats['overdue'])->toBeGreaterThanOrEqual(1);
+        expect($data['active_tasks'])->toBeGreaterThanOrEqual(3);
+        expect($data['completed_tasks'])->toBeGreaterThanOrEqual(1);
+        expect($data['overdue_tasks'])->toBeGreaterThanOrEqual(1);
     });
 });

@@ -108,6 +108,65 @@ describe('Users API', function () {
             expect($response->status())->toBe(422);
         });
 
+        it('validates login format (latin letters, digits, max one dot)', function () {
+            $manager = User::factory()->create(['role' => Role::MANAGER->value]);
+
+            // Case 1: Too long (>64)
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => str_repeat('a', 65),
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(422);
+
+            // Case 2: Invalid chars (Russian)
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'логин',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(422);
+
+            // Case 3: Special chars
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user_name',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(422);
+
+             // Case 4: Multiple dots
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user.name.test',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(422);
+
+            // Case 5: Valid dot
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user.name',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(201);
+        });
+
         it('requires manager or owner role', function () {
             // Arrange
             $employee = User::factory()->create(['role' => Role::EMPLOYEE->value]);

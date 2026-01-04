@@ -15,13 +15,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::firstOrCreate(
+        User::updateOrCreate(
             ['login' => 'admin'],
             [
                 'full_name' => 'Admin User',
-                'password' => bcrypt('password'),
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
                 'role' => \App\Enums\Role::OWNER,
             ]
         );
-      }
+    }
 }

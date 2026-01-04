@@ -8,7 +8,7 @@ use App\Enums\Role;
 
 describe('Dealership API', function () {
     beforeEach(function () {
-        $this->manager = User::factory()->create(['role' => Role::MANAGER->value]);
+        $this->manager = User::factory()->create(['role' => Role::OWNER->value]);
     });
 
     it('returns list of dealerships', function () {

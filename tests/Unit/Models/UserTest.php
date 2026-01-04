@@ -25,7 +25,7 @@ describe('User Model', function () {
             ->and($user->full_name)->toBe('Test User Full Name')
             ->and($user->telegram_id)->toBe(123456789)
             ->and($user->phone)->toBe('+998901234567')
-            ->and($user->role)->toBe(Role::EMPLOYEE->value)
+            ->and($user->role)->toBe(Role::EMPLOYEE)
             ->and($user->exists)->toBeTrue();
     });
 
@@ -40,7 +40,7 @@ describe('User Model', function () {
         expect($user)
             ->toBeInstanceOf(User::class)
             ->and($user->login)->toBe('minuser')
-            ->and($user->role)->toBe(Role::EMPLOYEE->value)
+            ->and($user->role)->toBe(Role::EMPLOYEE)
             ->and($user->exists)->toBeTrue();
     });
 
@@ -75,9 +75,9 @@ describe('User Model', function () {
         ]);
 
         // Assert
-        expect($owner->role)->toBe(Role::OWNER->value)
-            ->and($manager->role)->toBe(Role::MANAGER->value)
-            ->and($employee->role)->toBe(Role::EMPLOYEE->value);
+        expect($owner->role)->toBe(Role::OWNER)
+            ->and($manager->role)->toBe(Role::MANAGER)
+            ->and($employee->role)->toBe(Role::EMPLOYEE);
     });
 
     it('can query users by role', function () {
@@ -99,7 +99,7 @@ describe('User Model', function () {
 
         // Assert
         expect($managers)->toHaveCount(2)
-            ->and($managers->first()->role)->toBe(Role::MANAGER->value);
+            ->and($managers->first()->role)->toBe(Role::MANAGER);
     });
 
     it('can find user by telegram_id', function () {
