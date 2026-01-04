@@ -23,5 +23,7 @@ class DatabaseSeeder extends Seeder
                 'role' => \App\Enums\Role::OWNER,
             ]
         );
+
+        $this->call(DemoDataSeeder::class);
     }
 }
