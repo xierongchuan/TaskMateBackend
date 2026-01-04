@@ -84,4 +84,77 @@ describe('Task API', function () {
         $response->assertStatus(200);
         $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
     });
+    it('creates a task with tags', function () {
+        // Arrange
+        $user = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $tags = ['urgent', 'backend'];
+
+        // Act
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/v1/tasks', [
+                'title' => 'Task with Tags',
+                'description' => 'Description',
+                'dealership_id' => $this->dealership->id,
+                'assigned_users' => [$user->id],
+                'task_type' => 'individual',
+                'response_type' => 'complete',
+                'tags' => $tags,
+            ]);
+
+        // Assert
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Task with Tags',
+            'dealership_id' => $this->dealership->id,
+        ]);
+
+        $task = Task::where('title', 'Task with Tags')->first();
+        expect($task->tags)->toBe($tags);
+    });
+
+    it('updates task tags', function () {
+        // Arrange
+        $task = Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'tags' => ['old_tag']
+        ]);
+        $newTags = ['new_tag', 'updated'];
+
+        // Act
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->putJson("/api/v1/tasks/{$task->id}", [
+                'tags' => $newTags,
+            ]);
+
+        // Assert
+        $response->assertStatus(200);
+        $task->refresh();
+        expect($task->tags)->toBe($newTags);
+    });
+
+    it('searches tasks by tag text', function () {
+        // Arrange
+        Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'title' => 'First Task',
+            'tags' => ['apple', 'banana']
+        ]);
+
+        Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'title' => 'Second Task',
+            'tags' => ['cherry']
+        ]);
+
+        // Act - search using 'banana' which is in tags
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/v1/tasks?dealership_id={$this->dealership->id}&search=banana");
+
+        // Assert
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        expect($data)->toHaveCount(1);
+        expect($data[0]['title'])->toBe('First Task');
+    });
 });
+
