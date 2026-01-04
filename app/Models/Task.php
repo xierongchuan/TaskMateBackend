@@ -52,6 +52,15 @@ class Task extends Model
     ];
 
     /**
+     * Mutator for tags to ensure they are stored with unescaped unicode.
+     * This fixes search issues with Cyrillic tags in Postgres.
+     */
+    public function setTagsAttribute($value)
+    {
+        $this->attributes['tags'] = $value ? json_encode($value, JSON_UNESCAPED_UNICODE) : null;
+    }
+
+    /**
      * Set appear_date - convert from user input (Asia/Yekaterinburg) to UTC for storage
      */
     public function setAppearDateAttribute($value)
