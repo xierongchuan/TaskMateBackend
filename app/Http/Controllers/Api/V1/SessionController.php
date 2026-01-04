@@ -14,7 +14,7 @@ class SessionController extends Controller
     public function store(Request $req)
     {
         $req->validate([
-            'login'    => ['required', 'min:4', 'max:64', 'regex:/^[a-zA-Z0-9]*\.?[a-zA-Z0-9]*$/'],
+            'login'    => ['required', 'min:4', 'max:64', 'regex:/^(?!.*\..*\.)(?!.*_.*_)[a-zA-Z0-9._]+$/'],
             'password' => 'required|min:6|max:255',
         ]);
 

@@ -359,7 +359,7 @@ class UserApiController extends Controller
                 'min:4',
                 'max:64',
                 'unique:users,login',
-                'regex:/^[a-zA-Z0-9]*\.?[a-zA-Z0-9]*$/'
+                'regex:/^(?!.*\..*\.)(?!.*_.*_)[a-zA-Z0-9._]+$/'
             ],
             'password' => [
                 'required',
@@ -406,7 +406,7 @@ class UserApiController extends Controller
         ], [
             'login.required' => 'Логин обязателен',
             'login.min' => 'Логин должен содержать минимум 4 символа',
-            'login.regex' => 'Логин может содержать только латинские буквы, цифры и одну точку',
+            'login.regex' => 'Логин может содержать только латинские буквы, цифры, одну точку и одно нижнее подчеркивание',
             'login.unique' => 'Такой логин уже существует',
             'password.required' => 'Пароль обязателен',
             'password.min' => 'Пароль должен содержать минимум 8 символов',

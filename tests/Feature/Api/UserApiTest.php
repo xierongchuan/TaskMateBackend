@@ -133,10 +133,10 @@ describe('Users API', function () {
                 ]);
             expect($response->status())->toBe(422);
 
-            // Case 3: Special chars
+            // Case 3: Invalid Special chars (e.g. @)
             $response = $this->actingAs($manager, 'sanctum')
                 ->postJson('/api/v1/users', [
-                    'login' => 'user_name',
+                    'login' => 'user@name',
                     'password' => 'SecurePassword123!',
                     'full_name' => 'User',
                     'role' => Role::EMPLOYEE->value,
@@ -155,7 +155,18 @@ describe('Users API', function () {
                 ]);
             expect($response->status())->toBe(422);
 
-            // Case 5: Valid dot
+             // Case 5: Multiple underscores
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user_name_test',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                ]);
+            expect($response->status())->toBe(422);
+
+            // Case 6: Valid dot
             $response = $this->actingAs($manager, 'sanctum')
                 ->postJson('/api/v1/users', [
                     'login' => 'user.name',
@@ -163,6 +174,31 @@ describe('Users API', function () {
                     'full_name' => 'User',
                     'role' => Role::EMPLOYEE->value,
                     'phone' => '+1234567890',
+                    'telegram_id' => 1001,
+                ]);
+            expect($response->status())->toBe(201);
+
+            // Case 7: Valid underscore
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user_name',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                    'telegram_id' => 1002,
+                ]);
+            expect($response->status())->toBe(201);
+
+            // Case 8: Valid dot AND underscore
+            $response = $this->actingAs($manager, 'sanctum')
+                ->postJson('/api/v1/users', [
+                    'login' => 'user.name_test',
+                    'password' => 'SecurePassword123!',
+                    'full_name' => 'User',
+                    'role' => Role::EMPLOYEE->value,
+                    'phone' => '+1234567890',
+                    'telegram_id' => 1003,
                 ]);
             expect($response->status())->toBe(201);
         });
