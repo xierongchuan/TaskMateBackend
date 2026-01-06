@@ -118,7 +118,8 @@ class Task extends Model
     public function getAppearDateApiAttribute()
     {
         if ($this->appear_date) {
-            return $this->appear_date->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:s');
+            // Include timezone offset for correct JavaScript parsing
+            return $this->appear_date->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
         }
         return null;
     }
@@ -129,7 +130,8 @@ class Task extends Model
     public function getDeadlineApiAttribute()
     {
         if ($this->deadline) {
-            return $this->deadline->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:s');
+            // Include timezone offset for correct JavaScript parsing
+            return $this->deadline->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
         }
         return null;
     }
@@ -202,16 +204,16 @@ class Task extends Model
         if ($this->archived_at) {
             $data['archived_at'] = $this->archived_at->copy()
                 ->setTimezone('Asia/Yekaterinburg')
-                ->format('Y-m-d\TH:i:s');
+                ->format('Y-m-d\TH:i:sP');
         }
 
-        // Also convert created_at and updated_at
+        // Also convert created_at and updated_at with timezone offset
         if ($this->created_at) {
-            $data['created_at'] = $this->created_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:s');
+            $data['created_at'] = $this->created_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
         }
 
         if ($this->updated_at) {
-            $data['updated_at'] = $this->updated_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:s');
+            $data['updated_at'] = $this->updated_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
         }
 
         return $data;
