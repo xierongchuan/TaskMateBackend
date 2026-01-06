@@ -30,6 +30,7 @@ class TaskController extends Controller
         $search = $request->query('search');
         $status = $request->query('status');
         $recurrence = $request->query('recurrence');
+        $priority = $request->query('priority');
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
 
@@ -137,6 +138,11 @@ class TaskController extends Controller
                 // Show tasks with specific recurrence type
                 $query->where('recurrence', $recurrence);
             }
+        }
+
+        // Фильтрация по приоритету
+        if ($priority) {
+            $query->where('priority', $priority);
         }
 
         // Поиск по названию, описанию, комментарию и тегам
@@ -275,6 +281,7 @@ class TaskController extends Controller
             'assignments' => 'nullable|array',
             'assignments.*' => 'exists:users,id',
             'notification_settings' => 'nullable|array',
+            'priority' => 'nullable|string|in:low,medium,high',
         ]);
 
         // Custom validation for recurring tasks
@@ -337,6 +344,7 @@ class TaskController extends Controller
                 'response_type' => $validated['response_type'],
                 'tags' => $validated['tags'] ?? null,
                 'notification_settings' => $validated['notification_settings'] ?? null,
+                'priority' => $validated['priority'] ?? 'medium',
             ]);
 
             // Assign users
@@ -401,6 +409,7 @@ class TaskController extends Controller
             'assignments' => 'nullable|array',
             'assignments.*' => 'exists:users,id',
             'notification_settings' => 'nullable|array',
+            'priority' => 'nullable|string|in:low,medium,high',
         ]);
 
         // Custom validation for recurring tasks

@@ -34,6 +34,7 @@ class Task extends Model
         'postpone_count',
         'archived_at',
         'notification_settings',
+        'priority',
     ];
 
     protected $casts = [
