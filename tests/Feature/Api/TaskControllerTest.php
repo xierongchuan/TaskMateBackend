@@ -159,5 +159,56 @@ describe('Task API', function () {
         expect($data)->toHaveCount(1);
         expect($data[0]['title'])->toBe('First Task');
     });
+
+    it('filters tasks by date range', function () {
+        // Arrange
+        // Task 1: Deadline today, not completed
+        Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'title' => 'Deadline Today',
+            'deadline' => Carbon::now(),
+        ]);
+
+        // Task 2: Deadline tomorrow
+        Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'title' => 'Deadline Tomorrow',
+            'deadline' => Carbon::now()->addDay(),
+        ]);
+
+        // Act: Filter by today
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/v1/tasks?dealership_id={$this->dealership->id}&date_range=today");
+
+        // Assert
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        expect($data)->toHaveCount(1);
+        expect($data[0]['title'])->toBe('Deadline Today');
+
+        // Arrange 3: Completed today, deadline yesterday
+        $task3 = Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'title' => 'Completed Today',
+            'deadline' => Carbon::yesterday(),
+        ]);
+        \App\Models\TaskResponse::create([
+            'task_id' => $task3->id,
+            'user_id' => $this->manager->id,
+            'status' => 'completed',
+            'responded_at' => Carbon::now(),
+        ]);
+
+        // Act: Filter by status=completed and date_range=today
+        $response2 = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/v1/tasks?dealership_id={$this->dealership->id}&status=completed&date_range=today");
+
+        // Assert
+        $response2->assertStatus(200);
+        $data2 = $response2->json('data');
+        expect($data2)->toHaveCount(1);
+        expect($data2[0]['title'])->toBe('Completed Today');
+    });
 });
+
 

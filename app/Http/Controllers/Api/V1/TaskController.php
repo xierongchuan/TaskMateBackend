@@ -31,8 +31,41 @@ class TaskController extends Controller
         $status = $request->query('status');
         $recurrence = $request->query('recurrence');
         $priority = $request->query('priority');
+        $dateRange = $request->query('date_range');
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
+
+        // Фильтрация по диапазону дат
+        if ($dateRange && $dateRange !== 'all') {
+            $dateStart = null;
+            $dateEnd = null;
+
+            switch ($dateRange) {
+                case 'today':
+                    $dateStart = Carbon::today();
+                    $dateEnd = Carbon::today()->endOfDay();
+                    break;
+                case 'week':
+                    $dateStart = Carbon::now()->startOfWeek();
+                    $dateEnd = Carbon::now()->endOfWeek();
+                    break;
+                case 'month':
+                    $dateStart = Carbon::now()->startOfMonth();
+                    $dateEnd = Carbon::now()->endOfMonth();
+                    break;
+            }
+
+            if ($dateStart && $dateEnd) {
+                if ($status === 'completed') {
+                    $query->whereHas('responses', function ($q) use ($dateStart, $dateEnd) {
+                        $q->where('status', 'completed')
+                          ->whereBetween('responded_at', [$dateStart, $dateEnd]);
+                    });
+                } else {
+                    $query->whereBetween('deadline', [$dateStart, $dateEnd]);
+                }
+            }
+        }
 
         // Фильтрация по автосалону
         /** @var User $currentUser */
