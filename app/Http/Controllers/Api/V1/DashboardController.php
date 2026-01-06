@@ -39,6 +39,7 @@ class DashboardController extends Controller
             'active_tasks' => $taskStats['total_active'],
             'completed_tasks' => $taskStats['completed_today'],
             'overdue_tasks' => $taskStats['overdue'],
+            'overdue_tasks_list' => $this->getOverdueTasksList($dealershipId),
             'open_shifts' => count($activeShifts),
             'late_shifts_today' => $lateShiftsCount,
             'active_shifts' => $activeShifts,
@@ -176,5 +177,25 @@ class DashboardController extends Controller
             'total' => $total,
             'active' => $total,
         ];
+    }
+
+    private function getOverdueTasksList($dealershipId = null)
+    {
+        $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses.user'])
+            ->where('is_active', true)
+            ->where('deadline', '<', Carbon::now())
+            ->whereDoesntHave('responses', function ($q) {
+                $q->where('status', 'completed');
+            })
+            ->orderBy('deadline', 'asc') // Most overdue first
+            ->limit(10);
+
+        if ($dealershipId) {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        return $query->get()->map(function ($task) {
+            return $task->toApiArray();
+        });
     }
 }

@@ -105,4 +105,58 @@ describe('Dashboard API', function () {
         expect($data['completed_tasks'])->toBeGreaterThanOrEqual(1);
         expect($data['overdue_tasks'])->toBeGreaterThanOrEqual(1);
     });
+    it('returns overdue tasks list correctly', function () {
+        // Arrange
+        // Overdue task
+        $overdueTask = Task::factory()->create([
+            'title' => 'Important Overdue Task',
+            'is_active' => true,
+            'dealership_id' => $this->dealership->id,
+            'deadline' => Carbon::now()->subHour(),
+        ]);
+
+        // Future task (not overdue)
+        Task::factory()->create([
+            'title' => 'Future Task',
+            'is_active' => true,
+            'dealership_id' => $this->dealership->id,
+            'deadline' => Carbon::now()->addHour(),
+        ]);
+
+        // Completed overdue task (should not be in list)
+        $completedOverdueTask = Task::factory()->create([
+            'title' => 'Completed Overdue Task',
+            'is_active' => true,
+            'dealership_id' => $this->dealership->id,
+            'deadline' => Carbon::now()->subHour(),
+        ]);
+        TaskResponse::factory()->create([
+            'task_id' => $completedOverdueTask->id,
+            'status' => 'completed',
+        ]);
+
+        // Act
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson('/api/v1/dashboard');
+
+        // Assert
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        expect($data)->toHaveKey('overdue_tasks_list');
+        expect($data['overdue_tasks_list'])->toBeArray();
+
+        $list = collect($data['overdue_tasks_list']);
+        $found = $list->firstWhere('id', $overdueTask->id);
+
+        expect($found)->not->toBeNull();
+        expect($found['status'])->toBe('overdue');
+        expect($found['title'])->toBe('Important Overdue Task');
+        expect($found)->toHaveKey('creator');
+        expect($found)->toHaveKey('dealership');
+        expect($found)->toHaveKey('assignments');
+
+        // Ensure non-overdue and completed are not in the list
+        expect($list->pluck('id'))->not->toContain($completedOverdueTask->id);
+    });
 });
