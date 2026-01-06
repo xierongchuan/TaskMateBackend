@@ -51,6 +51,8 @@ describe('Task Model', function () {
             'dealership_id' => $dealership->id,
             'task_type' => 'individual',
             'response_type' => 'acknowledge',
+            'appear_date' => now(),
+            'deadline' => now()->addDay(),
         ]);
 
         // Assert
@@ -109,6 +111,7 @@ describe('Task Model', function () {
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
             'appear_date' => $userTime,
+            'deadline' => now()->addDay(),
             'task_type' => 'individual',
             'response_type' => 'acknowledge',
         ]);
@@ -128,6 +131,7 @@ describe('Task Model', function () {
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
             'deadline' => $userTime,
+            'appear_date' => now(),
             'task_type' => 'individual',
             'response_type' => 'acknowledge',
         ]);
@@ -227,6 +231,8 @@ describe('Task Model', function () {
             'dealership_id' => $dealership->id,
             'response_type' => 'acknowledge',
             'task_type' => 'individual',
+            'appear_date' => now(),
+            'deadline' => now()->addDay(),
         ]);
 
         $taskComplete = Task::create([
@@ -235,6 +241,8 @@ describe('Task Model', function () {
             'dealership_id' => $dealership->id,
             'response_type' => 'complete',
             'task_type' => 'individual',
+            'appear_date' => now(),
+            'deadline' => now()->addDay(),
         ]);
 
         // Assert
@@ -253,6 +261,8 @@ describe('Task Model', function () {
             'dealership_id' => $dealership->id,
             'task_type' => 'individual',
             'response_type' => 'acknowledge',
+            'appear_date' => now(),
+            'deadline' => now()->addDay(),
         ]);
 
         $groupTask = Task::create([
@@ -261,6 +271,8 @@ describe('Task Model', function () {
             'dealership_id' => $dealership->id,
             'task_type' => 'group',
             'response_type' => 'acknowledge',
+            'appear_date' => now(),
+            'deadline' => now()->addDay(),
         ]);
 
         // Assert

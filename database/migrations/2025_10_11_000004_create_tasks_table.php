@@ -19,8 +19,8 @@ return new class () extends Migration {
             $table->text('comment')->nullable();
             $table->bigInteger('creator_id')->unsigned();
             $table->bigInteger('dealership_id')->unsigned()->nullable();
-            $table->timestampTz('appear_date')->nullable();
-            $table->timestampTz('deadline')->nullable();
+            $table->timestampTz('appear_date'); // Removed nullable
+            $table->timestampTz('deadline');    // Removed nullable
             $table->string('recurrence', 50)->nullable(); // daily, weekly, monthly
             $table->string('task_type', 50)->default('individual'); // individual, group
             $table->string('response_type', 50)->default('acknowledge'); // acknowledge (OK), complete (Done/Postpone)

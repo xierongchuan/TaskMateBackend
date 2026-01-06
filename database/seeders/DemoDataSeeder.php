@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\AutoDealership;
 use App\Models\ImportantLink;
 use App\Models\Task;
+use App\Models\TaskAssignment;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -85,23 +86,45 @@ class DemoDataSeeder extends Seeder
             // 5. Create Tasks
             // 5.1 Individual Tasks for each employee
             foreach ($employees as $emp) {
-                Task::factory(2)->create([
+                $tasks = Task::factory(2)->create([
                     'dealership_id' => $dealership->id,
                     'creator_id' => $manager->id,
                     'task_type' => 'individual',
                     'title' => 'Personal Task for ' . $emp->full_name,
                 ]);
+
+                // Assign each individual task to the specific employee
+                foreach ($tasks as $task) {
+                    TaskAssignment::create([
+                        'task_id' => $task->id,
+                        'user_id' => $emp->id,
+                        'assigned_at' => now(),
+                    ]);
+                }
             }
 
-            // 5.2 Group Task
-            Task::factory(2)->create([
+            // 5.2 Group Tasks
+            $groupTasks = Task::factory(2)->create([
                 'dealership_id' => $dealership->id,
                 'creator_id' => $manager->id,
                 'task_type' => 'group',
                 'title' => 'Group Meeting Task',
             ]);
 
-            $this->command->info(" - Created Tasks");
+            // Assign each group task to ALL employees in the dealership
+            foreach ($groupTasks as $task) {
+                foreach ($employees as $emp) {
+                    TaskAssignment::create([
+                        'task_id' => $task->id,
+                        'user_id' => $emp->id,
+                        'assigned_at' => now(),
+                    ]);
+                }
+            }
+
+            $taskCount = count($employees) * 2 + 2; // 2 individual per employee + 2 group
+            $assignmentCount = count($employees) * 2 + (2 * count($employees)); // assignments
+            $this->command->info(" - Created {$taskCount} Tasks with {$assignmentCount} Assignments");
         }
 
         $this->command->info('Demo Data Creation Completed!');

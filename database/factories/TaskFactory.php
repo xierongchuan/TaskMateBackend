@@ -21,12 +21,12 @@ class TaskFactory extends Factory
             'comment' => fake()->optional()->sentence(),
             'creator_id' => User::factory(),
             'dealership_id' => AutoDealership::factory(),
-            'appear_date' => null,
-            'deadline' => fake()->optional()->dateTimeBetween('now', '+30 days'),
+            'appear_date' => fake()->dateTimeBetween('-7 days', 'now'), // Задачи появляются от недели назад до сейчас
+            'deadline' => fake()->dateTimeBetween('now', '+30 days'), // Дедлайн обязателен
             'recurrence' => null,
             'task_type' => fake()->randomElement(['individual', 'group']),
-            'response_type' => fake()->randomElement(['notification', 'execution']),
-            'tags' => fake()->optional()->randomElements(['важное', 'срочное', 'рутина'], rand(0, 2)),
+            'response_type' => fake()->randomElement(['acknowledge', 'complete']), // Исправлено: acknowledge вместо notification
+            'tags' => fake()->optional(0.6)->randomElements(['важное', 'срочное', 'рутина', 'продажа', 'клиент'], rand(1, 3)),
             'is_active' => true,
             'postpone_count' => 0,
             'archived_at' => null,

@@ -263,8 +263,8 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'comment' => 'nullable|string',
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'appear_date' => 'nullable|string|after_or_equal:now', // Bug #4: не раньше текущего времени
-            'deadline' => 'nullable|string',
+            'appear_date' => 'required|string', // Bug #4: Removed after_or_equal:now constraint for flexibility, but made required
+            'deadline' => 'required|string',
             'recurrence' => 'nullable|string|in:none,daily,weekly,monthly',
             'recurrence_time' => 'nullable|date_format:H:i', // Время для повторяющихся задач
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7', // 1=Пн, 7=Вс
@@ -388,8 +388,8 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'comment' => 'nullable|string',
             'dealership_id' => 'nullable|exists:auto_dealerships,id',
-            'appear_date' => 'nullable|string',
-            'deadline' => 'nullable|string',
+            'appear_date' => 'sometimes|required|string',
+            'deadline' => 'sometimes|required|string',
             'recurrence' => 'nullable|string|in:none,daily,weekly,monthly',
             'recurrence_time' => 'nullable|date_format:H:i',
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
