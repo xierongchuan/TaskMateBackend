@@ -1,44 +1,75 @@
 # TaskMateTelegramBot
 
-### Install Env
+Backend приложение для системы TaskMate, реализующее API и логику Telegram бота.
+
+## Стек технологий
+
+- **Framework**: Laravel 12
+- **Language**: PHP 8.4
+- **Database**: PostgreSQL 16
+- **Cache/Queue**: Valkey (Redis compatible)
+- **Telegram SDK**: Nutgram
+
+## Функциональность
+
+- **REST API**: Для взаимодействия с Frontend (React) приложением.
+- **Telegram Bot**: Обработка команд сотрудников, уведомления о задачах.
+- **Task Generators**: Фоновая генерация периодических задач (Daily, Weekly, Monthly).
+- **Scheduler**: Планировщик задач для архивации и генерации.
+
+## Установка и запуск
+
+### Требования
+- PHP 8.4+
+- Composer
+- Docker & Docker Compose
+
+### Установка зависимостей
+
 ```sh
-composer i
+composer install
 ```
 
-### Run
+### Запуск в Docker
+
 ```sh
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-### Requires
-* php8.4.10
+### Тестирование
 
-License: Proprietary License
+```sh
+# Запуск тестов внутри контейнера
+docker compose exec src_telegram_bot_api php artisan test
+```
 
-### Seeding
-To create default admin user and demo data:
+## Seeding (Заполнение данными)
+
+Чтобы создать пользователя администратора и демо-данные:
+
 ```sh
 docker compose exec src_telegram_bot_api php artisan db:seed
 ```
 
-This will create:
+Это создаст:
 - **1 Admin user** (owner)
-- **3 Dealerships** with their own managers and employees
-- **Tasks with assignments** for each dealership
-- **Important links** for each dealership
+- **3 Автосалона** со своими менеджерами и сотрудниками
+- **Задачи и назначения** для каждого салона
+- **Генераторы задач** для демонстрации автоматизации
+- **Важные ссылки**
 
-**Default credentials:**
+**Данные для входа:**
 - Admin: `admin` / `password`
 
-**Demo Dealerships:**
-- **Avto Salon Center**: Manager `manager1`, Employees `emp1_1`, `emp1_2`, `emp1_3`
-- **Avto Salon Sever**: Manager `manager2`, Employees `emp2_1`, `emp2_2`, `emp2_3`
-- **Auto Salon Lux**: Manager `manager3`, Employees `emp3_1`, `emp3_2`, `emp3_3`
+**Демо Салоны:**
+- **Avto Salon Center**: Manager `manager1`, Employees `emp1_1`, `emp1_2`
+- **Avto Salon Sever**: Manager `manager2`, Employees `emp2_1`, `emp2_2`
+- **Auto Salon Lux**: Manager `manager3`, Employees `emp3_1`, `emp3_2`
 
-**All user passwords:** `password`
+**Пароли всех пользователей:** `password`
 
-**Tasks created per dealership:**
-- 6 individual tasks (2 per employee)
-- 2 group tasks (assigned to all employees)
-- Total: 8 tasks with 12 assignments per dealership
+## Лицензия
+
+Proprietary License
+Copyright © 2023-2026 谢榕川 All rights reserved.
 

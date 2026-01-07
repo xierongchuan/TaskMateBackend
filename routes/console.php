@@ -42,8 +42,8 @@ Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->hourly();
 // Check for tasks without response
 Schedule::job(new \App\Jobs\CheckUnrespondedTasksJob())->everyThirtyMinutes();
 
-// Archive old completed tasks - runs daily at 2:00 AM
-// Schedule::job(new \App\Jobs\ArchiveOldTasksJob())->dailyAt('02:00');
+// Archive completed/overdue tasks based on auto_archive_day_of_week setting - runs daily at 3:00 AM
+Schedule::command('tasks:archive-completed')->dailyAt('03:00');
 
 // Send daily summary to managers - runs daily at end of business day (20:00)
 Schedule::job(new \App\Jobs\SendDailySummaryJob())->dailyAt('20:00');
