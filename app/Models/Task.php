@@ -15,6 +15,7 @@ class Task extends Model
     protected $table = 'tasks';
 
     protected $fillable = [
+        'generator_id',
         'title',
         'description',
         'comment',
@@ -22,6 +23,7 @@ class Task extends Model
         'dealership_id',
         'appear_date',
         'deadline',
+        'scheduled_date',
         'recurrence',
         'recurrence_time',
         'recurrence_day_of_week',
@@ -33,6 +35,7 @@ class Task extends Model
         'is_active',
         'postpone_count',
         'archived_at',
+        'archive_reason',
         'notification_settings',
         'priority',
     ];
@@ -40,6 +43,7 @@ class Task extends Model
     protected $casts = [
         'appear_date' => 'datetime',
         'deadline' => 'datetime',
+        'scheduled_date' => 'datetime',
         'archived_at' => 'datetime',
         'last_recurrence_at' => 'datetime',
         'tags' => 'array',
@@ -272,4 +276,52 @@ class Task extends Model
     {
         return $this->belongsTo(AutoDealership::class, 'dealership_id');
     }
+
+    /**
+     * Generator relationship - links to task generator if created by one
+     */
+    public function generator()
+    {
+        return $this->belongsTo(TaskGenerator::class, 'generator_id');
+    }
+
+    /**
+     * Get completion percentage for group tasks.
+     * Returns percentage of assignees who have completed the task.
+     */
+    public function getCompletionPercentageAttribute(): int
+    {
+        if ($this->task_type !== 'group') {
+            return $this->status === 'completed' ? 100 : 0;
+        }
+
+        $totalAssignees = $this->assignments()->count();
+        if ($totalAssignees === 0) {
+            return 0;
+        }
+
+        $completedCount = $this->responses()
+            ->where('status', 'completed')
+            ->distinct('user_id')
+            ->count();
+
+        return (int) round(($completedCount / $totalAssignees) * 100);
+    }
+
+    /**
+     * Scope to get tasks for a specific scheduled date
+     */
+    public function scopeForScheduledDate($query, $date)
+    {
+        return $query->whereDate('scheduled_date', $date);
+    }
+
+    /**
+     * Scope to get tasks from a generator
+     */
+    public function scopeFromGenerator($query, $generatorId)
+    {
+        return $query->where('generator_id', $generatorId);
+    }
 }
+

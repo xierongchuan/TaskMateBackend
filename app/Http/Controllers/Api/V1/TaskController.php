@@ -32,6 +32,8 @@ class TaskController extends Controller
         $recurrence = $request->query('recurrence');
         $priority = $request->query('priority');
         $dateRange = $request->query('date_range');
+        $generatorId = $request->query('generator_id') !== null && $request->query('generator_id') !== '' ? (int) $request->query('generator_id') : null;
+        $fromGenerator = $request->query('from_generator'); // 'yes', 'no', or null for all
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
 
@@ -176,6 +178,18 @@ class TaskController extends Controller
         // Фильтрация по приоритету
         if ($priority) {
             $query->where('priority', $priority);
+        }
+
+        // Фильтрация по генератору задач
+        if ($generatorId) {
+            $query->where('generator_id', $generatorId);
+        }
+
+        // Фильтрация по источнику задачи (из генератора или нет)
+        if ($fromGenerator === 'yes') {
+            $query->whereNotNull('generator_id');
+        } elseif ($fromGenerator === 'no') {
+            $query->whereNull('generator_id');
         }
 
         // Поиск по названию, описанию, комментарию и тегам

@@ -16,13 +16,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Job to archive old completed tasks after N days (configurable, default 30)
+ * Job to archive completed and expired tasks.
  *
- * Optimizations:
- * - Eager loading to prevent N+1 queries
- * - Batch processing with chunking for large datasets
- * - Bulk update for better performance
- * - Query optimization with subqueries for validation
+ * Supports multiple archive modes per dealership:
+ * - 'days': Archive completed tasks after N days
+ * - 'weekend': Archive completed tasks on Sunday
+ * - 'end_of_day': Archive completed tasks at end of completion day
+ *
+ * Also archives EXPIRED tasks (past scheduled_date without completion)
  */
 class ArchiveOldTasksJob implements ShouldQueue
 {
@@ -39,8 +40,9 @@ class ArchiveOldTasksJob implements ShouldQueue
     public function handle(SettingsService $settingsService): void
     {
         try {
-            $now = Carbon::now();
-            $archivedCount = 0;
+            $now = Carbon::now('Asia/Yekaterinburg');
+            $archivedCompleted = 0;
+            $archivedExpired = 0;
 
             // Get all dealership IDs that have non-archived tasks
             $dealershipIds = Task::whereNull('archived_at')
@@ -48,21 +50,24 @@ class ArchiveOldTasksJob implements ShouldQueue
                 ->pluck('dealership_id');
 
             foreach ($dealershipIds as $dealershipId) {
-                $archiveDays = $settingsService->getTaskArchiveDays($dealershipId);
-                $archiveDate = $now->copy()->subDays($archiveDays);
-
-                $count = $this->archiveTasksForDealership(
+                // Archive completed tasks based on dealership settings
+                $archivedCompleted += $this->archiveCompletedTasks(
                     $dealershipId,
-                    $archiveDate,
+                    $settingsService,
                     $now
                 );
 
-                $archivedCount += $count;
+                // Archive expired tasks (past scheduled_date)
+                $archivedExpired += $this->archiveExpiredTasks(
+                    $dealershipId,
+                    $now
+                );
             }
 
             Log::info('ArchiveOldTasksJob completed', [
-                'archived_count' => $archivedCount,
-                'duration' => now()->diffInSeconds($now),
+                'archived_completed' => $archivedCompleted,
+                'archived_expired' => $archivedExpired,
+                'total' => $archivedCompleted + $archivedExpired,
             ]);
         } catch (\Throwable $e) {
             Log::error('ArchiveOldTasksJob failed: ' . $e->getMessage(), [
@@ -74,22 +79,30 @@ class ArchiveOldTasksJob implements ShouldQueue
     }
 
     /**
-     * Archive tasks for a specific dealership.
+     * Archive completed tasks based on dealership archive mode.
      */
-    private function archiveTasksForDealership(?int $dealershipId, Carbon $archiveDate, Carbon $now): int
+    private function archiveCompletedTasks(?int $dealershipId, SettingsService $settingsService, Carbon $now): int
     {
+        $archiveMode = $settingsService->get('archive_mode', $dealershipId, 'days');
+        $archiveDays = $settingsService->getTaskArchiveDays($dealershipId);
+
+        // Determine if we should archive based on mode
+        $shouldArchive = match ($archiveMode) {
+            'weekend' => $now->isSunday(),
+            'end_of_day' => true, // Always process, but only archive same-day completed
+            'days' => true,
+            default => true,
+        };
+
+        if (!$shouldArchive) {
+            return 0;
+        }
+
         $archivedCount = 0;
 
-        // Find task IDs that have at least one completed response
-        $taskIdsWithCompletedResponse = DB::table('task_responses')
-            ->where('status', 'completed')
-            ->distinct()
-            ->pluck('task_id');
-
-        // Build base query
-        $query = Task::where('created_at', '<', $archiveDate)
-            ->whereNull('archived_at')
-            ->whereIn('id', $taskIdsWithCompletedResponse);
+        // Build base query for completed tasks
+        $query = Task::whereNull('archived_at')
+            ->where('is_active', true);
 
         if ($dealershipId === null) {
             $query->whereNull('dealership_id');
@@ -97,27 +110,105 @@ class ArchiveOldTasksJob implements ShouldQueue
             $query->where('dealership_id', $dealershipId);
         }
 
-        // Process in chunks to avoid memory issues
+        // Find completed tasks (based on responses)
+        $taskIdsWithCompletedResponse = DB::table('task_responses')
+            ->where('status', 'completed')
+            ->distinct()
+            ->pluck('task_id');
+
+        $query->whereIn('id', $taskIdsWithCompletedResponse);
+
+        // Apply archive mode logic
+        if ($archiveMode === 'end_of_day') {
+            // Archive tasks completed before today
+            $query->whereHas('responses', function ($q) use ($now) {
+                $q->where('status', 'completed')
+                  ->whereDate('created_at', '<', $now->toDateString());
+            });
+        } elseif ($archiveMode === 'days') {
+            // Archive tasks completed more than N days ago
+            $archiveDate = $now->copy()->subDays($archiveDays)->startOfDay();
+            $query->whereHas('responses', function ($q) use ($archiveDate) {
+                $q->where('status', 'completed')
+                  ->where('created_at', '<', $archiveDate);
+            });
+        }
+        // For 'weekend' mode, archive all completed tasks (already checked it's Sunday)
+
         $query->chunk(self::CHUNK_SIZE, function ($tasks) use ($now, &$archivedCount) {
             $taskIdsToArchive = [];
 
             foreach ($tasks as $task) {
-                // Check if all assigned users have completed responses
-                if ($this->allAssignmentsCompleted($task->id)) {
+                // Verify all assignments are completed for group tasks
+                if ($this->isTaskFullyCompleted($task)) {
                     $taskIdsToArchive[] = $task->id;
                 }
             }
 
-            // Bulk update for better performance
             if (!empty($taskIdsToArchive)) {
-                Task::whereIn('id', $taskIdsToArchive)
-                    ->update(['archived_at' => $now]);
+                Task::whereIn('id', $taskIdsToArchive)->update([
+                    'archived_at' => $now->copy()->setTimezone('UTC'),
+                    'archive_reason' => 'completed',
+                    'is_active' => false,
+                ]);
 
                 $archivedCount += count($taskIdsToArchive);
+            }
+        });
 
-                Log::debug('Archived batch of tasks', [
-                    'count' => count($taskIdsToArchive),
-                    'dealership_id' => $tasks->first()?->dealership_id,
+        return $archivedCount;
+    }
+
+    /**
+     * Archive expired tasks (past scheduled_date without completion).
+     */
+    private function archiveExpiredTasks(?int $dealershipId, Carbon $now): int
+    {
+        $yesterday = $now->copy()->subDay()->endOfDay();
+        $archivedCount = 0;
+
+        $query = Task::whereNull('archived_at')
+            ->where('is_active', true)
+            ->where(function ($q) use ($yesterday) {
+                // Tasks with scheduled_date in the past
+                $q->whereNotNull('scheduled_date')
+                  ->where('scheduled_date', '<', $yesterday->setTimezone('UTC'));
+            })
+            ->orWhere(function ($q) use ($yesterday) {
+                // Or tasks with deadline in the past (for one-time tasks without scheduled_date)
+                $q->whereNull('scheduled_date')
+                  ->whereNotNull('deadline')
+                  ->where('deadline', '<', $yesterday->setTimezone('UTC'));
+            });
+
+        if ($dealershipId === null) {
+            $query->whereNull('dealership_id');
+        } else {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        // Exclude already completed tasks
+        $completedTaskIds = DB::table('task_responses')
+            ->where('status', 'completed')
+            ->distinct()
+            ->pluck('task_id');
+
+        $query->whereNotIn('id', $completedTaskIds);
+
+        $query->chunk(self::CHUNK_SIZE, function ($tasks) use ($now, &$archivedCount) {
+            $taskIds = $tasks->pluck('id')->toArray();
+
+            if (!empty($taskIds)) {
+                Task::whereIn('id', $taskIds)->update([
+                    'archived_at' => $now->copy()->setTimezone('UTC'),
+                    'archive_reason' => 'expired',
+                    'is_active' => false,
+                ]);
+
+                $archivedCount += count($taskIds);
+
+                Log::debug('Archived expired tasks', [
+                    'count' => count($taskIds),
                 ]);
             }
         });
@@ -126,31 +217,24 @@ class ArchiveOldTasksJob implements ShouldQueue
     }
 
     /**
-     * Check if all task assignments have completed responses.
-     *
-     * Uses a single optimized query instead of N+1.
+     * Check if a task is fully completed (all assignees for group tasks).
      */
-    private function allAssignmentsCompleted(int $taskId): bool
+    private function isTaskFullyCompleted(Task $task): bool
     {
-        // Count total assignments
-        $totalAssignments = DB::table('task_assignments')
-            ->where('task_id', $taskId)
-            ->count();
+        if ($task->task_type !== 'group') {
+            // For individual tasks, any completion counts
+            return $task->responses()->where('status', 'completed')->exists();
+        }
 
-        // If no assignments, skip
+        // For group tasks, all assignees must complete
+        $totalAssignments = $task->assignments()->count();
         if ($totalAssignments === 0) {
             return false;
         }
 
-        // Count completed responses matching assignments
-        $completedResponses = DB::table('task_responses')
-            ->where('task_id', $taskId)
+        $completedResponses = $task->responses()
             ->where('status', 'completed')
-            ->whereIn('user_id', function ($query) {
-                $query->select('user_id')
-                    ->from('task_assignments')
-                    ->where('task_id', DB::raw('task_responses.task_id'));
-            })
+            ->whereIn('user_id', $task->assignments()->pluck('user_id'))
             ->distinct('user_id')
             ->count();
 

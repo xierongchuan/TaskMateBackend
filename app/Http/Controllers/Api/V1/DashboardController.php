@@ -24,6 +24,7 @@ class DashboardController extends Controller
         $taskStats = $this->getTaskStatistics($dealershipId);
         $lateShiftsCount = $this->getLateShiftsCount($dealershipId);
         $recentTasks = $this->getRecentTasks($dealershipId);
+        $generatorStats = $this->getGeneratorStats($dealershipId);
 
         // Calculate total users and active users (placeholder logic, adjust as needed)
         // For now, we'll just return some stats, but the frontend interface requires them.
@@ -44,6 +45,10 @@ class DashboardController extends Controller
             'late_shifts_today' => $lateShiftsCount,
             'active_shifts' => $activeShifts,
             'recent_tasks' => $recentTasks,
+            // Generator metrics
+            'active_generators' => $generatorStats['active'],
+            'total_generators' => $generatorStats['total'],
+            'tasks_generated_today' => $generatorStats['generated_today'],
             'timestamp' => Carbon::now()->toIso8601String(),
         ]);
     }
@@ -197,5 +202,33 @@ class DashboardController extends Controller
         return $query->get()->map(function ($task) {
             return $task->toApiArray();
         });
+    }
+
+    private function getGeneratorStats($dealershipId = null)
+    {
+        $query = \App\Models\TaskGenerator::query();
+
+        if ($dealershipId) {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        $total = $query->count();
+        $active = (clone $query)->where('is_active', true)->count();
+
+        // Count tasks generated today (tasks with generator_id created today)
+        $generatedTodayQuery = Task::whereNotNull('generator_id')
+            ->whereDate('created_at', Carbon::today());
+
+        if ($dealershipId) {
+            $generatedTodayQuery->where('dealership_id', $dealershipId);
+        }
+
+        $generatedToday = $generatedTodayQuery->count();
+
+        return [
+            'total' => $total,
+            'active' => $active,
+            'generated_today' => $generatedToday,
+        ];
     }
 }

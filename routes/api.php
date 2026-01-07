@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\ArchivedTaskController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\ImportantLinkController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\TaskGeneratorController;
 use App\Http\Controllers\Api\V1\UserApiController;
 use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
@@ -96,6 +98,30 @@ Route::prefix('v1')->group(function () {
             Route::patch('/tasks/{id}/status', [TaskController::class, 'updateStatus'])
                 ->middleware('role:manager,owner');
 
+            // Task Generators - READ операции
+            Route::get('/task-generators', [TaskGeneratorController::class, 'index']);
+            Route::get('/task-generators/{id}', [TaskGeneratorController::class, 'show']);
+            Route::get('/task-generators/{id}/tasks', [TaskGeneratorController::class, 'generatedTasks']);
+            Route::get('/task-generators/{id}/stats', [TaskGeneratorController::class, 'statistics']);
+
+            // Task Generators - WRITE операции (только managers и owners)
+            Route::post('/task-generators', [TaskGeneratorController::class, 'store'])
+                ->middleware('role:manager,owner');
+            Route::put('/task-generators/{id}', [TaskGeneratorController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/task-generators/{id}', [TaskGeneratorController::class, 'destroy'])
+                ->middleware('role:manager,owner');
+            Route::post('/task-generators/{id}/pause', [TaskGeneratorController::class, 'pause'])
+                ->middleware('role:manager,owner');
+            Route::post('/task-generators/{id}/resume', [TaskGeneratorController::class, 'resume'])
+                ->middleware('role:manager,owner');
+
+            // Archived Tasks
+            Route::get('/archived-tasks', [ArchivedTaskController::class, 'index']);
+            Route::get('/archived-tasks/export', [ArchivedTaskController::class, 'export']);
+            Route::post('/archived-tasks/{id}/restore', [ArchivedTaskController::class, 'restore'])
+                ->middleware('role:manager,owner');
+
             // Important Links - READ операции
             Route::get('/links', [ImportantLinkController::class, 'index']);
             Route::get('/links/{id}', [ImportantLinkController::class, 'show']);
@@ -147,3 +173,4 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:manager,owner');
         });
 });
+

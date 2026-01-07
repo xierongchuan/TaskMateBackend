@@ -7,30 +7,25 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TaskResponse extends Model
+class TaskGeneratorAssignment extends Model
 {
     use HasFactory;
 
-    protected $table = 'task_responses';
+    protected $table = 'task_generator_assignments';
 
     protected $fillable = [
-        'task_id',
+        'generator_id',
         'user_id',
-        'status',
-        'comment',
-        'responded_at',
-        'created_at',
     ];
 
     protected $casts = [
-        'responded_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
-    public function task()
+    public function generator()
     {
-        return $this->belongsTo(Task::class, 'task_id');
+        return $this->belongsTo(TaskGenerator::class, 'generator_id');
     }
 
     public function user()
