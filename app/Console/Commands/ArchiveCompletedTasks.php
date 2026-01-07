@@ -68,9 +68,10 @@ class ArchiveCompletedTasks extends Command
 
     private function archiveTasksForDealership(?int $dealershipId): int
     {
+        // Get tasks that are active and not already archived
         $query = Task::query()
-            ->whereIn('status', ['completed', 'overdue'])
-            ->where('archived', false);
+            ->where('is_active', true)
+            ->whereNull('archived_at');
 
         if ($dealershipId !== null) {
             $query->where('dealership_id', $dealershipId);
@@ -78,16 +79,49 @@ class ArchiveCompletedTasks extends Command
             $query->whereNull('dealership_id');
         }
 
+        // Archive tasks based on their computed status
         $cutoffDate = Carbon::now('Asia/Yekaterinburg')->subDay();
-        $query->where(function ($q) use ($cutoffDate) {
-            $q->where('status', 'completed')
-              ->where('completed_at', '<=', $cutoffDate)
-              ->orWhere(function ($q2) use ($cutoffDate) {
-                  $q2->where('status', 'overdue')
-                     ->where('deadline', '<=', $cutoffDate);
-              });
-        });
+        $tasksToArchive = $query->with(['responses', 'assignments'])->get();
 
-        return $query->update(['archived' => true]);
+        $archivedCount = 0;
+
+        foreach ($tasksToArchive as $task) {
+            $status = $task->status;
+            $shouldArchive = false;
+            $archiveReason = null;
+
+            // Archive completed tasks that were completed more than 1 day ago
+            if ($status === 'completed') {
+                // Check last response for completion time
+                $lastResponse = $task->responses()
+                    ->where('status', 'completed')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+
+                if ($lastResponse && Carbon::parse($lastResponse->created_at)->lt($cutoffDate)) {
+                    $shouldArchive = true;
+                    $archiveReason = 'completed';
+                }
+            }
+
+            // Archive overdue tasks that have passed deadline by more than 1 day
+            if ($status === 'overdue' && $task->deadline) {
+                if (Carbon::parse($task->deadline)->lt($cutoffDate)) {
+                    $shouldArchive = true;
+                    $archiveReason = 'expired';
+                }
+            }
+
+            if ($shouldArchive) {
+                $task->update([
+                    'is_active' => false,
+                    'archived_at' => Carbon::now(),
+                    'archive_reason' => $archiveReason,
+                ]);
+                $archivedCount++;
+            }
+        }
+
+        return $archivedCount;
     }
 }
