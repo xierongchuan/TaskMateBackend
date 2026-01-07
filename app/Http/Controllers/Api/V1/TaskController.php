@@ -375,6 +375,40 @@ class TaskController extends Controller
         }
 
         try {
+            // Prevent duplicate tasks
+            $duplicateQuery = Task::where('title', $validated['title'])
+                ->where('task_type', $validated['task_type'])
+                ->where('dealership_id', $validated['dealership_id'] ?? null)
+                ->where('is_active', true);
+
+            // Check deadline with tolerance (ignoring seconds mismatch)
+            if (isset($validated['deadline'])) {
+                // Parse the requested deadline. It might come as ISO string from frontend.
+                // Note: The Task model mutator expects Asia/Yekaterinburg input usually,
+                // but here we need to match what will be stored.
+                // Let's rely on how the DB stores it. The strict equality check failed.
+                // We should check if a task exists with the *same* minute.
+                $deadlineDate = Carbon::parse($validated['deadline'], 'Asia/Yekaterinburg')->setTimezone('UTC');
+                $start = $deadlineDate->copy()->startOfMinute();
+                $end = $deadlineDate->copy()->endOfMinute();
+
+                $duplicateQuery->whereBetween('deadline', [$start, $end]);
+            } else {
+                $duplicateQuery->whereNull('deadline');
+            }
+
+            if (isset($validated['description'])) {
+                 $duplicateQuery->where('description', $validated['description']);
+            } else {
+                 $duplicateQuery->whereNull('description');
+            }
+
+            if ($duplicateQuery->exists()) {
+                 return response()->json([
+                    'message' => 'Такая задача уже существует (дубликат)'
+                ], 422);
+            }
+
             $task = Task::create([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -577,7 +611,7 @@ class TaskController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,acknowledged,completed',
+            'status' => 'required|string|in:pending,completed',
         ]);
 
         $status = $validated['status'];
@@ -589,7 +623,6 @@ class TaskController extends Controller
                 $task->responses()->delete();
                 break;
 
-            case 'acknowledged':
             case 'completed':
                 // Update or create response for current user
                 $task->responses()->updateOrCreate(
@@ -600,8 +633,6 @@ class TaskController extends Controller
                     ]
                 );
                 break;
-
-
         }
 
         return response()->json($task->refresh()->load(['assignments.user', 'responses.user'])->toApiArray());

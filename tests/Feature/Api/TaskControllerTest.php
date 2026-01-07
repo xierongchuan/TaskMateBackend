@@ -209,6 +209,35 @@ describe('Task API', function () {
         expect($data2)->toHaveCount(1);
         expect($data2[0]['title'])->toBe('Completed Today');
     });
+    it('prevents duplicate task creation', function () {
+        // Arrange
+        $user = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $deadline = Carbon::now()->addDay()->toIso8601String();
+
+        $taskData = [
+                'title' => 'Duplicate Task',
+                'description' => 'Description',
+                'dealership_id' => $this->dealership->id,
+                'assigned_users' => [$user->id],
+                'appear_date' => Carbon::now()->toIso8601String(),
+                'deadline' => $deadline,
+                'task_type' => 'individual',
+                'response_type' => 'complete',
+        ];
+
+        // Create first task
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/v1/tasks', $taskData)
+            ->assertStatus(201);
+
+        // Act - try to create duplicate
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/v1/tasks', $taskData);
+
+        // Assert
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Такая задача уже существует (дубликат)']);
+    });
 });
 
 
