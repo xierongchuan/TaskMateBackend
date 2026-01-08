@@ -16,6 +16,7 @@ class ImportantLinkController extends Controller
         $perPage = (int) $request->query('per_page', '15');
         $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
         $isActive = $request->query('is_active');
+        $search = $request->query('search');
 
         $query = ImportantLink::with(['creator', 'dealership']);
 
@@ -25,6 +26,15 @@ class ImportantLinkController extends Controller
 
         if ($isActive !== null) {
             $query->where('is_active', (bool) $isActive);
+        }
+
+        // Поиск по title, url и description
+        if ($search !== null && $search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'ilike', "%{$search}%")
+                  ->orWhere('url', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%");
+            });
         }
 
         $links = $query->orderBy('sort_order')

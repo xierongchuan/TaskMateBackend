@@ -86,6 +86,49 @@ describe('Important Links API Endpoints', function () {
             // Assert
             $response->assertStatus(401);
         });
+
+        it('searches links by title, url, and description', function () {
+            // Arrange
+            ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'title' => 'Internal Portal',
+                'url' => 'https://portal.example.com',
+                'description' => 'Access internal resources',
+            ]);
+            ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'title' => 'CRM System',
+                'url' => 'https://crm.example.com',
+                'description' => 'Customer management',
+            ]);
+            ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'title' => 'Dashboard',
+                'url' => 'https://dashboard.example.com',
+                'description' => 'Analytics dashboard',
+            ]);
+
+            // Act - Search by title
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->getJson('/api/v1/links?search=Portal');
+            $response->assertStatus(200);
+            expect($response->json('data'))->toHaveCount(1);
+            expect($response->json('data.0.title'))->toBe('Internal Portal');
+
+            // Act - Search by url
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->getJson('/api/v1/links?search=crm.example');
+            $response->assertStatus(200);
+            expect($response->json('data'))->toHaveCount(1);
+            expect($response->json('data.0.title'))->toBe('CRM System');
+
+            // Act - Search by description
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->getJson('/api/v1/links?search=analytics');
+            $response->assertStatus(200);
+            expect($response->json('data'))->toHaveCount(1);
+            expect($response->json('data.0.title'))->toBe('Dashboard');
+        });
     });
 
     describe('GET /api/v1/links/{id}', function () {
