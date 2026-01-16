@@ -1,0 +1,442 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\Shift;
+use App\Models\User;
+use App\Services\ShiftService;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Auth\Access\AuthorizationException;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use App\Enums\Role;
+
+class ShiftController extends Controller
+{
+    public function __construct(
+        private readonly ShiftService $shiftService
+    ) {
+    }
+
+    /**
+     * Get list of shifts with filtering and pagination
+     *
+     * GET /api/v1/shifts
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $perPage = (int) $request->query('per_page', '15');
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
+        $status = $request->query('status');
+        $shiftType = $request->query('shift_type');
+        $isLate = $request->query('is_late');
+        $date = $request->query('date');
+        $userId = $request->query('user_id') !== null && $request->query('user_id') !== '' ? (int) $request->query('user_id') : null;
+
+        $query = Shift::with(['user', 'dealership', 'replacement.replacingUser', 'replacement.replacedUser']);
+
+        if ($dealershipId) {
+            $query->where('dealership_id', $dealershipId);
+        }
+
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($shiftType) {
+            $query->where('shift_type', $shiftType);
+        }
+
+        if ($isLate !== null && $isLate !== '') {
+            $isLateValue = filter_var($isLate, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isLateValue !== null) {
+                $query->where('is_late', $isLateValue);
+            }
+        }
+
+        if ($date) {
+            $startOfDay = Carbon::parse($date)->startOfDay();
+            $endOfDay = Carbon::parse($date)->endOfDay();
+            $query->whereBetween('shift_start', [$startOfDay, $endOfDay]);
+        }
+
+        $shifts = $query->orderByDesc('shift_start')->paginate($perPage);
+
+        return response()->json($shifts);
+    }
+
+    /**
+     * Create a new shift
+     *
+     * POST /api/v1/shifts
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $currentUser = $request->user();
+        if (!$currentUser) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required|exists:users,id',
+            'dealership_id' => 'required|exists:auto_dealerships,id',
+            'opening_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+            'replacing_user_id' => 'nullable|exists:users,id',
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        // SECURITY CHECK: Opening shift for another user
+        if ((int)$data['user_id'] !== $currentUser->id) {
+            // Only Owner can open shift for others
+            if ($currentUser->role !== Role::OWNER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Только Владелец может открывать смены за других пользователей'
+                ], 403);
+            }
+        }
+
+        // SECURITY CHECK: Role restriction
+        // Via API (admin panel): Only Owner can open shifts
+        // Employees must use Telegram bot to open/close shifts
+        if ($currentUser->role !== Role::OWNER) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Открытие смен через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
+            ], 403);
+        }
+
+        // Also check target user role if Owner is opening?
+        // Assuming Owner knows what they are doing.
+        // But if a Manager tries to open their own shift -> Denied above.
+
+        try {
+            $user = User::findOrFail($data['user_id']);
+
+            // Validate user belongs to the specified dealership
+            if (!$this->shiftService->validateUserDealership($user, (int) $data['dealership_id'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User does not belong to the specified dealership'
+                ], 403);
+            }
+
+            $replacingUser = null;
+            if (isset($data['replacing_user_id'])) {
+                $replacingUser = User::findOrFail($data['replacing_user_id']);
+
+                // Validate replacement user belongs to the same dealership
+                if (!$this->shiftService->validateUserDealership($replacingUser, (int) $data['dealership_id'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Replacement user does not belong to the specified dealership'
+                    ], 403);
+                }
+            }
+
+            $shift = $this->shiftService->openShift(
+                $user,
+                $data['opening_photo'],
+                $replacingUser,
+                $data['reason'] ?? null,
+                (int) $data['dealership_id']
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Shift opened successfully',
+                'data' => $shift->load(['user', 'dealership', 'replacement'])
+            ], 201);
+
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('Failed to open shift', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to open shift'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a specific shift
+     *
+     * GET /api/v1/shifts/{id}
+     */
+    public function show(int $id): JsonResponse
+    {
+        $shift = Shift::with(['user', 'dealership', 'replacement.replacingUser', 'replacement.replacedUser'])
+            ->find($id);
+
+        if (!$shift) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Смена не найдена'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $shift
+        ]);
+    }
+
+    /**
+     * Update a shift (primarily for closing)
+     *
+     * PUT /api/v1/shifts/{id}
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $shift = Shift::findOrFail($id);
+        $currentUser = $request->user();
+
+        // SECURITY CHECK: Closing/Editing shift
+        if (!$currentUser) {
+             return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        // 1. If trying to close/edit someone else's shift -> Only Owner allowed
+        if ($shift->user_id !== $currentUser->id) {
+             if ($currentUser->role !== Role::OWNER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Редактирование смен других пользователей доступно только Владельцу'
+                ], 403);
+             }
+        }
+
+        // 2. Via API (admin panel): Only Owner can close/edit shifts
+        // Employees must use Telegram bot to open/close shifts
+        if ($currentUser->role !== Role::OWNER) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Управление сменами через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'closing_photo' => 'sometimes|required|file|image|mimes:jpeg,png,jpg|max:5120',
+            'status' => 'sometimes|in:open,closed,replaced',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        try {
+            // If closing photo is provided, close the shift
+            if (isset($data['closing_photo'])) {
+                $updatedShift = $this->shiftService->closeShift($shift, $data['closing_photo']);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Shift closed successfully',
+                    'data' => $updatedShift->load(['user', 'dealership', 'replacement'])
+                ]);
+            }
+
+            // If only status is being updated
+            if (isset($data['status'])) {
+                if ($data['status'] === 'closed') {
+                    $this->shiftService->closeShiftWithoutPhoto($shift, 'closed');
+                } else {
+                    $shift->update(['status' => $data['status']]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Shift updated successfully',
+                    'data' => $shift->load(['user', 'dealership', 'replacement'])
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No valid fields to update'
+            ], 400);
+
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update shift'
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a shift
+     *
+     * DELETE /api/v1/shifts/{id}
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $shift = Shift::findOrFail($id);
+
+        try {
+            // Only allow deletion of shifts that are not in progress
+            if ($shift->status === 'open' && !$shift->shift_end) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete an active shift'
+                ], 400);
+            }
+
+            $shift->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Shift deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete shift'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current open shifts
+     *
+     * GET /api/v1/shifts/current
+     */
+    public function current(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
+        $currentShifts = $this->shiftService->getCurrentShifts($dealershipId);
+
+        return response()->json([
+            'success' => true,
+            'data' => $currentShifts
+        ]);
+    }
+
+    /**
+     * Get shift statistics
+     *
+     * GET /api/v1/shifts/statistics
+     */
+    public function statistics(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
+        $startDate = $request->query('start_date')
+            ? Carbon::parse($request->query('start_date'))
+            : Carbon::now()->subDays(7);
+        $endDate = $request->query('end_date')
+            ? Carbon::parse($request->query('end_date'))
+            : Carbon::now();
+
+        $statistics = $this->shiftService->getShiftStatistics($dealershipId, $startDate, $endDate);
+
+        return response()->json([
+            'success' => true,
+            'data' => $statistics
+        ]);
+    }
+
+    /**
+     * Get shifts for the authenticated user
+     *
+     * GET /api/v1/shifts/my
+     */
+    public function myShifts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        $filters = [
+            'status' => $request->query('status'),
+            'date_from' => $request->query('date_from')
+                ? Carbon::parse($request->query('date_from'))
+                : null,
+            'date_to' => $request->query('date_to')
+                ? Carbon::parse($request->query('date_to'))
+                : null,
+        ];
+
+        $shifts = $this->shiftService->getUserShifts($user, $filters);
+
+        return response()->json([
+            'success' => true,
+            'data' => $shifts
+        ]);
+    }
+
+    /**
+     * Get current user's open shift
+     *
+     * GET /api/v1/shifts/my/current
+     */
+    public function myCurrentShift(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== '' ? (int) $request->query('dealership_id') : null;
+        $shift = $this->shiftService->getUserOpenShift($user, $dealershipId);
+
+        if (!$shift) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No active shift found'
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $shift->load(['dealership', 'replacement'])
+        ]);
+    }
+}

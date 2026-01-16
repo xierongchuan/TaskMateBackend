@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('inspire', function () {
+    $this->comment(Inspiring::quote());
+})->purpose('Display an inspiring quote');
+
+// Command to test workers manually
+Artisan::command('workers:test {type=all}', function ($type) {
+    $this->info("Testing worker: {$type}");
+    $this->info("Current time: " . now()->format('Y-m-d H:i:s T'));
+    $this->info('Use "php artisan queue:work --queue=notifications" to process the jobs');
+})->purpose('Test notification workers manually');
+
+// Process recurring tasks - runs hourly
+Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->hourly();
+
+// Process task generators - runs every 5 minutes to ensure tasks are generated promptly
+Schedule::job(new \App\Jobs\ProcessTaskGeneratorsJob())->everyFiveMinutes();
+
+// Check for tasks to archive - runs every 10 minutes (command handles settings and time logic)
+Schedule::command('tasks:archive-completed --type=all')->everyTenMinutes();

@@ -1,0 +1,1163 @@
+openapi: 3.0.0
+info:
+  title: TaskMate Telegram Bot API
+  description: API documentation for TaskMate Telegram Bot backend
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        login:
+          type: string
+        full_name:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [owner, manager, employee, observer]
+        telegram_id:
+          type: integer
+          nullable: true
+        dealership_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+
+    Dealership:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        dealership_id:
+          type: integer
+        shift_start:
+          type: string
+          format: date-time
+        shift_end:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [open, closed, replaced]
+        opening_photo_path:
+          type: string
+        closing_photo_path:
+          type: string
+          nullable: true
+        late_minutes:
+          type: integer
+        is_late:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+        creator_id:
+          type: integer
+        dealership_id:
+          type: integer
+          nullable: true
+        appear_date:
+          type: string
+          format: date-time
+          nullable: true
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+          nullable: true
+        task_type:
+          type: string
+          enum: [individual, group]
+        response_type:
+          type: string
+          enum: [acknowledge, complete]
+        is_active:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskAssignment'
+
+    TaskAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+        task_id:
+          type: integer
+        user_id:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+
+    ImportantLink:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        url:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        dealership_id:
+          type: integer
+          nullable: true
+        creator_id:
+          type: integer
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationSetting:
+      type: object
+      properties:
+        id:
+          type: integer
+        channel_type:
+          type: string
+        channel_label:
+          type: string
+        is_enabled:
+          type: boolean
+        notification_time:
+          type: string
+          nullable: true
+        notification_day:
+          type: string
+          nullable: true
+        notification_offset:
+          type: integer
+          nullable: true
+        recipient_roles:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/session:
+    post:
+      summary: Login
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:
+                  type: string
+                password:
+                  type: string
+      responses:
+        200:
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        401:
+          description: Invalid credentials
+    delete:
+      summary: Logout
+      tags: [Auth]
+      responses:
+        200:
+          description: Successfully logged out
+
+  /v1/session/current:
+    get:
+      summary: Get current user
+      tags: [Auth]
+      responses:
+        200:
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /v1/users:
+    get:
+      summary: List users
+      tags: [Users]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: role
+          schema:
+            type: string
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+    post:
+      summary: Create user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password, full_name, phone, role]
+              properties:
+                login:
+                  type: string
+                password:
+                  type: string
+                full_name:
+                  type: string
+                phone:
+                  type: string
+                role:
+                  type: string
+                  enum: [owner, manager, employee, observer]
+                telegram_id:
+                  type: integer
+                dealership_id:
+                  type: integer
+                dealership_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        201:
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+
+  /v1/users/{id}:
+    get:
+      summary: Get user details
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    put:
+      summary: Update user
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name:
+                  type: string
+                phone:
+                  type: string
+                role:
+                  type: string
+                password:
+                  type: string
+                dealership_id:
+                  type: integer
+                dealership_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        200:
+          description: User updated
+    delete:
+      summary: Delete user
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: User deleted
+
+  /v1/dealerships:
+    get:
+      summary: List dealerships
+      tags: [Dealerships]
+      parameters:
+        - in: query
+          name: is_active
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of dealerships
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dealership'
+    post:
+      summary: Create dealership
+      tags: [Dealerships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+                phone:
+                  type: string
+                description:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        201:
+          description: Dealership created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dealership'
+
+  /v1/dealerships/{id}:
+    get:
+      summary: Get dealership details
+      tags: [Dealerships]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Dealership details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dealership'
+    put:
+      summary: Update dealership
+      tags: [Dealerships]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+                phone:
+                  type: string
+                description:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        200:
+          description: Dealership updated
+    delete:
+      summary: Delete dealership
+      tags: [Dealerships]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Dealership deleted
+
+  /v1/shifts:
+    get:
+      summary: List shifts
+      tags: [Shifts]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+      responses:
+        200:
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shift'
+    post:
+      summary: Open shift
+      tags: [Shifts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [user_id, dealership_id, opening_photo]
+              properties:
+                user_id:
+                  type: integer
+                dealership_id:
+                  type: integer
+                opening_photo:
+                  type: string
+                  format: binary
+                replacing_user_id:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        201:
+          description: Shift opened
+
+  /v1/shifts/{id}:
+    get:
+      summary: Get shift details
+      tags: [Shifts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Shift details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Shift'
+    put:
+      summary: Update/Close shift
+      tags: [Shifts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                closing_photo:
+                  type: string
+                  format: binary
+                status:
+                  type: string
+                  enum: [open, closed, replaced]
+      responses:
+        200:
+          description: Shift updated/closed
+    delete:
+      summary: Delete shift
+      tags: [Shifts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Shift deleted
+
+  /v1/shifts/current:
+    get:
+      summary: Get current open shifts
+      tags: [Shifts]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of current shifts
+
+  /v1/shifts/statistics:
+    get:
+      summary: Get shift statistics
+      tags: [Shifts]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        200:
+          description: Shift statistics
+
+  /v1/shifts/my:
+    get:
+      summary: Get my shifts
+      tags: [Shifts]
+      responses:
+        200:
+          description: List of user's shifts
+
+  /v1/shifts/my/current:
+    get:
+      summary: Get my current shift
+      tags: [Shifts]
+      responses:
+        200:
+          description: User's current shift
+
+  /v1/tasks:
+    get:
+      summary: List tasks
+      tags: [Tasks]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: recurrence
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+    post:
+      summary: Create task
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, task_type, response_type]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                dealership_id:
+                  type: integer
+                deadline:
+                  type: string
+                  format: date-time
+                task_type:
+                  type: string
+                  enum: [individual, group]
+                response_type:
+                  type: string
+                  enum: [acknowledge, complete]
+                assignments:
+                  type: array
+                  items:
+                    type: integer
+                recurrence:
+                  type: string
+                  enum: [none, daily, weekly, monthly]
+                recurrence_time:
+                  type: string
+                recurrence_day_of_week:
+                  type: integer
+                recurrence_day_of_month:
+                  type: integer
+      responses:
+        201:
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /v1/tasks/{id}:
+    get:
+      summary: Get task details
+      tags: [Tasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+    put:
+      summary: Update task
+      tags: [Tasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                is_active:
+                  type: boolean
+                assignments:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        200:
+          description: Task updated
+    delete:
+      summary: Delete task
+      tags: [Tasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Task deleted
+
+  /v1/links:
+    get:
+      summary: List important links
+      tags: [Links]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportantLink'
+    post:
+      summary: Create link
+      tags: [Links]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, url]
+              properties:
+                title:
+                  type: string
+                url:
+                  type: string
+                description:
+                  type: string
+                dealership_id:
+                  type: integer
+      responses:
+        201:
+          description: Link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportantLink'
+
+  /v1/links/{id}:
+    get:
+      summary: Get link details
+      tags: [Links]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Link details
+    put:
+      summary: Update link
+      tags: [Links]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                url:
+                  type: string
+      responses:
+        200:
+          description: Link updated
+    delete:
+      summary: Delete link
+      tags: [Links]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Link deleted
+
+  /v1/dashboard:
+    get:
+      summary: Get dashboard statistics
+      tags: [Dashboard]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_users:
+                    type: integer
+                  active_users:
+                    type: integer
+                  active_shifts:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/reports:
+    get:
+      summary: Get reports
+      tags: [Reports]
+      parameters:
+        - in: query
+          name: date_from
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: date_to
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        200:
+          description: Report data
+
+  /v1/settings:
+    get:
+      summary: Get global settings
+      tags: [Settings]
+      responses:
+        200:
+          description: Global settings
+
+  /v1/settings/{key}:
+    get:
+      summary: Get specific setting
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Setting value
+    put:
+      summary: Update setting
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+                type:
+                  type: string
+                description:
+                  type: string
+      responses:
+        200:
+          description: Setting updated
+
+  /v1/settings/shift-config:
+    get:
+      summary: Get shift configuration
+      tags: [Settings]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Shift config
+    post:
+      summary: Update shift configuration
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shift_1_start_time:
+                  type: string
+                shift_1_end_time:
+                  type: string
+                shift_2_start_time:
+                  type: string
+                shift_2_end_time:
+                  type: string
+                late_tolerance_minutes:
+                  type: integer
+                dealership_id:
+                  type: integer
+      responses:
+        200:
+          description: Config updated
+
+  /v1/notification-settings:
+    get:
+      summary: Get notification settings
+      tags: [Notification Settings]
+      parameters:
+        - in: query
+          name: dealership_id
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of notification settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationSetting'
+
+  /v1/notification-settings/{channelType}:
+    put:
+      summary: Update notification setting
+      tags: [Notification Settings]
+      parameters:
+        - in: path
+          name: channelType
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_enabled:
+                  type: boolean
+                notification_time:
+                  type: string
+                notification_day:
+                  type: string
+                notification_offset:
+                  type: integer
+                recipient_roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        200:
+          description: Setting updated
+
+  /v1/notification-settings/bulk:
+    post:
+      summary: Bulk update notification settings
+      tags: [Notification Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                dealership_id:
+                  type: integer
+                settings:
+                  type: array
+                  items:
+                    type: object
+                    required: [channel_type]
+                    properties:
+                      channel_type:
+                        type: string
+                      is_enabled:
+                        type: boolean
+      responses:
+        200:
+          description: Settings updated
+
+  /v1/notification-settings/reset:
+    post:
+      summary: Reset notification settings
+      tags: [Notification Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dealership_id:
+                  type: integer
+      responses:
+        200:
+          description: Settings reset
