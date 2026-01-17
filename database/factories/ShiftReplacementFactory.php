@@ -22,7 +22,7 @@ class ShiftReplacementFactory extends Factory
             'shift_id' => Shift::factory(),
             'replaced_user_id' => User::factory(),
             'replacing_user_id' => User::factory(),
-            'reason' => $this->faker->sentence(),
+            'reason' => fake()->sentence(),
             'created_at' => now(),
             'updated_at' => now(),
         ];

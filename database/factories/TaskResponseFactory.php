@@ -21,8 +21,8 @@ class TaskResponseFactory extends Factory
         return [
             'task_id' => Task::factory(),
             'user_id' => User::factory(),
-            'status' => $this->faker->randomElement(['completed', 'postponed', 'rejected']),
-            'comment' => $this->faker->sentence(),
+            'status' => fake()->randomElement(['completed', 'postponed', 'rejected']),
+            'comment' => fake()->sentence(),
             'responded_at' => now(),
         ];
     }

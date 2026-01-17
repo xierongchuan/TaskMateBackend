@@ -59,6 +59,16 @@ class TaskGenerator extends Model
 
     /**
      * Check if this generator should generate a task today.
+     *
+     * Logic:
+     * 1. Generator must be active
+     * 2. Current date must be within start_date and end_date range
+     * 3. Task must not have been generated today (prevents duplicates)
+     * 4. Current time must be >= recurrence_time (scheduled appear time)
+     * 5. Today must match the recurrence pattern (daily/weekly/monthly)
+     *
+     * This approach allows "catching up" on missed tasks if the scheduler
+     * was down - as long as the time has passed today, the task will generate.
      */
     public function shouldGenerateToday(?Carbon $now = null): bool
     {
@@ -70,28 +80,36 @@ class TaskGenerator extends Model
         }
 
         // Check if start_date has passed
-        $startDate = $this->start_date->setTimezone('Asia/Yekaterinburg');
+        $startDate = $this->start_date->copy()->setTimezone('Asia/Yekaterinburg');
         if ($now->lessThan($startDate->startOfDay())) {
             return false;
         }
 
         // Check if end_date has passed (if set)
         if ($this->end_date) {
-            $endDate = $this->end_date->setTimezone('Asia/Yekaterinburg');
+            $endDate = $this->end_date->copy()->setTimezone('Asia/Yekaterinburg');
             if ($now->greaterThan($endDate->endOfDay())) {
                 return false;
             }
         }
 
-        // Check if already generated today
+        // Check if already generated today (prevents duplicate generation)
         if ($this->last_generated_at) {
-            $lastRun = $this->last_generated_at->setTimezone('Asia/Yekaterinburg');
+            $lastRun = $this->last_generated_at->copy()->setTimezone('Asia/Yekaterinburg');
             if ($lastRun->isSameDay($now)) {
                 return false;
             }
         }
 
-        // Check recurrence type
+        // Check if scheduled time has arrived
+        // This allows "catching up" if scheduler was down - task will generate
+        // once the time has passed today (but only once due to last_generated_at check)
+        $scheduledTime = $this->getAppearTimeForDate($now);
+        if ($now->lessThan($scheduledTime)) {
+            return false;
+        }
+
+        // Check recurrence type (day matching)
         return match ($this->recurrence) {
             'daily' => true,
             'weekly' => $now->dayOfWeekIso === $this->recurrence_day_of_week,

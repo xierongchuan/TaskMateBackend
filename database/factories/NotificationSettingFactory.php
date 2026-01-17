@@ -19,11 +19,11 @@ class NotificationSettingFactory extends Factory
     {
         return [
             'dealership_id' => AutoDealership::factory(),
-            'channel_type' => $this->faker->word,
+            'channel_type' => fake()->word,
             'is_enabled' => true,
-            'notification_time' => $this->faker->time(),
-            'notification_day' => $this->faker->dayOfWeek,
-            'notification_offset' => $this->faker->numberBetween(1, 60),
+            'notification_time' => fake()->time(),
+            'notification_day' => fake()->dayOfWeek,
+            'notification_offset' => fake()->numberBetween(1, 60),
         ];
     }
 }
