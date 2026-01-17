@@ -1,5 +1,5 @@
 # ---------------- STAGE: build ----------------
-FROM php:8.4.13-fpm AS build
+FROM dunglas/frankenphp:1-php8.4 AS build
 
 # 1) Системные библиотеки для сборки расширений
 RUN apt-get update -y \
@@ -10,10 +10,11 @@ RUN apt-get update -y \
   libmemcached-tools \
   libpq-dev postgresql-client \
   curl \
+  $PHPIZE_DEPS \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /var/www/backend_api
+WORKDIR /app
 
 # 2) PHP-расширения: PostgreSQL, GD и т.д.
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -41,12 +42,10 @@ COPY . .
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
   && chmod -R 755 storage storage/framework bootstrap/cache || true
 
-# Например: php artisan config:cache && php artisan route:cache
-
 # ---------------- STAGE: runner ----------------
-FROM php:8.4.13-fpm AS runner
+FROM dunglas/frankenphp:1-php8.4 AS runner
 
-WORKDIR /var/www/backend_api
+WORKDIR /app
 
 # Устанавливаем минимальные runtime-зависимости
 RUN apt-get update -y \
@@ -56,6 +55,7 @@ RUN apt-get update -y \
   sqlite3 libsqlite3-dev \
   libpq-dev \
   supervisor \
+  $PHPIZE_DEPS \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
@@ -66,14 +66,17 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
   pdo pdo_pgsql gd \
   && docker-php-ext-install pgsql
 
-# Устанавливаем redis-расширение в runtime (если нужно)
+# Устанавливаем redis-расширение в runtime
 RUN set -eux; \
   pecl install redis-6.2.0 || true; \
   docker-php-ext-enable redis || true
 
 # Копируем артефакты и код из build
-COPY --from=build /var/www/backend_api /var/www/backend_api
+COPY --from=build /app /app
 COPY --from=build /usr/bin/composer /usr/bin/composer
+
+# Копируем Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
 
 # Права
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
@@ -82,7 +85,11 @@ RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
 # Создаем директорию для логов supervisor
 RUN mkdir -p /var/log/supervisor && chown -R www-data:www-data /var/log/supervisor
 
-# Документирование порта
-EXPOSE 9000
+# Переменные окружения для FrankenPHP
+ENV SERVER_NAME=":8000"
 
-CMD ["php-fpm", "-F"]
+# Документирование порта
+EXPOSE 8000
+
+# FrankenPHP как точка входа
+CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]

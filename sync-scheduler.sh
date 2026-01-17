@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Sync scheduler script - runs Laravel scheduler exactly at XX:XX:00 with self-correction
-cd /var/www/src_telegram_bot_api
+cd /app
 
 while true; do
     # Get current seconds
