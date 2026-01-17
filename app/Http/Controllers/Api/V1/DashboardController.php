@@ -106,7 +106,7 @@ class DashboardController extends Controller
             ->count('task_id');
 
         $overdue = (clone $query)
-            ->where('deadline', '<', Carbon::now())
+            ->where('deadline', '<', Carbon::now('UTC'))
             ->whereDoesntHave('responses', function ($q) {
                 $q->where('status', 'completed');
             })
@@ -147,20 +147,16 @@ class DashboardController extends Controller
         }
 
         return $query->get()->map(function ($task) {
-            // Determine status based on deadlines and responses
-            // This is a simplified status logic for the dashboard list
-            $status = 'pending';
-            if ($task->deadline && $task->deadline->isPast()) {
-                $status = 'overdue';
-            }
-            // Check if completed (simplified, ideally check responses)
-            // For now, let's just use 'pending' or 'overdue' or 'active'
-
+            $data = $task->toApiArray();
             return [
-                'id' => $task->id,
-                'title' => $task->title,
-                'status' => $status, // You might want to refine this logic
-                'created_at' => $task->created_at->toIso8601String(),
+                'id' => $data['id'],
+                'title' => $data['title'],
+                'status' => $data['status'],
+                'created_at' => $data['created_at'],
+                'creator' => $task->creator ? [
+                    'full_name' => $task->creator->full_name,
+                    'avatar' => $task->creator->avatar,
+                ] : null,
             ];
         });
     }
@@ -189,7 +185,7 @@ class DashboardController extends Controller
     {
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses.user'])
             ->where('is_active', true)
-            ->where('deadline', '<', Carbon::now())
+            ->where('deadline', '<', Carbon::now('UTC'))
             ->whereDoesntHave('responses', function ($q) {
                 $q->where('status', 'completed');
             })

@@ -87,8 +87,13 @@ class TaskGeneratorController extends Controller
             'recurrence' => 'required|in:daily,weekly,monthly',
             'recurrence_time' => 'required|date_format:H:i',
             'deadline_time' => 'required|date_format:H:i',
+            // Support both old (single int) and new (array) formats for backwards compatibility
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
             'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31',
+            'recurrence_days_of_week' => 'nullable|array|max:7',
+            'recurrence_days_of_week.*' => 'integer|min:1|max:7',
+            'recurrence_days_of_month' => 'nullable|array|max:31',
+            'recurrence_days_of_month.*' => 'integer|min:-2|max:31|not_in:0',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'task_type' => 'nullable|in:individual,group',
@@ -100,18 +105,30 @@ class TaskGeneratorController extends Controller
             'assignments.*' => 'exists:users,id',
         ]);
 
+        // Handle backwards compatibility: convert old single-value fields to arrays
+        $daysOfWeek = $validated['recurrence_days_of_week'] ?? null;
+        $daysOfMonth = $validated['recurrence_days_of_month'] ?? null;
+
+        // If old format is provided, convert to array
+        if (empty($daysOfWeek) && !empty($validated['recurrence_day_of_week'])) {
+            $daysOfWeek = [$validated['recurrence_day_of_week']];
+        }
+        if (empty($daysOfMonth) && !empty($validated['recurrence_day_of_month'])) {
+            $daysOfMonth = [$validated['recurrence_day_of_month']];
+        }
+
         // Validate recurrence requirements
-        if ($validated['recurrence'] === 'weekly' && empty($validated['recurrence_day_of_week'])) {
+        if ($validated['recurrence'] === 'weekly' && empty($daysOfWeek)) {
             return response()->json([
                 'success' => false,
-                'message' => 'recurrence_day_of_week is required for weekly recurrence',
+                'message' => 'recurrence_days_of_week is required for weekly recurrence',
             ], 422);
         }
 
-        if ($validated['recurrence'] === 'monthly' && empty($validated['recurrence_day_of_month'])) {
+        if ($validated['recurrence'] === 'monthly' && empty($daysOfMonth)) {
             return response()->json([
                 'success' => false,
-                'message' => 'recurrence_day_of_month is required for monthly recurrence',
+                'message' => 'recurrence_days_of_month is required for monthly recurrence',
             ], 422);
         }
 
@@ -126,8 +143,8 @@ class TaskGeneratorController extends Controller
             'recurrence' => $validated['recurrence'],
             'recurrence_time' => $validated['recurrence_time'] . ':00',
             'deadline_time' => $validated['deadline_time'] . ':00',
-            'recurrence_day_of_week' => $validated['recurrence_day_of_week'] ?? null,
-            'recurrence_day_of_month' => $validated['recurrence_day_of_month'] ?? null,
+            'recurrence_days_of_week' => $daysOfWeek,
+            'recurrence_days_of_month' => $daysOfMonth,
             'start_date' => Carbon::parse($validated['start_date'], 'Asia/Yekaterinburg')->setTimezone('UTC'),
             'end_date' => isset($validated['end_date'])
                 ? Carbon::parse($validated['end_date'], 'Asia/Yekaterinburg')->setTimezone('UTC')
@@ -171,8 +188,13 @@ class TaskGeneratorController extends Controller
             'recurrence' => 'sometimes|in:daily,weekly,monthly',
             'recurrence_time' => 'sometimes|date_format:H:i',
             'deadline_time' => 'sometimes|date_format:H:i',
+            // Support both old (single int) and new (array) formats for backwards compatibility
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
             'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31',
+            'recurrence_days_of_week' => 'nullable|array|max:7',
+            'recurrence_days_of_week.*' => 'integer|min:1|max:7',
+            'recurrence_days_of_month' => 'nullable|array|max:31',
+            'recurrence_days_of_month.*' => 'integer|min:-2|max:31|not_in:0',
             'start_date' => 'sometimes|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'task_type' => 'nullable|in:individual,group',
@@ -204,12 +226,26 @@ class TaskGeneratorController extends Controller
         if (isset($validated['deadline_time'])) {
             $updateData['deadline_time'] = $validated['deadline_time'] . ':00';
         }
-        if (array_key_exists('recurrence_day_of_week', $validated)) {
-            $updateData['recurrence_day_of_week'] = $validated['recurrence_day_of_week'];
+
+        // Handle backwards compatibility for recurrence days
+        if (array_key_exists('recurrence_days_of_week', $validated)) {
+            $updateData['recurrence_days_of_week'] = $validated['recurrence_days_of_week'];
+        } elseif (array_key_exists('recurrence_day_of_week', $validated)) {
+            // Convert old single value to array
+            $updateData['recurrence_days_of_week'] = $validated['recurrence_day_of_week']
+                ? [$validated['recurrence_day_of_week']]
+                : null;
         }
-        if (array_key_exists('recurrence_day_of_month', $validated)) {
-            $updateData['recurrence_day_of_month'] = $validated['recurrence_day_of_month'];
+
+        if (array_key_exists('recurrence_days_of_month', $validated)) {
+            $updateData['recurrence_days_of_month'] = $validated['recurrence_days_of_month'];
+        } elseif (array_key_exists('recurrence_day_of_month', $validated)) {
+            // Convert old single value to array
+            $updateData['recurrence_days_of_month'] = $validated['recurrence_day_of_month']
+                ? [$validated['recurrence_day_of_month']]
+                : null;
         }
+
         if (isset($validated['start_date'])) {
             $updateData['start_date'] = Carbon::parse($validated['start_date'], 'Asia/Yekaterinburg')->setTimezone('UTC');
         }

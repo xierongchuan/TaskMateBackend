@@ -23,8 +23,8 @@ class TaskGenerator extends Model
         'recurrence',
         'recurrence_time',
         'deadline_time',
-        'recurrence_day_of_week',
-        'recurrence_day_of_month',
+        'recurrence_days_of_week',
+        'recurrence_days_of_month',
         'start_date',
         'end_date',
         'last_generated_at',
@@ -43,8 +43,8 @@ class TaskGenerator extends Model
         'tags' => 'array',
         'notification_settings' => 'array',
         'is_active' => 'boolean',
-        'recurrence_day_of_week' => 'integer',
-        'recurrence_day_of_month' => 'integer',
+        'recurrence_days_of_week' => 'array',
+        'recurrence_days_of_month' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -63,9 +63,10 @@ class TaskGenerator extends Model
      * Logic:
      * 1. Generator must be active
      * 2. Current date must be within start_date and end_date range
-     * 3. Task must not have been generated today (prevents duplicates)
-     * 4. Current time must be >= recurrence_time (scheduled appear time)
-     * 5. Today must match the recurrence pattern (daily/weekly/monthly)
+     * 3. Today must not be a holiday (from CalendarDay)
+     * 4. Task must not have been generated today (prevents duplicates)
+     * 5. Current time must be >= recurrence_time (scheduled appear time)
+     * 6. Today must match the recurrence pattern (daily/weekly/monthly)
      *
      * This approach allows "catching up" on missed tasks if the scheduler
      * was down - as long as the time has passed today, the task will generate.
@@ -93,6 +94,11 @@ class TaskGenerator extends Model
             }
         }
 
+        // Check if today is a holiday
+        if (CalendarDay::isHoliday($now, $this->dealership_id)) {
+            return false;
+        }
+
         // Check if already generated today (prevents duplicate generation)
         if ($this->last_generated_at) {
             $lastRun = $this->last_generated_at->copy()->setTimezone('Asia/Yekaterinburg');
@@ -112,28 +118,63 @@ class TaskGenerator extends Model
         // Check recurrence type (day matching)
         return match ($this->recurrence) {
             'daily' => true,
-            'weekly' => $now->dayOfWeekIso === $this->recurrence_day_of_week,
+            'weekly' => $this->isWeeklyRunDay($now),
             'monthly' => $this->isMonthlyRunDay($now),
             default => false,
         };
     }
 
     /**
-     * Check if today is the correct day for monthly recurrence.
+     * Check if today is one of the selected days for weekly recurrence.
+     */
+    private function isWeeklyRunDay(Carbon $now): bool
+    {
+        $days = $this->recurrence_days_of_week ?? [];
+
+        if (empty($days)) {
+            return false;
+        }
+
+        return in_array($now->dayOfWeekIso, $days, true);
+    }
+
+    /**
+     * Check if today is one of the selected days for monthly recurrence.
+     *
+     * Supports:
+     * - Positive days (1-31): specific day of month
+     * - Negative days (-1, -2): last day, second-to-last day
+     * - Fallback: if day doesn't exist in month (e.g., 31 in February),
+     *   it falls back to the last valid day of the month
      */
     private function isMonthlyRunDay(Carbon $now): bool
     {
-        $targetDay = $this->recurrence_day_of_month;
+        $days = $this->recurrence_days_of_month ?? [];
 
-        if ($targetDay > 0) {
-            return $now->day === $targetDay;
+        if (empty($days)) {
+            return false;
         }
 
-        // Handle negative days (e.g. -1 is last day of month)
+        $currentDay = $now->day;
         $daysInMonth = $now->daysInMonth;
-        $calculatedDay = $daysInMonth + $targetDay + 1;
 
-        return $now->day === $calculatedDay;
+        foreach ($days as $targetDay) {
+            if ($targetDay > 0) {
+                // Positive day: use fallback to last valid day if needed
+                $effectiveDay = min($targetDay, $daysInMonth);
+                if ($currentDay === $effectiveDay) {
+                    return true;
+                }
+            } else {
+                // Negative day: -1 = last day, -2 = second-to-last, etc.
+                $effectiveDay = $daysInMonth + $targetDay + 1;
+                if ($effectiveDay > 0 && $currentDay === $effectiveDay) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -19,16 +19,18 @@ class TaskGeneratorFactory extends Factory
 
     public function definition(): array
     {
+        $recurrence = fake()->randomElement(['daily', 'weekly', 'monthly']);
+
         return [
             'title' => fake()->sentence(3),
             'description' => fake()->optional()->paragraph(),
             'creator_id' => User::factory(),
             'dealership_id' => AutoDealership::factory(),
-            'recurrence' => fake()->randomElement(['daily', 'weekly', 'monthly']),
+            'recurrence' => $recurrence,
             'recurrence_time' => '09:00',
             'deadline_time' => '18:00',
-            'recurrence_day_of_week' => fake()->optional()->numberBetween(1, 7),
-            'recurrence_day_of_month' => fake()->optional()->numberBetween(1, 28),
+            'recurrence_days_of_week' => $recurrence === 'weekly' ? [fake()->numberBetween(1, 7)] : null,
+            'recurrence_days_of_month' => $recurrence === 'monthly' ? [fake()->numberBetween(1, 28)] : null,
             'start_date' => Carbon::today(),
             'end_date' => null,
             'task_type' => fake()->randomElement(['individual', 'group']),
@@ -58,32 +60,36 @@ class TaskGeneratorFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'recurrence' => 'daily',
-            'recurrence_day_of_week' => null,
-            'recurrence_day_of_month' => null,
+            'recurrence_days_of_week' => null,
+            'recurrence_days_of_month' => null,
         ]);
     }
 
     /**
-     * Set recurrence to weekly.
+     * Set recurrence to weekly with specified days.
      */
-    public function weekly(int $dayOfWeek = 1): static
+    public function weekly(int|array $daysOfWeek = [1]): static
     {
+        $days = is_array($daysOfWeek) ? $daysOfWeek : [$daysOfWeek];
+
         return $this->state(fn (array $attributes) => [
             'recurrence' => 'weekly',
-            'recurrence_day_of_week' => $dayOfWeek,
-            'recurrence_day_of_month' => null,
+            'recurrence_days_of_week' => $days,
+            'recurrence_days_of_month' => null,
         ]);
     }
 
     /**
-     * Set recurrence to monthly.
+     * Set recurrence to monthly with specified days.
      */
-    public function monthly(int $dayOfMonth = 1): static
+    public function monthly(int|array $daysOfMonth = [1]): static
     {
+        $days = is_array($daysOfMonth) ? $daysOfMonth : [$daysOfMonth];
+
         return $this->state(fn (array $attributes) => [
             'recurrence' => 'monthly',
-            'recurrence_day_of_week' => null,
-            'recurrence_day_of_month' => $dayOfMonth,
+            'recurrence_days_of_week' => null,
+            'recurrence_days_of_month' => $days,
         ]);
     }
 }

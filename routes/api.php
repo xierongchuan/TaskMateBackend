@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\ArchivedTaskController;
+use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\ImportantLinkController;
@@ -174,6 +175,19 @@ Route::prefix('v1')->group(function () {
             Route::post('/notification-settings/bulk', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'bulkUpdate'])
                 ->middleware('role:manager,owner');
             Route::post('/notification-settings/reset', [\App\Http\Controllers\Api\V1\NotificationSettingController::class, 'resetToDefaults'])
+                ->middleware('role:manager,owner');
+
+            // Calendar - READ операции
+            Route::get('/calendar/{year}', [CalendarController::class, 'index']);
+            Route::get('/calendar/{year}/holidays', [CalendarController::class, 'holidays']);
+            Route::get('/calendar/check/{date}', [CalendarController::class, 'check']);
+
+            // Calendar - WRITE операции (только managers и owners)
+            Route::put('/calendar/{date}', [CalendarController::class, 'update'])
+                ->middleware('role:manager,owner');
+            Route::delete('/calendar/{date}', [CalendarController::class, 'destroy'])
+                ->middleware('role:manager,owner');
+            Route::post('/calendar/bulk', [CalendarController::class, 'bulkUpdate'])
                 ->middleware('role:manager,owner');
         });
 });

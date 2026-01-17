@@ -207,7 +207,8 @@ class Task extends Model
         // Add calculated status
         $data['status'] = $this->status;
 
-        // Convert datetime fields to UTC+5
+        // Convert datetime fields to UTC+5 with proper offset
+        // appear_date and deadline are stored in UTC, need to convert to local time
         if ($this->appear_date) {
             $data['appear_date'] = $this->appear_date_api;
         }
@@ -217,18 +218,24 @@ class Task extends Model
         }
 
         if ($this->archived_at) {
+            // archived_at is stored in UTC
             $data['archived_at'] = $this->archived_at->copy()
                 ->setTimezone('Asia/Yekaterinburg')
                 ->format('Y-m-d\TH:i:sP');
         }
 
-        // Also convert created_at and updated_at with timezone offset
+        // created_at and updated_at workaround:
+        // DB stores local time value as UTC (e.g. 01:25 stored as 01:25 UTC instead of 20:25 UTC)
+        // We need to output "01:25+05:00" so browser shows 01:25.
+        $offset = Carbon::now()->format('P'); // e.g. +05:00
+
         if ($this->created_at) {
-            $data['created_at'] = $this->created_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
+            // Take the raw time value (01:25) and append the local offset
+            $data['created_at'] = $this->created_at->format('Y-m-d\TH:i:s') . $offset;
         }
 
         if ($this->updated_at) {
-            $data['updated_at'] = $this->updated_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP');
+            $data['updated_at'] = $this->updated_at->format('Y-m-d\TH:i:s') . $offset;
         }
 
         return $data;

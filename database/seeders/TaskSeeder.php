@@ -85,7 +85,7 @@ class TaskSeeder extends Seeder
                 'recurrence' => 'weekly',
                 'recurrence_time' => '10:00',
                 'deadline_time' => '18:00',
-                'recurrence_day_of_week' => 5, // Friday
+                'recurrence_days_of_week' => [5], // Friday
                 'task_type' => 'individual',
                 'response_type' => 'complete',
                 'priority' => 'medium',
@@ -98,7 +98,7 @@ class TaskSeeder extends Seeder
                 'recurrence' => 'monthly',
                 'recurrence_time' => '09:00',
                 'deadline_time' => '18:00',
-                'recurrence_day_of_month' => -1, // Last day of month
+                'recurrence_days_of_month' => [-1], // Last day of month
                 'task_type' => 'group',
                 'response_type' => 'complete',
                 'priority' => 'high',
@@ -123,7 +123,7 @@ class TaskSeeder extends Seeder
                 'recurrence' => 'weekly',
                 'recurrence_time' => '14:00',
                 'deadline_time' => '15:00',
-                'recurrence_day_of_week' => 1, // Monday
+                'recurrence_days_of_week' => [1], // Monday
                 'task_type' => 'group',
                 'response_type' => 'acknowledge',
                 'priority' => 'low',
@@ -145,8 +145,8 @@ class TaskSeeder extends Seeder
                 'recurrence' => $genData['recurrence'],
                 'recurrence_time' => $genData['recurrence_time'] . ':00',
                 'deadline_time' => $genData['deadline_time'] . ':00',
-                'recurrence_day_of_week' => $genData['recurrence_day_of_week'] ?? null,
-                'recurrence_day_of_month' => $genData['recurrence_day_of_month'] ?? null,
+                'recurrence_days_of_week' => $genData['recurrence_days_of_week'] ?? null,
+                'recurrence_days_of_month' => $genData['recurrence_days_of_month'] ?? null,
                 'start_date' => $startDate,
                 'task_type' => $genData['task_type'],
                 'response_type' => $genData['response_type'],
@@ -205,16 +205,25 @@ class TaskSeeder extends Seeder
                     $shouldGenerate = true;
                     break;
                 case 'weekly':
-                    $shouldGenerate = $currentDate->dayOfWeekIso === $generator->recurrence_day_of_week;
+                    $daysOfWeek = $generator->recurrence_days_of_week ?? [];
+                    $shouldGenerate = in_array($currentDate->dayOfWeekIso, $daysOfWeek, true);
                     break;
                 case 'monthly':
-                    $targetDay = $generator->recurrence_day_of_month;
-                    if ($targetDay > 0) {
-                        $shouldGenerate = $currentDate->day === $targetDay;
-                    } else {
-                        $daysInMonth = $currentDate->daysInMonth;
-                        $calculatedDay = $daysInMonth + $targetDay + 1;
-                        $shouldGenerate = $currentDate->day === $calculatedDay;
+                    $daysOfMonth = $generator->recurrence_days_of_month ?? [];
+                    foreach ($daysOfMonth as $targetDay) {
+                        if ($targetDay > 0) {
+                            $effectiveDay = min($targetDay, $currentDate->daysInMonth);
+                            if ($currentDate->day === $effectiveDay) {
+                                $shouldGenerate = true;
+                                break;
+                            }
+                        } else {
+                            $effectiveDay = $currentDate->daysInMonth + $targetDay + 1;
+                            if ($effectiveDay > 0 && $currentDate->day === $effectiveDay) {
+                                $shouldGenerate = true;
+                                break;
+                            }
+                        }
                     }
                     break;
             }

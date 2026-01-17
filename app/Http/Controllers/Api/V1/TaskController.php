@@ -217,7 +217,7 @@ class TaskController extends Controller
                 case 'overdue':
                     $query->where('is_active', true)
                           ->whereNotNull('deadline')
-                          ->where('deadline', '<', $now)
+                          ->where('deadline', '<', Carbon::now('UTC'))
                           ->whereDoesntHave('responses', function ($q) {
                               $q->where('status', 'completed');
                           });
