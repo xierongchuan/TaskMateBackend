@@ -30,6 +30,7 @@ class Task extends Model
         'recurrence_day_of_month',
         'last_recurrence_at',
         'task_type',
+        'target_shift_type',
         'response_type',
         'tags',
         'is_active',
@@ -146,39 +147,76 @@ class Task extends Model
      *
      * For group tasks: 'completed' only when ALL assignees have completed
      * For individual tasks: first response determines status
+     *
+     * Status priority:
+     * 1. completed_late - all completed but after deadline
+     * 2. completed - all completed before deadline
+     * 3. pending_review - at least one pending review
+     * 4. acknowledged - at least one acknowledged
+     * 5. overdue - deadline passed, not completed
+     * 6. pending - default
      */
     public function getStatusAttribute()
     {
         $responses = $this->responses;
         $assignments = $this->assignments;
+        $hasDeadline = $this->deadline !== null;
+        $deadlinePassed = $hasDeadline && $this->deadline->isPast();
+
+        // Helper: check if task is completed (all required responses received)
+        $isCompleted = false;
+        $completedLate = false;
 
         if ($this->task_type === 'group') {
             // For group tasks: check that ALL assignees have completed
             $assignedUserIds = $assignments->pluck('user_id')->unique()->values()->toArray();
-            $completedUserIds = $responses->where('status', 'completed')->pluck('user_id')->unique()->values()->toArray();
+            $completedResponses = $responses->where('status', 'completed');
+            $completedUserIds = $completedResponses->pluck('user_id')->unique()->values()->toArray();
 
             // All assigned users must have completed
             if (count($assignedUserIds) > 0 && count(array_diff($assignedUserIds, $completedUserIds)) === 0) {
-                return 'completed';
-            }
+                $isCompleted = true;
 
-            // Check if at least one has pending_review
+                // Check if any completion was after deadline
+                if ($hasDeadline) {
+                    foreach ($completedResponses as $response) {
+                        if ($response->responded_at && $response->responded_at->gt($this->deadline)) {
+                            $completedLate = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            // For individual tasks: first completed response determines status
+            $completedResponse = $responses->firstWhere('status', 'completed');
+            if ($completedResponse) {
+                $isCompleted = true;
+
+                // Check if completion was after deadline
+                if ($hasDeadline && $completedResponse->responded_at && $completedResponse->responded_at->gt($this->deadline)) {
+                    $completedLate = true;
+                }
+            }
+        }
+
+        // Return completed statuses
+        if ($isCompleted) {
+            return $completedLate ? 'completed_late' : 'completed';
+        }
+
+        // Check for pending_review and acknowledged (group or individual)
+        if ($this->task_type === 'group') {
             $pendingReviewUserIds = $responses->where('status', 'pending_review')->pluck('user_id')->unique()->values()->toArray();
             if (count($pendingReviewUserIds) > 0) {
                 return 'pending_review';
             }
 
-            // Check if at least one has acknowledged
             $acknowledgedUserIds = $responses->where('status', 'acknowledged')->pluck('user_id')->unique()->values()->toArray();
             if (count($acknowledgedUserIds) > 0) {
                 return 'acknowledged';
             }
         } else {
-            // For individual tasks: first response determines status
-            if ($responses->contains('status', 'completed')) {
-                return 'completed';
-            }
-
             if ($responses->contains('status', 'pending_review')) {
                 return 'pending_review';
             }
@@ -188,8 +226,8 @@ class Task extends Model
             }
         }
 
-        // Check for overdue
-        if ($this->is_active && $this->deadline && $this->deadline->isPast()) {
+        // Check for overdue (only if active and not completed)
+        if ($this->is_active && $deadlinePassed) {
             return 'overdue';
         }
 

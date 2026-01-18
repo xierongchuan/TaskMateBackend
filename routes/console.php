@@ -23,5 +23,8 @@ Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->hourly();
 // Process task generators - runs every 5 minutes to ensure tasks are generated promptly
 Schedule::job(new \App\Jobs\ProcessTaskGeneratorsJob())->everyFiveMinutes();
 
-// Check for tasks to archive - runs every 10 minutes (command handles settings and time logic)
-Schedule::command('tasks:archive-completed --type=all')->everyTenMinutes();
+// Check for completed tasks to archive - runs every 10 minutes (command handles settings and time logic)
+Schedule::command('tasks:archive-completed --type=completed')->everyTenMinutes();
+
+// Archive overdue tasks N hours after shift closes - runs hourly
+Schedule::command('tasks:archive-overdue-after-shift')->hourly();

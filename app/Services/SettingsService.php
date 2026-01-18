@@ -23,13 +23,25 @@ class SettingsService
     {
         $cacheKey = $this->getCacheKey($key, $dealershipId);
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($key, $dealershipId, $default) {
-            $setting = Setting::where('key', $key)
-                ->where('dealership_id', $dealershipId)
-                ->first();
+        // Check cache first
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
 
-            return $setting ? $setting->getTypedValue() : $default;
-        });
+        // Query database
+        $setting = Setting::where('key', $key)
+            ->where('dealership_id', $dealershipId)
+            ->first();
+
+        if ($setting) {
+            $value = $setting->getTypedValue();
+            // Only cache actual values, not defaults
+            Cache::put($cacheKey, $value, self::CACHE_TTL);
+            return $value;
+        }
+
+        // Return default without caching (so we can retry later)
+        return $default;
     }
 
     /**

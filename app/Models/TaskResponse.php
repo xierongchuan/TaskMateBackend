@@ -16,9 +16,11 @@ class TaskResponse extends Model
     protected $fillable = [
         'task_id',
         'user_id',
+        'shift_id',
         'status',
         'comment',
         'responded_at',
+        'completed_during_shift',
         'created_at',
     ];
 
@@ -26,6 +28,7 @@ class TaskResponse extends Model
         'responded_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'completed_during_shift' => 'boolean',
     ];
 
     public function task()
@@ -36,5 +39,10 @@ class TaskResponse extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function shift()
+    {
+        return $this->belongsTo(Shift::class, 'shift_id');
     }
 }

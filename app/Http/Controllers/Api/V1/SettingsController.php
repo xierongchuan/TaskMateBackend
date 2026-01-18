@@ -423,4 +423,84 @@ class SettingsController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Get task configuration settings (shift requirements, archiving)
+     *
+     * GET /api/v1/settings/task-config
+     */
+    public function getTaskConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id') !== null && $request->query('dealership_id') !== ''
+            ? (int) $request->query('dealership_id')
+            : null;
+
+        $taskConfig = [
+            // Hybrid mode: require open shift to complete tasks
+            'task_requires_open_shift' => (bool) $this->settingsService->getSettingWithFallback(
+                'task_requires_open_shift',
+                $dealershipId,
+                false
+            ),
+            // Hours after shift close to archive overdue tasks
+            'archive_overdue_hours_after_shift' => (int) $this->settingsService->getSettingWithFallback(
+                'archive_overdue_hours_after_shift',
+                $dealershipId,
+                2
+            ),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $taskConfig,
+        ]);
+    }
+
+    /**
+     * Update task configuration settings
+     *
+     * PUT /api/v1/settings/task-config
+     */
+    public function updateTaskConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'task_requires_open_shift' => ['nullable', 'boolean'],
+            'archive_overdue_hours_after_shift' => ['nullable', 'integer', 'min:1', 'max:48'],
+            'dealership_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $data = $validator->validated();
+            $dealershipId = $data['dealership_id'] ?? null;
+            unset($data['dealership_id']);
+
+            $updatedSettings = [];
+            foreach ($data as $key => $value) {
+                if ($value !== null) {
+                    $type = is_bool($value) ? 'boolean' : 'integer';
+                    $this->settingsService->set($key, $value, $dealershipId, $type);
+                    $updatedSettings[$key] = $value;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Task configuration updated successfully',
+                'data' => $updatedSettings,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }

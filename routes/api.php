@@ -158,6 +158,9 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:owner');
             Route::put('/settings/bot-config', [SettingsController::class, 'updateBotConfig'])
                 ->middleware('role:manager,owner');
+            Route::get('/settings/task-config', [SettingsController::class, 'getTaskConfig']);
+            Route::put('/settings/task-config', [SettingsController::class, 'updateTaskConfig'])
+                ->middleware('role:manager,owner');
             Route::put('/settings/{key}', [SettingsController::class, 'update'])
                 ->middleware('role:owner');
 

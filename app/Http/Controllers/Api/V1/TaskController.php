@@ -7,6 +7,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskAssignment;
+use App\Models\Shift;
+use App\Services\SettingsService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Enums\Role;
@@ -609,7 +611,41 @@ class TaskController extends Controller
         ]);
 
         $status = $validated['status'];
+        /** @var \App\Models\User $user */
         $user = auth()->user();
+
+        // Hybrid mode: check if open shift is required
+        $shiftId = null;
+        $completedDuringShift = false;
+
+        if (in_array($status, ['pending_review', 'completed'])) {
+            $settingsService = app(SettingsService::class);
+            $requiresShift = (bool) $settingsService->getSettingWithFallback(
+                'task_requires_open_shift',
+                $task->dealership_id,
+                false
+            );
+
+            // Find user's open shift
+            $openShift = Shift::where('user_id', $user->id)
+                ->whereNull('shift_end')
+                ->where('status', 'open')
+                ->first();
+
+            if ($requiresShift && !$openShift) {
+                // Managers and owners can complete without open shift
+                if (!in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+                    return response()->json([
+                        'message' => 'Для выполнения задачи необходимо открыть смену'
+                    ], 422);
+                }
+            }
+
+            if ($openShift) {
+                $shiftId = $openShift->id;
+                $completedDuringShift = true;
+            }
+        }
 
         switch ($status) {
             case 'pending':
@@ -618,23 +654,15 @@ class TaskController extends Controller
                 break;
 
             case 'pending_review':
-                // Update or create response with pending_review status
-                $task->responses()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'status' => $status,
-                        'responded_at' => Carbon::now(),
-                    ]
-                );
-                break;
-
             case 'completed':
-                // Update or create response for current user
+                // Update or create response with shift tracking
                 $task->responses()->updateOrCreate(
                     ['user_id' => $user->id],
                     [
                         'status' => $status,
                         'responded_at' => Carbon::now(),
+                        'shift_id' => $shiftId,
+                        'completed_during_shift' => $completedDuringShift,
                     ]
                 );
                 break;

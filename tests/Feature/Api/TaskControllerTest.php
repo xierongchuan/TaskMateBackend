@@ -255,10 +255,11 @@ describe('Task API', function () {
     });
 
     it('updates task status to completed', function () {
-        // Arrange
+        // Arrange - ensure deadline is in the future so status is 'completed', not 'completed_late'
         $task = Task::factory()->create([
             'dealership_id' => $this->dealership->id,
-            'task_type' => 'individual'
+            'task_type' => 'individual',
+            'deadline' => Carbon::now()->addDay(),
         ]);
 
         // Act

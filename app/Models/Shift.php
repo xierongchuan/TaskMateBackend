@@ -25,6 +25,7 @@ class Shift extends Model
         'late_minutes',
         'scheduled_start',
         'scheduled_end',
+        'archived_tasks_processed',
     ];
 
     protected $casts = [
@@ -35,6 +36,7 @@ class Shift extends Model
         'late_minutes' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'archived_tasks_processed' => 'boolean',
     ];
 
     public function user()
