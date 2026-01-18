@@ -231,7 +231,7 @@ class SettingsService
         $key = $shiftNumber === 1 ? 'shift_1_start_time' : 'shift_2_start_time';
         $default = $shiftNumber === 1 ? '09:00' : '18:00';
 
-        return $this->get($key, $dealershipId, $default);
+        return $this->getSettingWithFallback($key, $dealershipId, $default);
     }
 
     /**
@@ -246,7 +246,7 @@ class SettingsService
         $key = $shiftNumber === 1 ? 'shift_1_end_time' : 'shift_2_end_time';
         $default = $shiftNumber === 1 ? '18:00' : '02:00';
 
-        return $this->get($key, $dealershipId, $default);
+        return $this->getSettingWithFallback($key, $dealershipId, $default);
     }
 
     /**
@@ -257,7 +257,7 @@ class SettingsService
      */
     public function getLateTolerance(?int $dealershipId = null): int
     {
-        return (int) $this->get('late_tolerance_minutes', $dealershipId, 15);
+        return (int) $this->getSettingWithFallback('late_tolerance_minutes', $dealershipId, 15);
     }
 
     /**
@@ -268,7 +268,7 @@ class SettingsService
      */
     public function getTaskArchiveDays(?int $dealershipId = null): int
     {
-        return $this->get('task_archive_days', $dealershipId, 30);
+        return (int) $this->getSettingWithFallback('task_archive_days', $dealershipId, 30);
     }
 
     /**
@@ -279,7 +279,7 @@ class SettingsService
      */
     public function getWeeklyReportDay(?int $dealershipId = null): int
     {
-        return $this->get('weekly_report_day', $dealershipId, 1); // Monday by default
+        return (int) $this->getSettingWithFallback('weekly_report_day', $dealershipId, 1); // Monday by default
     }
 
     /**
@@ -348,16 +348,23 @@ class SettingsService
      */
     public function getSettingWithFallback(string $key, ?int $dealershipId = null, mixed $default = null): mixed
     {
+        $uniqueMarker = '___SETTING_NOT_FOUND___' . uniqid();
+
         // First try to get dealership-specific setting
         if ($dealershipId) {
-            $dealershipValue = $this->get($key, $dealershipId);
-            if ($dealershipValue !== $default) {
+            $dealershipValue = $this->get($key, $dealershipId, $uniqueMarker);
+            if ($dealershipValue !== $uniqueMarker) {
                 return $dealershipValue;
             }
         }
 
         // Fallback to global setting
-        return $this->get($key, null, $default);
+        $globalValue = $this->get($key, null, $uniqueMarker);
+        if ($globalValue !== $uniqueMarker) {
+            return $globalValue;
+        }
+
+        return $default;
     }
 
     /**

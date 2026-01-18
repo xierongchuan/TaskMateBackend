@@ -341,21 +341,21 @@ class SettingsController extends Controller
         $dealershipId = $request->query('dealership_id');
 
         $botConfig = [
-            'notification_enabled' => (bool) $this->settingsService->get('notification_enabled', $dealershipId) ?? true,
-            'auto_close_shifts' => (bool) $this->settingsService->get('auto_close_shifts', $dealershipId) ?? false,
-            'shift_reminder_minutes' => (int) ($this->settingsService->get('shift_reminder_minutes', $dealershipId) ?? 15),
-            'maintenance_mode' => (bool) $this->settingsService->get('maintenance_mode', $dealershipId) ?? false,
-            'rows_per_page' => (int) ($this->settingsService->get('rows_per_page', $dealershipId) ?? 10),
+            'notification_enabled' => (bool) $this->settingsService->getSettingWithFallback('notification_enabled', $dealershipId, true),
+            'auto_close_shifts' => (bool) $this->settingsService->getSettingWithFallback('auto_close_shifts', $dealershipId, false),
+            'shift_reminder_minutes' => (int) $this->settingsService->getSettingWithFallback('shift_reminder_minutes', $dealershipId, 15),
+            'maintenance_mode' => (bool) $this->settingsService->getSettingWithFallback('maintenance_mode', $dealershipId, false),
+            'rows_per_page' => (int) $this->settingsService->getSettingWithFallback('rows_per_page', $dealershipId, 10),
             // Archive settings - separate for completed and overdue tasks
-            'archive_completed_time' => $this->settingsService->get('archive_completed_time', $dealershipId) ?? '03:00', // Time for daily completed tasks archiving
-            'archive_overdue_day_of_week' => (int) ($this->settingsService->get('archive_overdue_day_of_week', $dealershipId) ?? 0), // 0 = disabled, 1-7 = Monday-Sunday
-            'archive_overdue_time' => $this->settingsService->get('archive_overdue_time', $dealershipId) ?? '03:00', // Time for overdue tasks archiving
-            'notification_types' => $this->settingsService->get('notification_types', $dealershipId) ?? [
+            'archive_completed_time' => $this->settingsService->getSettingWithFallback('archive_completed_time', $dealershipId, '03:00'), // Time for daily completed tasks archiving
+            'archive_overdue_day_of_week' => (int) $this->settingsService->getSettingWithFallback('archive_overdue_day_of_week', $dealershipId, 0), // 0 = disabled, 1-7 = Monday-Sunday
+            'archive_overdue_time' => $this->settingsService->getSettingWithFallback('archive_overdue_time', $dealershipId, '03:00'), // Time for overdue tasks archiving
+            'notification_types' => $this->settingsService->getSettingWithFallback('notification_types', $dealershipId, [
                 'task_overdue' => true,
                 'shift_late' => true,
                 'task_completed' => true,
                 'system_errors' => true,
-            ],
+            ]),
         ];
 
         return response()->json([
