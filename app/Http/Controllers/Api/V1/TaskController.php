@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskAssignment;
@@ -45,16 +46,16 @@ class TaskController extends Controller
 
             switch ($dateRange) {
                 case 'today':
-                    $dateStart = Carbon::today();
-                    $dateEnd = Carbon::today()->endOfDay();
+                    $dateStart = TimeHelper::startOfDayUtc();
+                    $dateEnd = TimeHelper::endOfDayUtc();
                     break;
                 case 'week':
-                    $dateStart = Carbon::now()->startOfWeek();
-                    $dateEnd = Carbon::now()->endOfWeek();
+                    $dateStart = TimeHelper::startOfWeekUtc();
+                    $dateEnd = TimeHelper::endOfWeekUtc();
                     break;
                 case 'month':
-                    $dateStart = Carbon::now()->startOfMonth();
-                    $dateEnd = Carbon::now()->endOfMonth();
+                    $dateStart = TimeHelper::startOfMonthUtc();
+                    $dateEnd = TimeHelper::endOfMonthUtc();
                     break;
             }
 
@@ -196,7 +197,7 @@ class TaskController extends Controller
         // Фильтрация по статусу задачи (Bug #3 - код корректный, проверено)
         // Поддерживаемые статусы: active, completed, overdue, pending, acknowledged
         if ($status) {
-            $now = Carbon::now();
+            $nowUtc = TimeHelper::nowUtc();
 
             switch (strtolower($status)) {
                 case 'active':
@@ -219,13 +220,10 @@ class TaskController extends Controller
                 case 'overdue':
                     $query->where('is_active', true)
                           ->whereNotNull('deadline')
-                          ->where('deadline', '<', Carbon::now('UTC'))
+                          ->where('deadline', '<', $nowUtc)
                           ->whereDoesntHave('responses', function ($q) {
                               $q->where('status', 'completed');
                           });
-                    break;
-
-
                     break;
 
                 case 'pending':
@@ -660,7 +658,7 @@ class TaskController extends Controller
                     ['user_id' => $user->id],
                     [
                         'status' => $status,
-                        'responded_at' => Carbon::now(),
+                        'responded_at' => TimeHelper::nowUtc(),
                         'shift_id' => $shiftId,
                         'completed_during_shift' => $completedDuringShift,
                     ]

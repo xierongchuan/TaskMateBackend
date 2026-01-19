@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Shift;
 use App\Models\Task;
-use App\Models\TaskResponse;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
@@ -25,53 +23,44 @@ class ReportController extends Controller
             return response()->json(['message' => 'Parameters date_from and date_to are required'], 400);
         }
 
-        $from = Carbon::parse($dateFrom)->startOfDay();
-        $to = Carbon::parse($dateTo)->endOfDay();
+        // Конвертируем даты в UTC для запросов к БД
+        $from = TimeHelper::startOfDayUtc($dateFrom);
+        $to = TimeHelper::endOfDayUtc($dateTo);
+        $nowUtc = TimeHelper::nowUtc();
 
-        // Determine Dealership Filter
+        // Фильтр по автосалону для менеджеров
         $dealershipId = null;
         if ($user->role === 'manager' && $user->dealership_id) {
             $dealershipId = $user->dealership_id;
         }
 
-        // Helper to apply dealership filter to Task query
-        // Assuming Tasks have dealership_id or we filter by assigned users in dealership
-        // Inspecting Task model or migrations earlier, we saw 'dealership_id' in Task migrations?
-        // Let's rely on tasks.dealership_id if it exists, or relation.
-        // Given earlier UI filters had 'dealership_id', column likely exists.
+        // Helper для применения фильтра по автосалону
         $applyTaskFilter = function ($query) use ($dealershipId) {
             if ($dealershipId) {
                 $query->where('dealership_id', $dealershipId);
             }
         };
 
-        // Helper for Shift filter
         $applyShiftFilter = function ($query) use ($dealershipId) {
             if ($dealershipId) {
                 $query->where('dealership_id', $dealershipId);
             }
         };
 
-        // Summary Statistics
+        // === SUMMARY STATISTICS ===
+
+        // Всего задач в периоде
         $totalTasksQuery = Task::whereBetween('created_at', [$from, $to]);
         $applyTaskFilter($totalTasksQuery);
         $totalTasks = $totalTasksQuery->count();
 
-        $completedTasksQuery = Task::whereBetween('created_at', [$from, $to])->where('is_active', false);
-        $applyTaskFilter($completedTasksQuery);
-        $completedTasks = $completedTasksQuery->count();
-
-        $overdueTasksQuery = Task::whereBetween('deadline', [$from, $to])
-            ->where('deadline', '<', Carbon::now())
-            ->where('is_active', true);
-        $applyTaskFilter($overdueTasksQuery);
-        $overdueTasks = $overdueTasksQuery->count();
-
+        // Переносы
         $postponedTasksQuery = Task::whereBetween('created_at', [$from, $to])
             ->where('postpone_count', '>', 0);
         $applyTaskFilter($postponedTasksQuery);
         $postponedTasks = $postponedTasksQuery->count();
 
+        // Смены
         $totalShiftsQuery = Shift::whereBetween('shift_start', [$from, $to]);
         $applyShiftFilter($totalShiftsQuery);
         $totalShifts = $totalShiftsQuery->count();
@@ -85,87 +74,86 @@ class ReportController extends Controller
         $applyShiftFilter($totalReplacementsQuery);
         $totalReplacements = $totalReplacementsQuery->count();
 
-        // Tasks by Status
-        $activeTasksQuery = Task::whereBetween('created_at', [$from, $to])
-            ->where('is_active', true)
-            ->where(function($q) {
-                $q->whereNull('deadline')->orWhere('deadline', '>=', Carbon::now());
-            });
-        $applyTaskFilter($activeTasksQuery);
-        $activeTasksCount = $activeTasksQuery->count();
+        // === ПОДСЧЁТ СТАТУСОВ БЕЗ ДВОЙНОГО СЧЁТА ===
+        // Используем взаимоисключающую логику как в Task::getStatusAttribute()
 
-        // Pending review tasks count
-        $pendingReviewQuery = Task::whereBetween('created_at', [$from, $to])
-            ->whereHas('responses', function ($q) {
-                $q->where('status', 'pending_review');
-            });
-        $applyTaskFilter($pendingReviewQuery);
-        $pendingReviewTasks = $pendingReviewQuery->count();
+        // Получаем все задачи периода с responses для расчёта статусов
+        $tasksQuery = Task::with(['responses', 'assignments'])->whereBetween('created_at', [$from, $to]);
+        $applyTaskFilter($tasksQuery);
+        $allTasks = $tasksQuery->get();
 
-        $tasksByStatus = [
-            [
-                'status' => 'completed',
-                'count' => $completedTasks,
-                'percentage' => $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100, 1) : 0
-            ],
-            [
-                'status' => 'overdue',
-                'count' => $overdueTasks,
-                'percentage' => $totalTasks > 0 ? round(($overdueTasks / $totalTasks) * 100, 1) : 0
-            ],
-            [
-                'status' => 'active',
-                'count' => $activeTasksCount,
-                'percentage' => $totalTasks > 0 ? round(($activeTasksCount / $totalTasks) * 100, 1) : 0
-            ],
-            [
-                'status' => 'pending_review',
-                'count' => $pendingReviewTasks,
-                'percentage' => $totalTasks > 0 ? round(($pendingReviewTasks / $totalTasks) * 100, 1) : 0
-            ]
+        // Считаем статусы по каждой задаче индивидуально
+        $statusCounts = [
+            'completed' => 0,
+            'completed_late' => 0,
+            'pending_review' => 0,
+            'acknowledged' => 0,
+            'overdue' => 0,
+            'pending' => 0,
         ];
 
-        // Employee Performance
+        foreach ($allTasks as $task) {
+            $status = $this->calculateTaskStatus($task, $nowUtc);
+            if (isset($statusCounts[$status])) {
+                $statusCounts[$status]++;
+            }
+        }
+
+        // Формируем массив для API (сумма должна равняться totalTasks)
+        $tasksByStatus = [];
+        foreach ($statusCounts as $status => $count) {
+            $tasksByStatus[] = [
+                'status' => $status,
+                'count' => $count,
+                'percentage' => $totalTasks > 0 ? round(($count / $totalTasks) * 100, 1) : 0,
+            ];
+        }
+
+        // Суммарные completed (включая с опозданием) и overdue для summary
+        $completedTasks = $statusCounts['completed'] + $statusCounts['completed_late'];
+        $overdueTasks = $statusCounts['overdue'];
+
+        // === ПРОИЗВОДИТЕЛЬНОСТЬ СОТРУДНИКОВ ===
         $employeesQuery = User::where('role', 'employee');
         if ($dealershipId) {
             $employeesQuery->where('dealership_id', $dealershipId);
         }
         $employees = $employeesQuery->get();
 
-        $employeesPerformance = $employees->map(function ($user) use ($from, $to) {
-            // Task filter handles user specific logic, but tasks are usually assigned to a user or dealership
-            // Here we look at tasks specifically assigned to the user
-            $userTasksQuery = Task::whereHas('assignedUsers', function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            });
-            // Note: Assigned tasks might be from any dealership if user moved, but typically strict.
-            // We count specific tasks regardless of dealership ID on the TASK itself,
-            // because they are assigned to THIS user who is in THIS dealership.
-            // So we don't strictly need to filter tasks by dealership_id here again if we trust the user assignment scope.
-            // But if we want to be strict about 'tasks within this dealership context', we could add it.
-            // Let's stick to user assignment.
+        $employeesPerformance = $employees->map(function ($employee) use ($from, $to, $nowUtc, $applyTaskFilter) {
+            // Задачи, назначенные этому сотруднику
+            $userTasksQuery = Task::whereHas('assignedUsers', function ($q) use ($employee) {
+                $q->where('user_id', $employee->id);
+            })->whereBetween('created_at', [$from, $to]);
 
-            $userTasks = (clone $userTasksQuery)
-                ->whereBetween('created_at', [$from, $to])
-                ->count();
+            $userTasks = (clone $userTasksQuery)->count();
 
+            // Выполненные - есть completed response от этого пользователя
             $userCompleted = (clone $userTasksQuery)
-                ->whereBetween('created_at', [$from, $to])
-                ->where('is_active', false)
+                ->whereHas('responses', function ($q) use ($employee) {
+                    $q->where('user_id', $employee->id)
+                      ->where('status', 'completed');
+                })
                 ->count();
 
+            // Просроченные - дедлайн прошёл, нет completed response от этого пользователя
             $userOverdue = (clone $userTasksQuery)
-                ->whereBetween('deadline', [$from, $to])
-                ->where('deadline', '<', Carbon::now())
                 ->where('is_active', true)
+                ->whereNotNull('deadline')
+                ->where('deadline', '<', $nowUtc)
+                ->whereDoesntHave('responses', function ($q) use ($employee) {
+                    $q->where('user_id', $employee->id)
+                      ->where('status', 'completed');
+                })
                 ->count();
 
-            $userLateShifts = Shift::where('user_id', $user->id)
+            // Опоздания на смены
+            $userLateShifts = Shift::where('user_id', $employee->id)
                 ->whereBetween('shift_start', [$from, $to])
                 ->where('late_minutes', '>', 0)
                 ->count();
 
-            // Simple score calculation
+            // Расчёт рейтинга
             $score = 100;
             if ($userTasks > 0) {
                 $score -= ($userOverdue * 5);
@@ -174,8 +162,8 @@ class ReportController extends Controller
             $score = max(0, min(100, $score));
 
             return [
-                'employee_id' => $user->id,
-                'employee_name' => $user->full_name,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->full_name,
                 'completed_tasks' => $userCompleted,
                 'overdue_tasks' => $userOverdue,
                 'late_shifts' => $userLateShifts,
@@ -183,30 +171,39 @@ class ReportController extends Controller
             ];
         })->sortByDesc('performance_score')->values();
 
-        // Daily Stats
+        // === ЕЖЕДНЕВНАЯ СТАТИСТИКА ===
         $dailyStats = [];
         $current = $from->copy();
         while ($current <= $to) {
-            $dayStart = $current->copy()->startOfDay();
-            $dayEnd = $current->copy()->endOfDay();
+            $dayStart = TimeHelper::startOfDayUtc($current);
+            $dayEnd = TimeHelper::endOfDayUtc($current);
 
-            $dayCompletedQuery = Task::whereBetween('created_at', [$dayStart, $dayEnd])->where('is_active', false);
+            // Задачи, выполненные в этот день (по времени response)
+            $dayCompletedQuery = Task::whereHas('responses', function ($q) use ($dayStart, $dayEnd) {
+                $q->where('status', 'completed')
+                  ->whereBetween('responded_at', [$dayStart, $dayEnd]);
+            });
             $applyTaskFilter($dayCompletedQuery);
             $dayCompleted = $dayCompletedQuery->count();
 
+            // Задачи, просроченные в этот день (дедлайн попал в этот день и уже прошёл)
             $dayOverdueQuery = Task::whereBetween('deadline', [$dayStart, $dayEnd])
-                ->where('deadline', '<', Carbon::now())
-                ->where('is_active', true);
+                ->where('deadline', '<', $nowUtc)
+                ->where('is_active', true)
+                ->whereDoesntHave('responses', function ($q) {
+                    $q->where('status', 'completed');
+                });
             $applyTaskFilter($dayOverdueQuery);
             $dayOverdue = $dayOverdueQuery->count();
 
+            // Опоздания на смены в этот день
             $dayLateShiftsQuery = Shift::whereBetween('shift_start', [$dayStart, $dayEnd])
                 ->where('late_minutes', '>', 0);
             $applyShiftFilter($dayLateShiftsQuery);
             $dayLateShifts = $dayLateShiftsQuery->count();
 
             $dailyStats[] = [
-                'date' => $current->format('Y-m-d'),
+                'date' => $current->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d'),
                 'completed' => $dayCompleted,
                 'overdue' => $dayOverdue,
                 'late_shifts' => $dayLateShifts,
@@ -214,35 +211,33 @@ class ReportController extends Controller
             $current->addDay();
         }
 
-        // Top Issues
+        // === ТОП ПРОБЛЕМ ===
         $topIssues = [];
         if ($overdueTasks > 0) {
             $topIssues[] = [
                 'issue_type' => 'overdue_tasks',
                 'count' => $overdueTasks,
-                'description' => 'Просроченные задачи'
+                'description' => 'Просроченные задачи',
             ];
         }
         if ($lateShifts > 0) {
             $topIssues[] = [
                 'issue_type' => 'late_shifts',
                 'count' => $lateShifts,
-                'description' => 'Опоздания на смены'
+                'description' => 'Опоздания на смены',
             ];
         }
         if ($postponedTasks > 0) {
             $topIssues[] = [
                 'issue_type' => 'frequent_postponements',
                 'count' => $postponedTasks,
-                'description' => 'Частые переносы задач'
+                'description' => 'Частые переносы задач',
             ];
         }
-        usort($topIssues, function($a, $b) {
-            return $b['count'] <=> $a['count'];
-        });
+        usort($topIssues, fn ($a, $b) => $b['count'] <=> $a['count']);
 
         return response()->json([
-            'period' => $from->format('Y-m-d') . ' - ' . $to->format('Y-m-d'),
+            'period' => $from->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d') . ' - ' . $to->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d'),
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'summary' => [
@@ -259,5 +254,77 @@ class ReportController extends Controller
             'daily_stats' => $dailyStats,
             'top_issues' => $topIssues,
         ]);
+    }
+
+    /**
+     * Вычисляет статус задачи (копия логики из Task::getStatusAttribute для консистентности)
+     */
+    private function calculateTaskStatus(Task $task, $nowUtc): string
+    {
+        $responses = $task->responses;
+        $assignments = $task->assignments;
+        $hasDeadline = $task->deadline !== null;
+        $deadlinePassed = $hasDeadline && $task->deadline->lt($nowUtc);
+
+        $isCompleted = false;
+        $completedLate = false;
+
+        if ($task->task_type === 'group') {
+            $assignedUserIds = $assignments->pluck('user_id')->unique()->values()->toArray();
+            $completedResponses = $responses->where('status', 'completed');
+            $completedUserIds = $completedResponses->pluck('user_id')->unique()->values()->toArray();
+
+            if (count($assignedUserIds) > 0 && count(array_diff($assignedUserIds, $completedUserIds)) === 0) {
+                $isCompleted = true;
+
+                if ($hasDeadline) {
+                    foreach ($completedResponses as $response) {
+                        if ($response->responded_at && $response->responded_at->gt($task->deadline)) {
+                            $completedLate = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            $completedResponse = $responses->firstWhere('status', 'completed');
+            if ($completedResponse) {
+                $isCompleted = true;
+
+                if ($hasDeadline && $completedResponse->responded_at && $completedResponse->responded_at->gt($task->deadline)) {
+                    $completedLate = true;
+                }
+            }
+        }
+
+        if ($isCompleted) {
+            return $completedLate ? 'completed_late' : 'completed';
+        }
+
+        if ($task->task_type === 'group') {
+            $pendingReviewUserIds = $responses->where('status', 'pending_review')->pluck('user_id')->unique()->values()->toArray();
+            if (count($pendingReviewUserIds) > 0) {
+                return 'pending_review';
+            }
+
+            $acknowledgedUserIds = $responses->where('status', 'acknowledged')->pluck('user_id')->unique()->values()->toArray();
+            if (count($acknowledgedUserIds) > 0) {
+                return 'acknowledged';
+            }
+        } else {
+            if ($responses->contains('status', 'pending_review')) {
+                return 'pending_review';
+            }
+
+            if ($responses->contains('status', 'acknowledged')) {
+                return 'acknowledged';
+            }
+        }
+
+        if ($task->is_active && $deadlinePassed) {
+            return 'overdue';
+        }
+
+        return 'pending';
     }
 }

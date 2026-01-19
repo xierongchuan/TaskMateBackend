@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Helpers\TimeHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
@@ -161,7 +162,7 @@ class Task extends Model
         $responses = $this->responses;
         $assignments = $this->assignments;
         $hasDeadline = $this->deadline !== null;
-        $deadlinePassed = $hasDeadline && $this->deadline->isPast();
+        $deadlinePassed = TimeHelper::isDeadlinePassed($this->deadline);
 
         // Helper: check if task is completed (all required responses received)
         $isCompleted = false;
@@ -265,7 +266,7 @@ class Task extends Model
         // created_at and updated_at workaround:
         // DB stores local time value as UTC (e.g. 01:25 stored as 01:25 UTC instead of 20:25 UTC)
         // We need to output "01:25+05:00" so browser shows 01:25.
-        $offset = Carbon::now()->format('P'); // e.g. +05:00
+        $offset = TimeHelper::getUserTimezoneOffset(); // e.g. +05:00
 
         if ($this->created_at) {
             // Take the raw time value (01:25) and append the local offset

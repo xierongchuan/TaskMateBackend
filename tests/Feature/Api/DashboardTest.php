@@ -78,12 +78,12 @@ describe('Dashboard API', function () {
         // Active task
         Task::factory()->create(['is_active' => true, 'dealership_id' => $this->dealership->id]);
 
-        // Completed today
+        // Completed today - use UTC timezone to match TimeHelper::nowUtc()
         $completedTask = Task::factory()->create(['is_active' => true, 'dealership_id' => $this->dealership->id]);
         TaskResponse::factory()->create([
             'task_id' => $completedTask->id,
             'status' => 'completed',
-            'responded_at' => Carbon::now(),
+            'responded_at' => Carbon::now('UTC'),
         ]);
 
         // Overdue

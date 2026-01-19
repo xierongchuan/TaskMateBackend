@@ -187,16 +187,17 @@ describe('Task API', function () {
         expect($data[0]['title'])->toBe('Deadline Today');
 
         // Arrange 3: Completed today, deadline yesterday
+        // Use UTC timezone to match TimeHelper::nowUtc()
         $task3 = Task::factory()->create([
             'dealership_id' => $this->dealership->id,
             'title' => 'Completed Today',
-            'deadline' => Carbon::yesterday(),
+            'deadline' => Carbon::yesterday('UTC'),
         ]);
         \App\Models\TaskResponse::create([
             'task_id' => $task3->id,
             'user_id' => $this->manager->id,
             'status' => 'completed',
-            'responded_at' => Carbon::now(),
+            'responded_at' => Carbon::now('UTC'),
         ]);
 
         // Act: Filter by status=completed and date_range=today

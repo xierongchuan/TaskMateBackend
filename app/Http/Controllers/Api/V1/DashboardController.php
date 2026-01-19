@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Shift;
 use App\Models\Task;
@@ -95,8 +96,11 @@ class DashboardController extends Controller
 
         $totalTasks = $query->count();
 
+        $todayStart = TimeHelper::startOfDayUtc();
+        $todayEnd = TimeHelper::endOfDayUtc();
+
         $completedToday = TaskResponse::where('status', 'completed')
-            ->whereDate('responded_at', Carbon::today())
+            ->whereBetween('responded_at', [$todayStart, $todayEnd])
             ->whereHas('task', function ($q) use ($dealershipId) {
                 if ($dealershipId) {
                     $q->where('dealership_id', $dealershipId);
@@ -106,7 +110,7 @@ class DashboardController extends Controller
             ->count('task_id');
 
         $overdue = (clone $query)
-            ->where('deadline', '<', Carbon::now('UTC'))
+            ->where('deadline', '<', TimeHelper::nowUtc())
             ->whereDoesntHave('responses', function ($q) {
                 $q->where('status', 'completed');
             })
@@ -126,7 +130,10 @@ class DashboardController extends Controller
 
     private function getLateShiftsCount($dealershipId = null)
     {
-        $query = Shift::whereDate('shift_start', Carbon::today())
+        $todayStart = TimeHelper::startOfDayUtc();
+        $todayEnd = TimeHelper::endOfDayUtc();
+
+        $query = Shift::whereBetween('shift_start', [$todayStart, $todayEnd])
             ->where('late_minutes', '>', 0);
 
         if ($dealershipId) {
@@ -185,7 +192,7 @@ class DashboardController extends Controller
     {
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses.user'])
             ->where('is_active', true)
-            ->where('deadline', '<', Carbon::now('UTC'))
+            ->where('deadline', '<', TimeHelper::nowUtc())
             ->whereDoesntHave('responses', function ($q) {
                 $q->where('status', 'completed');
             })
@@ -213,8 +220,11 @@ class DashboardController extends Controller
         $active = (clone $query)->where('is_active', true)->count();
 
         // Count tasks generated today (tasks with generator_id created today)
+        $todayStart = TimeHelper::startOfDayUtc();
+        $todayEnd = TimeHelper::endOfDayUtc();
+
         $generatedTodayQuery = Task::whereNotNull('generator_id')
-            ->whereDate('created_at', Carbon::today());
+            ->whereBetween('created_at', [$todayStart, $todayEnd]);
 
         if ($dealershipId) {
             $generatedTodayQuery->where('dealership_id', $dealershipId);
