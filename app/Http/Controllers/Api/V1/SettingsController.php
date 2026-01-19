@@ -344,7 +344,8 @@ class SettingsController extends Controller
             'notification_enabled' => (bool) $this->settingsService->getSettingWithFallback('notification_enabled', $dealershipId, true),
             'auto_close_shifts' => (bool) $this->settingsService->getSettingWithFallback('auto_close_shifts', $dealershipId, false),
             'shift_reminder_minutes' => (int) $this->settingsService->getSettingWithFallback('shift_reminder_minutes', $dealershipId, 15),
-            'maintenance_mode' => (bool) $this->settingsService->getSettingWithFallback('maintenance_mode', $dealershipId, false),
+            // maintenance_mode всегда глобальная настройка (dealership_id = null)
+            'maintenance_mode' => (bool) $this->settingsService->get('maintenance_mode', null, false),
             'rows_per_page' => (int) $this->settingsService->getSettingWithFallback('rows_per_page', $dealershipId, 10),
             // Archive settings - separate for completed and overdue tasks
             'archive_completed_time' => $this->settingsService->getSettingWithFallback('archive_completed_time', $dealershipId, '03:00'), // Time for daily completed tasks archiving
@@ -406,7 +407,10 @@ class SettingsController extends Controller
                     elseif (is_int($value)) $type = 'integer';
                     elseif (is_array($value)) $type = 'json';
 
-                    $this->settingsService->set($key, $value, $dealershipId, $type);
+                    // maintenance_mode всегда сохраняется глобально (dealership_id = null)
+                    $targetDealershipId = ($key === 'maintenance_mode') ? null : $dealershipId;
+
+                    $this->settingsService->set($key, $value, $targetDealershipId, $type);
                     $updatedSettings[$key] = $value;
                 }
             }
