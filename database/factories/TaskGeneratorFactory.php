@@ -44,6 +44,23 @@ class TaskGeneratorFactory extends Factory
     }
 
     /**
+     * Configure the model factory after creating.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (TaskGenerator $generator) {
+            // Создаём хотя бы одного исполнителя для всех генераторов
+            // чтобы избежать проблем с валидацией
+            $user = User::where('dealership_id', $generator->dealership_id)->first()
+                ?? User::factory()->create(['dealership_id' => $generator->dealership_id]);
+
+            $generator->assignments()->create([
+                'user_id' => $user->id,
+            ]);
+        });
+    }
+
+    /**
      * Indicate that the generator is inactive.
      */
     public function inactive(): static

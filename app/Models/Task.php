@@ -283,6 +283,46 @@ class Task extends Model
             $data['updated_at'] = $this->updated_at->format('Y-m-d\TH:i:s') . $offset;
         }
 
+        // Add responses with user info for group task progress tracking
+        if ($this->relationLoaded('responses')) {
+            $data['responses'] = $this->responses->map(function ($response) {
+                $responseData = [
+                    'id' => $response->id,
+                    'user_id' => $response->user_id,
+                    'status' => $response->status,
+                    'comment' => $response->comment,
+                    'responded_at' => $response->responded_at
+                        ? $response->responded_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP')
+                        : null,
+                ];
+
+                // Include user info if loaded
+                if ($response->relationLoaded('user') && $response->user) {
+                    $responseData['user'] = [
+                        'id' => $response->user->id,
+                        'full_name' => $response->user->full_name,
+                    ];
+                }
+
+                return $responseData;
+            })->values()->toArray();
+        }
+
+        // Add completion progress for group tasks
+        if ($this->task_type === 'group') {
+            $assignments = $this->relationLoaded('assignments') ? $this->assignments : collect();
+            $responses = $this->relationLoaded('responses') ? $this->responses : collect();
+
+            $totalAssignees = $assignments->count();
+            $completedCount = $responses->where('status', 'completed')->pluck('user_id')->unique()->count();
+
+            $data['completion_progress'] = [
+                'total_assignees' => $totalAssignees,
+                'completed_count' => $completedCount,
+                'percentage' => $totalAssignees > 0 ? (int) round(($completedCount / $totalAssignees) * 100) : 0,
+            ];
+        }
+
         return $data;
     }
 

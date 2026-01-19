@@ -113,6 +113,27 @@ class StoreTaskRequest extends FormRequest
                         break;
                 }
             }
+
+            // Валидация типа задачи и количества исполнителей
+            $taskType = $this->input('task_type');
+            $assignments = $this->input('assignments', []);
+            $assignmentCount = is_array($assignments) ? count($assignments) : 0;
+
+            // Групповая задача должна иметь хотя бы одного исполнителя
+            if ($taskType === 'group' && $assignmentCount === 0) {
+                $validator->errors()->add(
+                    'assignments',
+                    'Для групповой задачи необходимо указать хотя бы одного исполнителя'
+                );
+            }
+
+            // Индивидуальная задача не может иметь более одного исполнителя
+            if ($taskType === 'individual' && $assignmentCount > 1) {
+                $validator->errors()->add(
+                    'task_type',
+                    'Индивидуальная задача не может иметь более одного исполнителя. Используйте групповую задачу для нескольких исполнителей.'
+                );
+            }
         });
     }
 

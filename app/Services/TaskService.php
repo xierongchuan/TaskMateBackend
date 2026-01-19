@@ -124,16 +124,46 @@ class TaskService
     /**
      * Синхронизирует назначения пользователей для задачи.
      *
+     * Использует SoftDeletes для сохранения истории назначений.
+     * При повторном назначении восстанавливает ранее удалённые записи.
+     *
      * @param Task $task Задача
      * @param array<int> $userIds Массив ID пользователей
      */
     protected function syncAssignments(Task $task, array $userIds): void
     {
-        // Удаляем существующие назначения
-        TaskAssignment::where('task_id', $task->id)->delete();
+        $existingAssignments = TaskAssignment::where('task_id', $task->id)
+            ->pluck('user_id')
+            ->toArray();
 
-        // Добавляем новые назначения
-        foreach ($userIds as $userId) {
+        $toAdd = array_diff($userIds, $existingAssignments);
+        $toRemove = array_diff($existingAssignments, $userIds);
+
+        // SoftDelete удалённых назначений
+        if (!empty($toRemove)) {
+            TaskAssignment::where('task_id', $task->id)
+                ->whereIn('user_id', $toRemove)
+                ->delete();
+        }
+
+        // Восстановление ранее удалённых назначений
+        $restoredIds = TaskAssignment::withTrashed()
+            ->where('task_id', $task->id)
+            ->whereIn('user_id', $toAdd)
+            ->onlyTrashed()
+            ->pluck('user_id')
+            ->toArray();
+
+        if (!empty($restoredIds)) {
+            TaskAssignment::withTrashed()
+                ->where('task_id', $task->id)
+                ->whereIn('user_id', $restoredIds)
+                ->restore();
+        }
+
+        // Создание новых назначений для пользователей, которых ранее не было
+        $toCreate = array_diff($toAdd, $restoredIds);
+        foreach ($toCreate as $userId) {
             TaskAssignment::create([
                 'task_id' => $task->id,
                 'user_id' => $userId,

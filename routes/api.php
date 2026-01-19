@@ -140,6 +140,7 @@ Route::prefix('v1')->group(function () {
 
             // Reports
             Route::get('/reports', [ReportController::class, 'index']);
+            Route::get('/reports/issues/{type}', [ReportController::class, 'issueDetails']);
 
             // Settings - READ операции
             Route::get('/settings', [SettingsController::class, 'index']);

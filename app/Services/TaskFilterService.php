@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Сервис для фильтрации задач.
@@ -32,7 +33,7 @@ class TaskFilterService
      */
     public function getFilteredTasks(Request $request, User $currentUser): LengthAwarePaginator
     {
-        $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses']);
+        $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses.user']);
 
         $this->applyDateRangeFilter($query, $request);
         $this->applyDealershipFilter($query, $request, $currentUser);
@@ -161,6 +162,13 @@ class TaskFilterService
         if ($request->filled('priority')) {
             $query->where('priority', $request->query('priority'));
         }
+
+        // Фильтр по исполнителю (assigned_to)
+        if ($request->filled('assigned_to')) {
+            $query->whereHas('assignments', function ($q) use ($request) {
+                $q->where('user_id', $request->integer('assigned_to'));
+            });
+        }
     }
 
     /**
@@ -255,7 +263,32 @@ class TaskFilterService
                 break;
 
             case 'completed':
-                $query->whereHas('responses', fn ($q) => $q->where('status', 'completed'));
+                $query->where(function ($q) {
+                    // Индивидуальные задачи: хотя бы один completed response
+                    $q->where(function ($individual) {
+                        $individual->where('task_type', 'individual')
+                            ->whereHas('responses', fn ($r) => $r->where('status', 'completed'));
+                    })
+                    // Групповые задачи: ВСЕ назначенные должны выполнить
+                    ->orWhere(function ($group) {
+                        $group->where('task_type', 'group')
+                            ->whereHas('assignments') // должны быть назначенные
+                            ->whereRaw('(
+                                SELECT COUNT(DISTINCT ta.user_id)
+                                FROM task_assignments ta
+                                WHERE ta.task_id = tasks.id AND ta.deleted_at IS NULL
+                            ) > 0')
+                            ->whereRaw('(
+                                SELECT COUNT(DISTINCT ta.user_id)
+                                FROM task_assignments ta
+                                WHERE ta.task_id = tasks.id AND ta.deleted_at IS NULL
+                            ) = (
+                                SELECT COUNT(DISTINCT tr.user_id)
+                                FROM task_responses tr
+                                WHERE tr.task_id = tasks.id AND tr.status = ?
+                            )', ['completed']);
+                    });
+                });
                 break;
 
             case 'pending_review':

@@ -28,10 +28,14 @@ class ReportController extends Controller
         $to = TimeHelper::endOfDayUtc($dateTo);
         $nowUtc = TimeHelper::nowUtc();
 
-        // Фильтр по автосалону для менеджеров
+        // Фильтр по автосалону
         $dealershipId = null;
         if ($user->role === 'manager' && $user->dealership_id) {
+            // Для менеджера - только его автосалон
             $dealershipId = $user->dealership_id;
+        } elseif ($request->filled('dealership_id')) {
+            // Для других ролей - можно выбрать автосалон
+            $dealershipId = $request->integer('dealership_id');
         }
 
         // Helper для применения фильтра по автосалону
@@ -212,6 +216,28 @@ class ReportController extends Controller
         }
 
         // === ТОП ПРОБЛЕМ ===
+
+        // Задачи на проверке
+        $pendingReviewCount = $statusCounts['pending_review'] ?? 0;
+
+        // Сотрудники с низким рейтингом (score < 70)
+        $lowPerformersCount = $employeesPerformance->filter(fn ($e) => $e['performance_score'] < 70)->count();
+
+        // Долго невыполненные задачи (pending > 3 дней)
+        $stalePendingQuery = Task::where('is_active', true)
+            ->whereBetween('created_at', [$from, $to])
+            ->where('created_at', '<', $nowUtc->copy()->subDays(3))
+            ->whereDoesntHave('responses', fn ($q) => $q->whereIn('status', ['completed', 'pending_review']));
+        $applyTaskFilter($stalePendingQuery);
+        $stalePendingCount = $stalePendingQuery->count();
+
+        // Неявки - запланированные смены без фактического начала
+        $missedShiftsQuery = Shift::whereBetween('scheduled_start', [$from, $to])
+            ->whereNull('shift_start')
+            ->where('scheduled_start', '<', $nowUtc);
+        $applyShiftFilter($missedShiftsQuery);
+        $missedShiftsCount = $missedShiftsQuery->count();
+
         $topIssues = [];
         if ($overdueTasks > 0) {
             $topIssues[] = [
@@ -232,6 +258,34 @@ class ReportController extends Controller
                 'issue_type' => 'frequent_postponements',
                 'count' => $postponedTasks,
                 'description' => 'Частые переносы задач',
+            ];
+        }
+        if ($pendingReviewCount > 0) {
+            $topIssues[] = [
+                'issue_type' => 'pending_review_tasks',
+                'count' => $pendingReviewCount,
+                'description' => 'Задачи на проверке',
+            ];
+        }
+        if ($lowPerformersCount > 0) {
+            $topIssues[] = [
+                'issue_type' => 'low_performers',
+                'count' => $lowPerformersCount,
+                'description' => 'Сотрудники с низким рейтингом',
+            ];
+        }
+        if ($stalePendingCount > 0) {
+            $topIssues[] = [
+                'issue_type' => 'stale_pending_tasks',
+                'count' => $stalePendingCount,
+                'description' => 'Долго невыполненные задачи',
+            ];
+        }
+        if ($missedShiftsCount > 0) {
+            $topIssues[] = [
+                'issue_type' => 'missed_shifts',
+                'count' => $missedShiftsCount,
+                'description' => 'Неявки на смены',
             ];
         }
         usort($topIssues, fn ($a, $b) => $b['count'] <=> $a['count']);
@@ -326,5 +380,191 @@ class ReportController extends Controller
         }
 
         return 'pending';
+    }
+
+    /**
+     * Возвращает детали проблемы по типу.
+     */
+    public function issueDetails(Request $request, string $issueType)
+    {
+        $user = $request->user();
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+
+        if (! $dateFrom || ! $dateTo) {
+            return response()->json(['message' => 'Parameters date_from and date_to are required'], 400);
+        }
+
+        $from = TimeHelper::startOfDayUtc($dateFrom);
+        $to = TimeHelper::endOfDayUtc($dateTo);
+        $nowUtc = TimeHelper::nowUtc();
+
+        // Фильтр по автосалону
+        $dealershipId = null;
+        if ($user->role === 'manager' && $user->dealership_id) {
+            // Для менеджера - только его автосалон
+            $dealershipId = $user->dealership_id;
+        } elseif ($request->filled('dealership_id')) {
+            // Для других ролей - можно выбрать автосалон
+            $dealershipId = $request->integer('dealership_id');
+        }
+
+        $applyTaskFilter = function ($query) use ($dealershipId) {
+            if ($dealershipId) {
+                $query->where('dealership_id', $dealershipId);
+            }
+        };
+
+        $applyShiftFilter = function ($query) use ($dealershipId) {
+            if ($dealershipId) {
+                $query->where('dealership_id', $dealershipId);
+            }
+        };
+
+        $items = [];
+
+        switch ($issueType) {
+            case 'overdue_tasks':
+                $query = Task::with(['creator', 'dealership'])
+                    ->whereBetween('created_at', [$from, $to])
+                    ->where('is_active', true)
+                    ->whereNotNull('deadline')
+                    ->where('deadline', '<', $nowUtc)
+                    ->whereDoesntHave('responses', fn ($q) => $q->where('status', 'completed'));
+                $applyTaskFilter($query);
+                $items = $query->orderBy('deadline')->get()->map(fn ($task) => [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'subtitle' => $task->dealership?->name,
+                    'date' => $task->deadline?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'type' => 'task',
+                ]);
+                break;
+
+            case 'late_shifts':
+                $query = Shift::with(['user', 'dealership'])
+                    ->whereBetween('shift_start', [$from, $to])
+                    ->where('late_minutes', '>', 0);
+                $applyShiftFilter($query);
+                $items = $query->orderByDesc('late_minutes')->get()->map(fn ($shift) => [
+                    'id' => $shift->id,
+                    'title' => $shift->user?->full_name ?? 'Неизвестный',
+                    'subtitle' => "Опоздание: {$shift->late_minutes} мин",
+                    'date' => $shift->shift_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'type' => 'shift',
+                    'user_id' => $shift->user_id,
+                ]);
+                break;
+
+            case 'frequent_postponements':
+                $query = Task::with(['creator', 'dealership'])
+                    ->whereBetween('created_at', [$from, $to])
+                    ->where('postpone_count', '>', 0);
+                $applyTaskFilter($query);
+                $items = $query->orderByDesc('postpone_count')->get()->map(fn ($task) => [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'subtitle' => "Переносов: {$task->postpone_count}",
+                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'type' => 'task',
+                ]);
+                break;
+
+            case 'pending_review_tasks':
+                $query = Task::with(['creator', 'dealership'])
+                    ->whereBetween('created_at', [$from, $to])
+                    ->whereHas('responses', fn ($q) => $q->where('status', 'pending_review'));
+                $applyTaskFilter($query);
+                $items = $query->orderBy('created_at')->get()->map(fn ($task) => [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'subtitle' => $task->dealership?->name,
+                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'type' => 'task',
+                ]);
+                break;
+
+            case 'low_performers':
+                // Пересчитываем для получения списка
+                $employeesQuery = User::where('role', 'employee');
+                if ($dealershipId) {
+                    $employeesQuery->where('dealership_id', $dealershipId);
+                }
+                $employees = $employeesQuery->get();
+
+                $items = $employees->map(function ($employee) use ($from, $to, $nowUtc) {
+                    $userTasksQuery = Task::whereHas('assignedUsers', fn ($q) => $q->where('user_id', $employee->id))
+                        ->whereBetween('created_at', [$from, $to]);
+
+                    $userTasks = (clone $userTasksQuery)->count();
+                    $userOverdue = (clone $userTasksQuery)
+                        ->where('is_active', true)
+                        ->whereNotNull('deadline')
+                        ->where('deadline', '<', $nowUtc)
+                        ->whereDoesntHave('responses', fn ($q) => $q->where('user_id', $employee->id)->where('status', 'completed'))
+                        ->count();
+
+                    $userLateShifts = Shift::where('user_id', $employee->id)
+                        ->whereBetween('shift_start', [$from, $to])
+                        ->where('late_minutes', '>', 0)
+                        ->count();
+
+                    $score = 100;
+                    if ($userTasks > 0) {
+                        $score -= ($userOverdue * 5);
+                    }
+                    $score -= ($userLateShifts * 10);
+                    $score = max(0, min(100, $score));
+
+                    return [
+                        'id' => $employee->id,
+                        'title' => $employee->full_name,
+                        'subtitle' => "Рейтинг: {$score}/100",
+                        'score' => $score,
+                        'type' => 'user',
+                    ];
+                })->filter(fn ($e) => $e['score'] < 70)->sortBy('score')->values();
+                break;
+
+            case 'stale_pending_tasks':
+                $query = Task::with(['creator', 'dealership'])
+                    ->where('is_active', true)
+                    ->whereBetween('created_at', [$from, $to])
+                    ->where('created_at', '<', $nowUtc->copy()->subDays(3))
+                    ->whereDoesntHave('responses', fn ($q) => $q->whereIn('status', ['completed', 'pending_review']));
+                $applyTaskFilter($query);
+                $items = $query->orderBy('created_at')->get()->map(fn ($task) => [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'subtitle' => $task->dealership?->name,
+                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'type' => 'task',
+                ]);
+                break;
+
+            case 'missed_shifts':
+                $query = Shift::with(['user', 'dealership'])
+                    ->whereBetween('scheduled_start', [$from, $to])
+                    ->whereNull('shift_start')
+                    ->where('scheduled_start', '<', $nowUtc);
+                $applyShiftFilter($query);
+                $items = $query->orderBy('scheduled_start')->get()->map(fn ($shift) => [
+                    'id' => $shift->id,
+                    'title' => $shift->user?->full_name ?? 'Неизвестный',
+                    'subtitle' => $shift->dealership?->name,
+                    'date' => $shift->scheduled_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'type' => 'shift',
+                    'user_id' => $shift->user_id,
+                ]);
+                break;
+
+            default:
+                return response()->json(['message' => 'Unknown issue type'], 400);
+        }
+
+        return response()->json([
+            'issue_type' => $issueType,
+            'items' => $items,
+        ]);
     }
 }

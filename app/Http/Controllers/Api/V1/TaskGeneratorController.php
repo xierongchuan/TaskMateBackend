@@ -132,6 +132,26 @@ class TaskGeneratorController extends Controller
             ], 422);
         }
 
+        // Валидация типа задачи и количества исполнителей
+        $taskType = $validated['task_type'] ?? 'individual';
+        $assignmentCount = count($validated['assignments']);
+
+        if ($taskType === 'group' && $assignmentCount === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Для групповой задачи необходимо указать хотя бы одного исполнителя',
+                'errors' => ['assignments' => ['Для групповой задачи необходимо указать хотя бы одного исполнителя']],
+            ], 422);
+        }
+
+        if ($taskType === 'individual' && $assignmentCount > 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Индивидуальная задача не может иметь более одного исполнителя',
+                'errors' => ['task_type' => ['Индивидуальная задача не может иметь более одного исполнителя. Используйте групповую задачу для нескольких исполнителей.']],
+            ], 422);
+        }
+
         $user = $request->user();
 
         $generator = TaskGenerator::create([
@@ -205,6 +225,32 @@ class TaskGeneratorController extends Controller
             'assignments' => 'sometimes|array|min:1',
             'assignments.*' => 'exists:users,id',
         ]);
+
+        // Валидация типа задачи и количества исполнителей
+        $taskType = $validated['task_type'] ?? $generator->task_type;
+
+        // Определяем количество исполнителей
+        if (isset($validated['assignments'])) {
+            $assignmentCount = count($validated['assignments']);
+        } else {
+            $assignmentCount = $generator->assignments()->count();
+        }
+
+        if ($taskType === 'group' && $assignmentCount === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Для групповой задачи необходимо указать хотя бы одного исполнителя',
+                'errors' => ['assignments' => ['Для групповой задачи необходимо указать хотя бы одного исполнителя']],
+            ], 422);
+        }
+
+        if ($taskType === 'individual' && $assignmentCount > 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Индивидуальная задача не может иметь более одного исполнителя',
+                'errors' => ['task_type' => ['Индивидуальная задача не может иметь более одного исполнителя. Используйте групповую задачу для нескольких исполнителей.']],
+            ], 422);
+        }
 
         $updateData = [];
 

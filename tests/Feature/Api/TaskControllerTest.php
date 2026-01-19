@@ -168,6 +168,7 @@ describe('Task API', function () {
             'dealership_id' => $this->dealership->id,
             'title' => 'Deadline Today',
             'deadline' => Carbon::now(),
+            'task_type' => 'individual',
         ]);
 
         // Task 2: Deadline tomorrow
@@ -175,6 +176,7 @@ describe('Task API', function () {
             'dealership_id' => $this->dealership->id,
             'title' => 'Deadline Tomorrow',
             'deadline' => Carbon::now()->addDay(),
+            'task_type' => 'individual',
         ]);
 
         // Act: Filter by today
@@ -193,6 +195,7 @@ describe('Task API', function () {
             'dealership_id' => $this->dealership->id,
             'title' => 'Completed Today',
             'deadline' => Carbon::yesterday('UTC'),
+            'task_type' => 'individual',
         ]);
         \App\Models\TaskResponse::create([
             'task_id' => $task3->id,
