@@ -294,6 +294,11 @@ class Task extends Model
                     'responded_at' => $response->responded_at
                         ? $response->responded_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP')
                         : null,
+                    'verified_at' => $response->verified_at
+                        ? $response->verified_at->copy()->setTimezone('Asia/Yekaterinburg')->format('Y-m-d\TH:i:sP')
+                        : null,
+                    'verified_by' => $response->verified_by,
+                    'rejection_reason' => $response->rejection_reason,
                 ];
 
                 // Include user info if loaded
@@ -302,6 +307,21 @@ class Task extends Model
                         'id' => $response->user->id,
                         'full_name' => $response->user->full_name,
                     ];
+                }
+
+                // Include verifier info if loaded
+                if ($response->relationLoaded('verifier') && $response->verifier) {
+                    $responseData['verifier'] = [
+                        'id' => $response->verifier->id,
+                        'full_name' => $response->verifier->full_name,
+                    ];
+                }
+
+                // Include proofs if loaded
+                if ($response->relationLoaded('proofs')) {
+                    $responseData['proofs'] = $response->proofs->map(function ($proof) {
+                        return $proof->toApiArray();
+                    })->values()->toArray();
                 }
 
                 return $responseData;

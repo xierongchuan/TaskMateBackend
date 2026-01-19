@@ -34,7 +34,7 @@ class TaskGeneratorFactory extends Factory
             'start_date' => Carbon::today(),
             'end_date' => null,
             'task_type' => fake()->randomElement(['individual', 'group']),
-            'response_type' => fake()->randomElement(['acknowledge', 'complete']),
+            'response_type' => fake()->randomElement(['notification', 'completion', 'completion_with_proof']),
             'priority' => fake()->randomElement(['low', 'medium', 'high']),
             'tags' => [],
             'notification_settings' => null,

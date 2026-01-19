@@ -14,11 +14,13 @@ use App\Models\Shift;
 use App\Services\SettingsService;
 use App\Services\TaskService;
 use App\Services\TaskFilterService;
+use App\Services\TaskProofService;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
 use App\Enums\Role;
+use InvalidArgumentException;
 
 class TaskController extends Controller
 {
@@ -26,7 +28,8 @@ class TaskController extends Controller
 
     public function __construct(
         private readonly TaskService $taskService,
-        private readonly TaskFilterService $taskFilterService
+        private readonly TaskFilterService $taskFilterService,
+        private readonly TaskProofService $taskProofService
     ) {}
 
     /**
@@ -74,7 +77,9 @@ class TaskController extends Controller
             'creator',
             'dealership',
             'assignments.user',
-            'responses.user'
+            'responses.user',
+            'responses.proofs',
+            'responses.verifier'
         ])->find($id);
 
         if (!$task) {
@@ -218,7 +223,9 @@ class TaskController extends Controller
     /**
      * Обновляет статус задачи.
      *
-     * @param Request $request HTTP-запрос со статусом
+     * Поддерживает загрузку файлов доказательств для задач типа completion_with_proof.
+     *
+     * @param Request $request HTTP-запрос со статусом и файлами
      * @param int|string $id ID задачи
      * @return \Illuminate\Http\JsonResponse
      */
@@ -235,12 +242,35 @@ class TaskController extends Controller
         $validated = $request->validate([
             'status' => 'required|string|in:pending,pending_review,completed',
             'complete_for_all' => 'sometimes|boolean',
+            'proof_files' => 'sometimes|array|max:' . TaskProofService::MAX_FILES_PER_RESPONSE,
+            'proof_files.*' => 'file|max:102400', // 100 MB max per file
         ]);
 
         $status = $validated['status'];
         $completeForAll = $validated['complete_for_all'] ?? false;
         /** @var \App\Models\User $user */
         $user = auth()->user();
+
+        // Для задач с доказательством: проверяем наличие файлов
+        if ($task->response_type === 'completion_with_proof') {
+            // При попытке завершить задачу (не pending) требуется минимум 1 файл
+            if (in_array($status, ['pending_review', 'completed']) && !$request->hasFile('proof_files')) {
+                // Проверяем, есть ли уже загруженные файлы
+                $existingResponse = $task->responses()->where('user_id', $user->id)->first();
+                $hasExistingProofs = $existingResponse && $existingResponse->proofs()->exists();
+
+                if (!$hasExistingProofs) {
+                    return response()->json([
+                        'message' => 'Для выполнения этой задачи необходимо загрузить доказательство'
+                    ], 422);
+                }
+            }
+
+            // Для задач с доказательством автоматически ставим pending_review при загрузке файлов
+            if ($request->hasFile('proof_files') && $status === 'completed') {
+                $status = 'pending_review';
+            }
+        }
 
         // Hybrid mode: check if open shift is required
         $shiftId = null;
@@ -277,7 +307,10 @@ class TaskController extends Controller
 
         switch ($status) {
             case 'pending':
-                // Reset task: remove all responses
+                // Reset task: remove all responses and their proofs
+                foreach ($task->responses as $response) {
+                    $this->taskProofService->deleteAllProofs($response);
+                }
                 $task->responses()->delete();
                 break;
 
@@ -301,7 +334,7 @@ class TaskController extends Controller
                     }
                 } else {
                     // Update or create response for current user only
-                    $task->responses()->updateOrCreate(
+                    $taskResponse = $task->responses()->updateOrCreate(
                         ['user_id' => $user->id],
                         [
                             'status' => $status,
@@ -310,10 +343,29 @@ class TaskController extends Controller
                             'completed_during_shift' => $completedDuringShift,
                         ]
                     );
+
+                    // Загрузка файлов доказательств
+                    if ($request->hasFile('proof_files')) {
+                        try {
+                            $this->taskProofService->storeProofs(
+                                $taskResponse,
+                                $request->file('proof_files'),
+                                $task->dealership_id
+                            );
+                        } catch (InvalidArgumentException $e) {
+                            return response()->json([
+                                'message' => $e->getMessage()
+                            ], 422);
+                        }
+                    }
                 }
                 break;
         }
 
-        return response()->json($task->refresh()->load(['assignments.user', 'responses.user'])->toApiArray());
+        return response()->json(
+            $task->refresh()
+                ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier'])
+                ->toApiArray()
+        );
     }
 }

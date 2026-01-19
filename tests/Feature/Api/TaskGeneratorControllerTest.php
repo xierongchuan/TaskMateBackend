@@ -75,7 +75,7 @@ class TaskGeneratorControllerTest extends TestCase
             'deadline_time' => '18:00',
             'start_date' => Carbon::today()->format('Y-m-d'),
             'task_type' => 'individual',
-            'response_type' => 'complete',
+            'response_type' => 'completion',
             'priority' => 'high',
             'assignments' => [$employee->id],
         ]);

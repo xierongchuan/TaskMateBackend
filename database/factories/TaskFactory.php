@@ -25,7 +25,7 @@ class TaskFactory extends Factory
             'deadline' => fake()->dateTimeBetween('now', '+30 days'), // Дедлайн обязателен
             'recurrence' => null,
             'task_type' => fake()->randomElement(['individual', 'group']),
-            'response_type' => fake()->randomElement(['acknowledge', 'complete']), // Исправлено: acknowledge вместо notification
+            'response_type' => fake()->randomElement(['notification', 'completion', 'completion_with_proof']),
             'tags' => fake()->optional(0.6)->randomElements(['важное', 'срочное', 'рутина', 'продажа', 'клиент'], rand(1, 3)),
             'is_active' => true,
             'postpone_count' => 0,
@@ -61,10 +61,17 @@ class TaskFactory extends Factory
         ]);
     }
 
-    public function execution(): static
+    public function completion(): static
     {
         return $this->state(fn (array $attributes) => [
-            'response_type' => 'execution',
+            'response_type' => 'completion',
+        ]);
+    }
+
+    public function completionWithProof(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'response_type' => 'completion_with_proof',
         ]);
     }
 

@@ -41,7 +41,7 @@ class UpdateTaskRequest extends FormRequest
             'recurrence_day_of_week' => 'nullable|integer|min:1|max:7',
             'recurrence_day_of_month' => 'nullable|integer|min:-2|max:31',
             'task_type' => 'sometimes|required|string|in:individual,group',
-            'response_type' => 'sometimes|required|string|in:acknowledge,complete',
+            'response_type' => 'sometimes|required|string|in:notification,completion,completion_with_proof',
             'tags' => 'nullable|array',
             'is_active' => 'boolean',
             'assignments' => 'nullable|array',
@@ -73,7 +73,7 @@ class UpdateTaskRequest extends FormRequest
             'task_type.required' => 'Тип задачи обязателен',
             'task_type.in' => 'Некорректный тип задачи',
             'response_type.required' => 'Тип ответа обязателен',
-            'response_type.in' => 'Некорректный тип ответа',
+            'response_type.in' => 'Некорректный тип ответа. Допустимы: notification, completion, completion_with_proof',
             'assignments.*.exists' => 'Пользователь не найден',
             'priority.in' => 'Некорректный приоритет',
         ];

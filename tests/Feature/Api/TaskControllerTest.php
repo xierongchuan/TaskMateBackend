@@ -44,7 +44,7 @@ describe('Task API', function () {
                 'appear_date' => Carbon::now()->toIso8601String(),
                 'deadline' => Carbon::now()->addDay()->toIso8601String(),
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
             ]);
 
         // Assert
@@ -101,7 +101,7 @@ describe('Task API', function () {
                 'appear_date' => Carbon::now()->toIso8601String(),
                 'deadline' => Carbon::now()->addDay()->toIso8601String(),
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'tags' => $tags,
             ]);
 
@@ -227,7 +227,7 @@ describe('Task API', function () {
                 'appear_date' => Carbon::now()->toIso8601String(),
                 'deadline' => $deadline,
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
         ];
 
         // Create first task
@@ -245,8 +245,8 @@ describe('Task API', function () {
     });
 
     it('updates task status to pending_review', function () {
-        // Arrange
-        $task = Task::factory()->create(['dealership_id' => $this->dealership->id]);
+        // Arrange - use completion() to avoid completion_with_proof which requires proof files
+        $task = Task::factory()->completion()->create(['dealership_id' => $this->dealership->id]);
         $user = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
         \App\Models\TaskAssignment::create(['task_id' => $task->id, 'user_id' => $user->id]);
 
@@ -260,8 +260,8 @@ describe('Task API', function () {
     });
 
     it('updates task status to completed', function () {
-        // Arrange - ensure deadline is in the future so status is 'completed', not 'completed_late'
-        $task = Task::factory()->create([
+        // Arrange - use completion() to avoid completion_with_proof which requires proof files
+        $task = Task::factory()->completion()->create([
             'dealership_id' => $this->dealership->id,
             'task_type' => 'individual',
             'deadline' => Carbon::now()->addDay(),

@@ -1,0 +1,228 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\TaskProof;
+use App\Services\TaskProofService;
+use App\Traits\HasDealershipAccess;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * Контроллер для работы с доказательствами выполнения задач.
+ */
+class TaskProofController extends Controller
+{
+    use HasDealershipAccess;
+
+    public function __construct(
+        private readonly TaskProofService $taskProofService
+    ) {}
+
+    /**
+     * Получить информацию о доказательстве.
+     *
+     * @param int|string $id ID доказательства
+     * @return JsonResponse
+     */
+    public function show($id): JsonResponse
+    {
+        $proof = TaskProof::with(['taskResponse.task'])->find($id);
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Доказательство не найдено'
+            ], 404);
+        }
+
+        /** @var \App\Models\User $currentUser */
+        $currentUser = auth()->user();
+        $task = $proof->taskResponse->task;
+
+        // Проверка доступа к задаче
+        if (!$this->isOwner($currentUser)) {
+            $isCreator = $task->creator_id === $currentUser->id;
+            $isAssigned = $task->assignments()->where('user_id', $currentUser->id)->exists();
+            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
+
+            if (!$hasAccess && !$isCreator && !$isAssigned) {
+                return response()->json([
+                    'message' => 'У вас нет доступа к этому доказательству'
+                ], 403);
+            }
+        }
+
+        return response()->json([
+            'data' => $proof->toApiArray()
+        ]);
+    }
+
+    /**
+     * Скачать файл доказательства.
+     *
+     * Доступ по подписанному URL с проверкой авторизации.
+     * URL генерируется в модели TaskProof::getUrlAttribute().
+     *
+     * @param Request $request HTTP-запрос
+     * @param int|string $id ID доказательства
+     * @return StreamedResponse|JsonResponse
+     */
+    public function download(Request $request, $id): StreamedResponse|JsonResponse
+    {
+        // Проверка подписи URL
+        if (!$request->hasValidSignature()) {
+            return response()->json([
+                'message' => 'Ссылка недействительна или истекла'
+            ], 403);
+        }
+
+        $proof = TaskProof::with(['taskResponse.task'])->find($id);
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Доказательство не найдено'
+            ], 404);
+        }
+
+        /** @var \App\Models\User|null $currentUser */
+        $currentUser = auth()->user();
+
+        // Требуем авторизацию для скачивания
+        if (!$currentUser) {
+            return response()->json([
+                'message' => 'Необходима авторизация'
+            ], 401);
+        }
+
+        $task = $proof->taskResponse->task;
+
+        // Проверка доступа к задаче
+        if (!$this->isOwner($currentUser)) {
+            $isCreator = $task->creator_id === $currentUser->id;
+            $isAssigned = $task->assignments()->where('user_id', $currentUser->id)->exists();
+            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
+
+            if (!$hasAccess && !$isCreator && !$isAssigned) {
+                return response()->json([
+                    'message' => 'У вас нет доступа к этому файлу'
+                ], 403);
+            }
+        }
+
+        // Проверяем существование файла
+        $filePath = $this->taskProofService->getFilePath($proof);
+
+        if (!$filePath || !file_exists($filePath)) {
+            return response()->json([
+                'message' => 'Файл не найден на сервере'
+            ], 404);
+        }
+
+        // Определяем Content-Type и Content-Disposition
+        $mimeType = $proof->mime_type ?: 'application/octet-stream';
+        $filename = $proof->original_filename;
+
+        // Для изображений и PDF отдаём inline, для остальных — attachment
+        $disposition = $this->getContentDisposition($mimeType);
+
+        return response()->streamDownload(
+            function () use ($filePath) {
+                $stream = fopen($filePath, 'rb');
+                if ($stream) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+            },
+            $filename,
+            [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => $disposition . '; filename="' . $this->sanitizeFilename($filename) . '"',
+                'Content-Length' => $proof->file_size,
+                'Cache-Control' => 'private, max-age=3600',
+            ]
+        );
+    }
+
+    /**
+     * Удалить доказательство.
+     *
+     * Доступно только менеджерам и владельцам.
+     *
+     * @param int|string $id ID доказательства
+     * @return JsonResponse
+     */
+    public function destroy($id): JsonResponse
+    {
+        $proof = TaskProof::with(['taskResponse.task'])->find($id);
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Доказательство не найдено'
+            ], 404);
+        }
+
+        /** @var \App\Models\User $currentUser */
+        $currentUser = auth()->user();
+        $task = $proof->taskResponse->task;
+
+        // Проверка доступа (только владелец proof или менеджер/владелец автосалона)
+        $isProofOwner = $proof->taskResponse->user_id === $currentUser->id;
+        $hasManageAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id)
+            && in_array($currentUser->role->value, ['manager', 'owner']);
+
+        if (!$isProofOwner && !$hasManageAccess && !$this->isOwner($currentUser)) {
+            return response()->json([
+                'message' => 'У вас нет прав для удаления этого доказательства'
+            ], 403);
+        }
+
+        $this->taskProofService->deleteProof($proof);
+
+        return response()->json([
+            'message' => 'Доказательство успешно удалено'
+        ]);
+    }
+
+    /**
+     * Определить Content-Disposition для типа файла.
+     *
+     * Изображения и PDF открываются в браузере (inline),
+     * остальные файлы скачиваются (attachment).
+     */
+    private function getContentDisposition(string $mimeType): string
+    {
+        $inlineTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+            'video/mp4',
+            'video/webm',
+        ];
+
+        return in_array($mimeType, $inlineTypes, true) ? 'inline' : 'attachment';
+    }
+
+    /**
+     * Очистить имя файла для безопасного использования в заголовках.
+     */
+    private function sanitizeFilename(string $filename): string
+    {
+        // Удаляем потенциально опасные символы
+        $filename = preg_replace('/[^\p{L}\p{N}\s\.\-_]/u', '', $filename);
+
+        // Ограничиваем длину
+        if (mb_strlen($filename) > 200) {
+            $extension = pathinfo($filename, PATHINFO_EXTENSION);
+            $name = mb_substr(pathinfo($filename, PATHINFO_FILENAME), 0, 195 - mb_strlen($extension));
+            $filename = $name . '.' . $extension;
+        }
+
+        return $filename ?: 'file';
+    }
+}

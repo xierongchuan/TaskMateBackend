@@ -23,7 +23,7 @@ describe('Task Model', function () {
             'appear_date' => now()->addHours(2),
             'deadline' => now()->addDay(),
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'tags' => ['urgent', 'important'],
             'is_active' => true,
         ]);
@@ -50,7 +50,7 @@ describe('Task Model', function () {
             'creator_id' => $creator->id,
             'dealership_id' => $dealership->id,
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'appear_date' => now(),
             'deadline' => now()->addDay(),
         ]);
@@ -113,7 +113,7 @@ describe('Task Model', function () {
             'appear_date' => $userTime,
             'deadline' => now()->addDay(),
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
         ]);
 
         // Assert
@@ -133,7 +133,7 @@ describe('Task Model', function () {
             'deadline' => $userTime,
             'appear_date' => now(),
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
         ]);
 
         // Assert
@@ -152,7 +152,7 @@ describe('Task Model', function () {
             'appear_date' => now(),
             'deadline' => now()->addHours(8),
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'recurrence' => 'daily',
             'recurrence_time' => '09:00',
         ]);
@@ -229,7 +229,7 @@ describe('Task Model', function () {
             'title' => 'Acknowledge Task',
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'task_type' => 'individual',
             'appear_date' => now(),
             'deadline' => now()->addDay(),
@@ -239,15 +239,15 @@ describe('Task Model', function () {
             'title' => 'Complete Task',
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
-            'response_type' => 'complete',
+            'response_type' => 'completion',
             'task_type' => 'individual',
             'appear_date' => now(),
             'deadline' => now()->addDay(),
         ]);
 
         // Assert
-        expect($taskAck->response_type)->toBe('acknowledge')
-            ->and($taskComplete->response_type)->toBe('complete');
+        expect($taskAck->response_type)->toBe('notification')
+            ->and($taskComplete->response_type)->toBe('completion');
     });
 
     it('can handle different task types', function () {
@@ -260,7 +260,7 @@ describe('Task Model', function () {
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
             'task_type' => 'individual',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'appear_date' => now(),
             'deadline' => now()->addDay(),
         ]);
@@ -270,7 +270,7 @@ describe('Task Model', function () {
             'creator_id' => User::factory()->create()->id,
             'dealership_id' => $dealership->id,
             'task_type' => 'group',
-            'response_type' => 'acknowledge',
+            'response_type' => 'notification',
             'appear_date' => now(),
             'deadline' => now()->addDay(),
         ]);

@@ -47,6 +47,15 @@ return [
             'report' => false,
         ],
 
+        // Приватное хранилище для доказательств выполнения задач
+        // Файлы недоступны напрямую, только через подписанные URL с проверкой авторизации
+        'task_proofs' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/task_proofs'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

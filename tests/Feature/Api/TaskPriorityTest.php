@@ -25,7 +25,7 @@ describe('Task Priority API', function () {
                 'dealership_id' => $this->dealership->id,
                 'priority' => 'high',
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'deadline' => Carbon::now()->addDay()->toIso8601String(),
                 'appear_date' => Carbon::now()->toIso8601String(),
             ]);
@@ -43,7 +43,7 @@ describe('Task Priority API', function () {
                 'title' => 'Normal Task',
                 'dealership_id' => $this->dealership->id,
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'deadline' => Carbon::now()->addDay()->toIso8601String(),
                 'appear_date' => Carbon::now()->toIso8601String(),
             ]);
@@ -93,7 +93,7 @@ describe('Task Priority API', function () {
                 'dealership_id' => $this->dealership->id,
                 'priority' => 'super_urgent',
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'deadline' => Carbon::now()->addDay()->toIso8601String(),
                 'appear_date' => Carbon::now()->toIso8601String(),
             ]);

@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TaskGeneratorController;
+use App\Http\Controllers\Api\V1\TaskProofController;
+use App\Http\Controllers\Api\V1\TaskVerificationController;
 use App\Http\Controllers\Api\V1\UserApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -92,7 +94,20 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:manager,owner');
             Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])
                 ->middleware('role:manager,owner');
-            Route::patch('/tasks/{id}/status', [TaskController::class, 'updateStatus'])
+
+            // Task status update - доступно всем (сотрудники могут загружать доказательства)
+            Route::patch('/tasks/{id}/status', [TaskController::class, 'updateStatus']);
+
+            // Task Proofs - доказательства выполнения
+            Route::get('/task-proofs/{id}', [TaskProofController::class, 'show']);
+            Route::get('/task-proofs/{id}/download', [TaskProofController::class, 'download'])
+                ->name('task-proofs.download');
+            Route::delete('/task-proofs/{id}', [TaskProofController::class, 'destroy']);
+
+            // Task Verification - верификация доказательств (только managers и owners)
+            Route::post('/task-responses/{id}/approve', [TaskVerificationController::class, 'approve'])
+                ->middleware('role:manager,owner');
+            Route::post('/task-responses/{id}/reject', [TaskVerificationController::class, 'reject'])
                 ->middleware('role:manager,owner');
 
             // Task Generators - READ операции
