@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Exceptions\AccessDeniedException;
+use App\Exceptions\DuplicateTaskException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,5 +21,19 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (DuplicateTaskException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_type' => 'duplicate_task'
+            ], 422);
+        });
+
+        $exceptions->render(function (AccessDeniedException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_type' => 'access_denied'
+            ], 403);
+        });
     })->create();

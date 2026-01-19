@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\StoreUserRequest;
+use App\Http\Requests\Api\V1\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Traits\HasDealershipAccess;
@@ -12,8 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Enums\Role;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 /**
  * Контроллер для управления пользователями.
@@ -159,11 +159,11 @@ class UserApiController extends Controller
     /**
      * Обновляет данные пользователя.
      *
-     * @param Request $request HTTP-запрос с данными для обновления
+     * @param UpdateUserRequest $request Валидированный запрос
      * @param int|string $id ID пользователя
      * @return JsonResponse
      */
-    public function update(Request $request, $id): JsonResponse
+    public function update(UpdateUserRequest $request, $id): JsonResponse
     {
         $user = User::with('dealerships')->find($id);
 
@@ -181,7 +181,8 @@ class UserApiController extends Controller
         if (!$this->isOwner($currentUser) && $user->role === Role::OWNER) {
             return response()->json([
                 'success' => false,
-                'message' => 'У вас нет прав для редактирования Владельца'
+                'message' => 'У вас нет прав для редактирования Владельца',
+                'error_type' => 'access_denied'
             ], 403);
         }
 
@@ -190,96 +191,20 @@ class UserApiController extends Controller
         if ($accessError) {
             return response()->json([
                 'success' => false,
-                'message' => 'У вас нет прав для редактирования сотрудника другого автосалона'
+                'message' => 'У вас нет прав для редактирования сотрудника другого автосалона',
+                'error_type' => 'access_denied'
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'current_password' => [
-                'required_with:password',
-                'string',
-            ],
-            'password' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'min:8',
-                'max:255',
-                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]/'
-            ],
-            'full_name' => [
-                'sometimes',
-                'required',
-                'string',
-                'min:2',
-                'max:255'
-            ],
-            'phone' => [
-                'sometimes',
-                'required',
-                'string',
-                'regex:/^\+?[\d\s\-\(\)]+$/',
-                'max:20'
-            ],
-            'phone_number' => [
-                'sometimes',
-                'required',
-                'string',
-                'regex:/^\+?[\d\s\-\(\)]+$/',
-                'max:20'
-            ],
-            'role' => [
-                'sometimes',
-                'required',
-                'string',
-                Rule::in(Role::values())
-            ],
-            'dealership_id' => [
-                'sometimes',
-                'nullable',
-                'integer',
-                'exists:auto_dealerships,id'
-            ],
-            'dealership_ids' => [
-                'sometimes',
-                'nullable',
-                'array'
-            ],
-            'dealership_ids.*' => [
-                'integer',
-                'exists:auto_dealerships,id'
-            ]
-        ], [
-            'current_password.required_with' => 'Для смены пароля необходимо указать текущий пароль',
-            'password.min' => 'Пароль должен содержать минимум 8 символов',
-            'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
-            'full_name.required' => 'Полное имя обязательно',
-            'full_name.min' => 'Полное имя должно содержать минимум 2 символа',
-            'phone.required' => 'Телефон обязателен',
-            'phone.regex' => 'Некорректный формат телефона',
-            'phone_number.required' => 'Телефон обязателен',
-            'phone_number.regex' => 'Некорректный формат телефона',
-            'role.required' => 'Роль обязательна',
-            'role.in' => 'Некорректная роль',
-            'dealership_id.exists' => 'Автосалон не найден'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ошибка валидации',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $validated = $validator->validated();
+        $validated = $request->validated();
 
         // Security check: Non-owners cannot promote users to Owner
         if (isset($validated['role']) && $validated['role'] === Role::OWNER->value) {
             if (!$this->isOwner($currentUser)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Только Владелец может назначать роль Владельца'
+                    'message' => 'Только Владелец может назначать роль Владельца',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
@@ -290,7 +215,8 @@ class UserApiController extends Controller
             if ($accessError) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Вы не можете привязать сотрудника к чужому автосалону'
+                    'message' => 'Вы не можете привязать сотрудника к чужому автосалону',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
@@ -301,149 +227,71 @@ class UserApiController extends Controller
             if ($accessError) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Вы не можете управлять доступом к чужому автосалону'
+                    'message' => 'Вы не можете управлять доступом к чужому автосалону',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
 
-        try {
-            $updateData = [];
+        $updateData = [];
 
-            // Only update password if it's provided and not empty
-            if (isset($validated['password']) && $validated['password'] !== '' && $validated['password'] !== null) {
-                // Security: If user is changing their OWN password, require current_password verification
-                // Owners/Managers can reset others' passwords without this check
-                if ($user->id === $currentUser->id) {
-                    if (!isset($validated['current_password']) || !Hash::check($validated['current_password'], $user->password)) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Текущий пароль указан неверно',
-                            'errors' => ['current_password' => ['Неверный текущий пароль']]
-                        ], 422);
-                    }
+        // Only update password if it's provided and not empty
+        if (isset($validated['password']) && $validated['password'] !== '' && $validated['password'] !== null) {
+            // Security: If user is changing their OWN password, require current_password verification
+            // Owners/Managers can reset others' passwords without this check
+            if ($user->id === $currentUser->id) {
+                if (!isset($validated['current_password']) || !Hash::check($validated['current_password'], $user->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Текущий пароль указан неверно',
+                        'errors' => ['current_password' => ['Неверный текущий пароль']]
+                    ], 422);
                 }
-                $updateData['password'] = Hash::make($validated['password']);
             }
-
-            if (isset($validated['full_name'])) {
-                $updateData['full_name'] = $validated['full_name'];
-            }
-
-            // Support both 'phone' and 'phone_number' fields
-            if (isset($validated['phone'])) {
-                $updateData['phone'] = $validated['phone'];
-            } elseif (isset($validated['phone_number'])) {
-                $updateData['phone'] = $validated['phone_number'];
-            }
-
-            if (isset($validated['role'])) {
-                $updateData['role'] = $validated['role'];
-            }
-
-            if (isset($validated['dealership_id'])) {
-                $updateData['dealership_id'] = $validated['dealership_id'];
-            }
-
-            if (isset($validated['dealership_ids'])) {
-                $user->dealerships()->sync($validated['dealership_ids']);
-            }
-
-            $user->update($updateData);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Данные пользователя успешно обновлены',
-                'data' => new UserResource($user)
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ошибка при обновлении пользователя',
-                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера'
-            ], 500);
+            $updateData['password'] = Hash::make($validated['password']);
         }
+
+        if (isset($validated['full_name'])) {
+            $updateData['full_name'] = $validated['full_name'];
+        }
+
+        // Support both 'phone' and 'phone_number' fields
+        if (isset($validated['phone'])) {
+            $updateData['phone'] = $validated['phone'];
+        } elseif (isset($validated['phone_number'])) {
+            $updateData['phone'] = $validated['phone_number'];
+        }
+
+        if (isset($validated['role'])) {
+            $updateData['role'] = $validated['role'];
+        }
+
+        if (isset($validated['dealership_id'])) {
+            $updateData['dealership_id'] = $validated['dealership_id'];
+        }
+
+        if (isset($validated['dealership_ids'])) {
+            $user->dealerships()->sync($validated['dealership_ids']);
+        }
+
+        $user->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Данные пользователя успешно обновлены',
+            'data' => new UserResource($user)
+        ], 200);
     }
 
     /**
      * Создаёт нового пользователя.
      *
-     * @param Request $request HTTP-запрос с данными нового пользователя
+     * @param StoreUserRequest $request Валидированный запрос
      * @return JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreUserRequest $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'login' => [
-                'required',
-                'string',
-                'min:4',
-                'max:64',
-                'unique:users,login',
-                'regex:/^(?!.*\..*\.)(?!.*_.*_)[a-zA-Z0-9._]+$/'
-            ],
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-                'max:255',
-                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/'
-            ],
-            'full_name' => [
-                'required',
-                'string',
-                'min:2',
-                'max:255'
-            ],
-            'phone' => [
-                'required',
-                'string',
-                'regex:/^\+?[\d\s\-\(\)]+$/',
-                'max:20'
-            ],
-            'role' => [
-                'required',
-                'string',
-                Rule::in(Role::values())
-            ],
-            'dealership_id' => [
-                'nullable',
-                'integer',
-                'exists:auto_dealerships,id'
-            ],
-            'dealership_ids' => [
-                'nullable',
-                'array'
-            ],
-            'dealership_ids.*' => [
-                'integer',
-                'exists:auto_dealerships,id'
-            ]
-        ], [
-            'login.required' => 'Логин обязателен',
-            'login.min' => 'Логин должен содержать минимум 4 символа',
-            'login.regex' => 'Логин может содержать только латинские буквы, цифры, одну точку и одно нижнее подчеркивание',
-            'login.unique' => 'Такой логин уже существует',
-            'password.required' => 'Пароль обязателен',
-            'password.min' => 'Пароль должен содержать минимум 8 символов',
-            'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
-            'full_name.required' => 'Полное имя обязательно',
-            'full_name.min' => 'Полное имя должно содержать минимум 2 символа',
-            'phone.required' => 'Телефон обязателен',
-            'phone.regex' => 'Некорректный формат телефона',
-            'role.required' => 'Роль обязательна',
-            'role.in' => 'Некорректная роль',
-            'dealership_id.exists' => 'Автосалон не найден',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ошибка валидации',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $validated = $validator->validated();
+        $validated = $request->validated();
 
         /** @var User $currentUser */
         $currentUser = $request->user();
@@ -453,7 +301,8 @@ class UserApiController extends Controller
             if (!$this->isOwner($currentUser)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Только Владелец может создавать пользователей с ролью Владельца'
+                    'message' => 'Только Владелец может создавать пользователей с ролью Владельца',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
@@ -464,7 +313,8 @@ class UserApiController extends Controller
             if ($accessError) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Вы не можете создать сотрудника в чужом автосалоне'
+                    'message' => 'Вы не можете создать сотрудника в чужом автосалоне',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
@@ -475,37 +325,30 @@ class UserApiController extends Controller
             if ($accessError) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Вы не можете дать доступ к чужому автосалону'
+                    'message' => 'Вы не можете дать доступ к чужому автосалону',
+                    'error_type' => 'access_denied'
                 ], 403);
             }
         }
 
-        try {
-            $user = User::create([
-                'login' => $validated['login'],
-                'password' => Hash::make($validated['password']),
-                'full_name' => $validated['full_name'],
-                'phone' => $validated['phone'],
-                'role' => $validated['role'],
-                'dealership_id' => $validated['dealership_id'] ?? null,
-            ]);
+        $user = User::create([
+            'login' => $validated['login'],
+            'password' => Hash::make($validated['password']),
+            'full_name' => $validated['full_name'],
+            'phone' => $validated['phone'],
+            'role' => $validated['role'],
+            'dealership_id' => $validated['dealership_id'] ?? null,
+        ]);
 
-            if (!empty($validated['dealership_ids'])) {
-                $user->dealerships()->sync($validated['dealership_ids']);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Сотрудник успешно создан',
-                'data' => new UserResource($user)
-            ], 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ошибка при создании сотрудника',
-                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера'
-            ], 500);
+        if (!empty($validated['dealership_ids'])) {
+            $user->dealerships()->sync($validated['dealership_ids']);
         }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Сотрудник успешно создан',
+            'data' => new UserResource($user)
+        ], 201);
     }
 
     /**
