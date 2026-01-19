@@ -37,11 +37,31 @@ composer install
 docker compose up -d --build
 ```
 
+### Инициализация после первого запуска
+
+```sh
+# Установка зависимостей (если vendor/ отсутствует)
+docker compose exec backend_api composer install
+
+# Миграции и сидинг демо-данных
+docker compose exec backend_api php artisan migrate --force
+docker compose exec backend_api php artisan db:seed-demo
+
+# Создание симлинка для публичных файлов
+docker compose exec backend_api php artisan storage:link
+```
+
 ### Тестирование
 
 ```sh
-# Запуск тестов внутри контейнера
-docker compose exec src_telegram_bot_api php artisan test
+# Все тесты (193 теста)
+docker compose exec backend_api php artisan test
+
+# Отдельные наборы тестов
+docker compose exec backend_api composer test:unit      # Unit tests
+docker compose exec backend_api composer test:feature   # Feature tests
+docker compose exec backend_api composer test:api       # API endpoint tests
+docker compose exec backend_api composer test:coverage  # С отчётом покрытия (min 50%)
 ```
 
 ## Seeding (Заполнение данными)
