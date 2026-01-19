@@ -438,6 +438,7 @@ class ReportController extends Controller
                     'subtitle' => $task->dealership?->name,
                     'date' => $task->deadline?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
                     'type' => 'task',
+                    'dealership_id' => $task->dealership_id,
                 ]);
                 break;
 
@@ -453,6 +454,7 @@ class ReportController extends Controller
                     'date' => $shift->shift_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
                     'type' => 'shift',
                     'user_id' => $shift->user_id,
+                    'dealership_id' => $shift->dealership_id,
                 ]);
                 break;
 
@@ -467,6 +469,7 @@ class ReportController extends Controller
                     'subtitle' => "Переносов: {$task->postpone_count}",
                     'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
                     'type' => 'task',
+                    'dealership_id' => $task->dealership_id,
                 ]);
                 break;
 
@@ -481,6 +484,7 @@ class ReportController extends Controller
                     'subtitle' => $task->dealership?->name,
                     'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
                     'type' => 'task',
+                    'dealership_id' => $task->dealership_id,
                 ]);
                 break;
 
@@ -522,6 +526,7 @@ class ReportController extends Controller
                         'subtitle' => "Рейтинг: {$score}/100",
                         'score' => $score,
                         'type' => 'user',
+                        'dealership_id' => $employee->dealership_id,
                     ];
                 })->filter(fn ($e) => $e['score'] < 70)->sortBy('score')->values();
                 break;
@@ -539,6 +544,7 @@ class ReportController extends Controller
                     'subtitle' => $task->dealership?->name,
                     'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
                     'type' => 'task',
+                    'dealership_id' => $task->dealership_id,
                 ]);
                 break;
 
@@ -555,6 +561,7 @@ class ReportController extends Controller
                     'date' => $shift->scheduled_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
                     'type' => 'shift',
                     'user_id' => $shift->user_id,
+                    'dealership_id' => $shift->dealership_id,
                 ]);
                 break;
 

@@ -224,7 +224,7 @@ class TaskController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
-        $task = Task::find($id);
+        $task = Task::with(['assignments'])->find($id);
 
         if (!$task) {
             return response()->json([
@@ -234,9 +234,11 @@ class TaskController extends Controller
 
         $validated = $request->validate([
             'status' => 'required|string|in:pending,pending_review,completed',
+            'complete_for_all' => 'sometimes|boolean',
         ]);
 
         $status = $validated['status'];
+        $completeForAll = $validated['complete_for_all'] ?? false;
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
@@ -281,16 +283,34 @@ class TaskController extends Controller
 
             case 'pending_review':
             case 'completed':
-                // Update or create response with shift tracking
-                $task->responses()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'status' => $status,
-                        'responded_at' => TimeHelper::nowUtc(),
-                        'shift_id' => $shiftId,
-                        'completed_during_shift' => $completedDuringShift,
-                    ]
-                );
+                // If manager/owner wants to complete for all assignees
+                if ($completeForAll && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+                    // Create responses for ALL assigned users
+                    $assignedUserIds = $task->assignments->pluck('user_id')->unique()->toArray();
+
+                    foreach ($assignedUserIds as $assignedUserId) {
+                        $task->responses()->updateOrCreate(
+                            ['user_id' => $assignedUserId],
+                            [
+                                'status' => $status,
+                                'responded_at' => TimeHelper::nowUtc(),
+                                'shift_id' => null, // Manager completes on behalf
+                                'completed_during_shift' => false,
+                            ]
+                        );
+                    }
+                } else {
+                    // Update or create response for current user only
+                    $task->responses()->updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'status' => $status,
+                            'responded_at' => TimeHelper::nowUtc(),
+                            'shift_id' => $shiftId,
+                            'completed_during_shift' => $completedDuringShift,
+                        ]
+                    );
+                }
                 break;
         }
 
