@@ -1,7 +1,7 @@
-# 🛡️ Strict Proprietary Software License  
-**For TaskMateTelegramBot**
+# 🛡️ Strict Proprietary Software License
+**For TaskMateBackend**
 
-This software and its source code, documentation, and all associated files (collectively, the "Software") are the sole property of **Tulenov Temur Pulatovich**, an individual ("Licensor").
+This software and its source code, documentation, and all associated files (collectively, the "Software") are the sole property of [**https://github.com/xierongchuan**](https://github.com/xierongchuan), an individual ("Licensor").
 
 ---
 
@@ -45,4 +45,4 @@ This agreement is governed by the laws of the Republic of Uzbekistan and applica
 
 ---
 
-Any use of TaskMateTelegramBot without explicit written permission is a violation of this license. All rights reserved.
+Any use of TaskMateBackend without explicit written permission is a violation of this license. All rights reserved.

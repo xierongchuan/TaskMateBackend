@@ -75,4 +75,4 @@ docker compose exec src_telegram_bot_api php artisan db:seed
 ## Лицензия
 
 Proprietary License
-Copyright © 2023-2026 谢榕川 All rights reserved.
+Copyright © 2023-2026 [https://github.com/xierongchuan](https://github.com/xierongchuan). All rights reserved.
