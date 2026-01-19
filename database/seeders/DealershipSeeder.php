@@ -49,7 +49,6 @@ class DealershipSeeder extends Seeder
                     'role' => Role::MANAGER,
                     'dealership_id' => $dealership->id,
                     'phone' => fake()->phoneNumber(),
-                    'telegram_id' => fake()->unique()->randomNumber(9),
                 ]
             );
             $this->command->info(" - Created Manager: {$manager->login} / password");
@@ -65,7 +64,6 @@ class DealershipSeeder extends Seeder
                         'role' => Role::EMPLOYEE,
                         'dealership_id' => $dealership->id,
                         'phone' => fake()->phoneNumber(),
-                        'telegram_id' => fake()->unique()->randomNumber(9),
                     ]
                 );
                 $this->command->info(" - Created Employee: {$employee->login} / password");

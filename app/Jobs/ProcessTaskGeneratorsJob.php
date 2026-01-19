@@ -84,6 +84,8 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
             $deadlineTime = $generator->getDeadlineTimeForDate($now);
 
             // Create the task
+            // Note: Task model mutators expect time in Asia/Yekaterinburg and convert to UTC.
+            // So we pass the local time directly without manual UTC conversion.
             $task = Task::create([
                 'generator_id' => $generator->id,
                 'title' => $generator->title,
@@ -91,8 +93,8 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
                 'comment' => $generator->comment,
                 'creator_id' => $generator->creator_id,
                 'dealership_id' => $generator->dealership_id,
-                'appear_date' => $appearTime->copy()->setTimezone('UTC'),
-                'deadline' => $deadlineTime->copy()->setTimezone('UTC'),
+                'appear_date' => $appearTime->copy()->format('Y-m-d H:i:s'),  // Pass as local time string
+                'deadline' => $deadlineTime->copy()->format('Y-m-d H:i:s'),   // Mutator converts to UTC
                 'scheduled_date' => $now->copy()->startOfDay()->setTimezone('UTC'),
                 'task_type' => $generator->task_type,
                 'response_type' => $generator->response_type,

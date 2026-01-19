@@ -10,12 +10,21 @@ use App\Models\Task;
 use App\Models\TaskAssignment;
 use App\Models\Shift;
 use App\Services\SettingsService;
+use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Enums\Role;
 
 class TaskController extends Controller
 {
+    use HasDealershipAccess;
+
+    /**
+     * Получает список задач с фильтрацией и пагинацией.
+     *
+     * @param Request $request HTTP-запрос с параметрами фильтрации
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', '15');
@@ -72,16 +81,14 @@ class TaskController extends Controller
         }
 
         // Фильтрация по автосалону
-        /** @var User $currentUser */
+        /** @var \App\Models\User $currentUser */
         $currentUser = $request->user();
 
         // Scope tasks for non-owners: restricted to accessible dealerships
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
+        if (!$this->isOwner($currentUser)) {
             // If explicit filter is provided, validate it's accessible
             if ($dealershipId) {
-                if (!in_array($dealershipId, $accessibleIds)) {
+                if (!$this->hasAccessToDealership($currentUser, $dealershipId)) {
                     // If filtering by inaccessible dealership, return empty
                     $query->where('dealership_id', -1);
                 } else {
@@ -89,14 +96,7 @@ class TaskController extends Controller
                 }
             } else {
                 // Otherwise, show tasks from all accessible dealerships or tasks assigned to user
-                // Policy: Manager can see tasks in their dealerships OR tasks assigned to them even if dealership is different (unlikely but safe)
-                $query->where(function($q) use ($accessibleIds, $currentUser) {
-                     $q->whereIn('dealership_id', $accessibleIds)
-                       ->orWhereHas('assignments', function($subQ) use ($currentUser) {
-                           $subQ->where('user_id', $currentUser->id);
-                       })
-                       ->orWhere('creator_id', $currentUser->id);
-                });
+                $this->scopeTasksByAccessibleDealerships($query, $currentUser);
             }
         } elseif ($dealershipId) {
             // Owner filtering by dealership
@@ -266,6 +266,12 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Получает детальную информацию о задаче.
+     *
+     * @param int|string $id ID задачи
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function show($id)
     {
         $task = Task::with([
@@ -281,19 +287,17 @@ class TaskController extends Controller
             ], 404);
         }
 
-        /** @var User $currentUser */
+        /** @var \App\Models\User $currentUser */
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
+        if (!$this->isOwner($currentUser)) {
             // Check visibility: dealership match OR created by me OR assigned to me
             $isCreator = $task->creator_id === $currentUser->id;
             $isAssigned = $task->assignments->contains('user_id', $currentUser->id);
-            $hasAccessToDealership = in_array($task->dealership_id, $accessibleIds);
+            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
 
-            if (!$hasAccessToDealership && !$isCreator && !$isAssigned) {
+            if (!$hasAccess && !$isCreator && !$isAssigned) {
                 return response()->json([
                     'message' => 'У вас нет доступа к этой задаче'
                 ], 403);
@@ -303,6 +307,12 @@ class TaskController extends Controller
         return response()->json($task->toApiArray());
     }
 
+    /**
+     * Создаёт новую задачу.
+     *
+     * @param Request $request HTTP-запрос с данными задачи
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -356,16 +366,15 @@ class TaskController extends Controller
         }
 
         // Security check: Ensure dealership is accessible
-        /** @var User $currentUser */
+        /** @var \App\Models\User $currentUser */
         $currentUser = $request->user();
-        if ($currentUser->role !== Role::OWNER) {
-             $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-             if (!empty($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
-                 return response()->json([
+        if (!empty($validated['dealership_id'])) {
+            $accessError = $this->validateDealershipAccess($currentUser, (int) $validated['dealership_id']);
+            if ($accessError) {
+                return response()->json([
                     'message' => 'Вы не можете создать задачу в чужом автосалоне'
                 ], 403);
-             }
+            }
         }
 
         try {
@@ -441,6 +450,13 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Обновляет существующую задачу.
+     *
+     * @param Request $request HTTP-запрос с данными для обновления
+     * @param int|string $id ID задачи
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function update(Request $request, $id)
     {
         $task = Task::find($id);
@@ -451,16 +467,14 @@ class TaskController extends Controller
             ], 404);
         }
 
-        /** @var User $currentUser */
+        /** @var \App\Models\User $currentUser */
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-            // Check if current task is accessible
-            if (!in_array($task->dealership_id, $accessibleIds) && $task->creator_id !== $currentUser->id) {
-                 return response()->json([
+        if (!$this->isOwner($currentUser)) {
+            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
+            if (!$hasAccess && $task->creator_id !== $currentUser->id) {
+                return response()->json([
                     'message' => 'У вас нет прав для редактирования этой задачи'
                 ], 403);
             }
@@ -520,14 +534,13 @@ class TaskController extends Controller
         }
 
         // Security check: Ensure new dealership is accessible
-        if ($currentUser->role !== Role::OWNER) {
-             $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-             if (isset($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
-                 return response()->json([
+        if (isset($validated['dealership_id'])) {
+            $accessError = $this->validateDealershipAccess($currentUser, (int) $validated['dealership_id']);
+            if ($accessError) {
+                return response()->json([
                     'message' => 'Вы не можете перенести задачу в чужой автосалон'
                 ], 403);
-             }
+            }
         }
 
         $task->update($validated);
@@ -551,36 +564,33 @@ class TaskController extends Controller
         return response()->json($task->load(['assignments.user', 'responses.user'])->toApiArray());
     }
 
+    /**
+     * Удаляет задачу.
+     *
+     * @param int|string $id ID задачи
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function destroy($id)
     {
         $task = Task::find($id);
 
         if (!$task) {
-             return response()->json([ // Fixed missing variable
+             return response()->json([
                 'message' => 'Задача не найдена'
             ], 404);
         }
 
-        /** @var User $currentUser */
+        /** @var \App\Models\User $currentUser */
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-            // Allow deletion if creator OR has access to dealership
-            // Assuming Manager can delete tasks in their dealership even if not creator
-            if (!in_array($task->dealership_id, $accessibleIds) && $task->creator_id !== $currentUser->id) {
-                 return response()->json([
+        if (!$this->isOwner($currentUser)) {
+            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
+            if (!$hasAccess && $task->creator_id !== $currentUser->id) {
+                return response()->json([
                     'message' => 'У вас нет прав для удаления этой задачи'
                 ], 403);
             }
-        }
-
-        if (!$task) {
-            return response()->json([
-                'message' => 'Задача не найдена'
-            ], 404);
         }
 
         // Delete task assignments (they will be automatically deleted due to foreign key constraints)
@@ -594,6 +604,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Обновляет статус задачи.
+     *
+     * @param Request $request HTTP-запрос со статусом
+     * @param int|string $id ID задачи
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function updateStatus(Request $request, $id)
     {
         $task = Task::find($id);

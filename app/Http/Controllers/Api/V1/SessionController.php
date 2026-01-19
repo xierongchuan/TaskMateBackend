@@ -7,13 +7,24 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 
 class SessionController extends Controller
 {
+    /**
+     * Maximum failed login attempts before account lockout
+     */
+    private const MAX_FAILED_ATTEMPTS = 5;
+
+    /**
+     * Lockout duration in minutes
+     */
+    private const LOCKOUT_MINUTES = 15;
+
     public function store(Request $req)
     {
-        \Illuminate\Support\Facades\Log::info('Login attempt', ['login' => $req->login]);
+        Log::info('Login attempt', ['login' => $req->login]);
 
         $req->validate([
             'login'    => ['required', 'min:4', 'max:64', 'regex:/^(?!.*\..*\.)(?!.*_.*_)[a-zA-Z0-9._]+$/'],
@@ -23,17 +34,53 @@ class SessionController extends Controller
         try {
             $user = User::where('login', $req->login)->first();
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Login DB Error', ['error' => $e->getMessage()]);
+            Log::error('Login DB Error', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Ошибка базы данных'], 500);
         }
 
+        // Check if account is locked
+        if ($user && $user->locked_until && $user->locked_until > now()) {
+            $minutesLeft = (int) now()->diffInMinutes($user->locked_until, false);
+            Log::warning('Login blocked: Account locked', [
+                'login' => $req->login,
+                'locked_until' => $user->locked_until,
+            ]);
+            return response()->json([
+                'message' => "Аккаунт временно заблокирован. Попробуйте через {$minutesLeft} мин."
+            ], 429);
+        }
+
         if (! $user || ! Hash::check($req->password, $user->password)) {
-            \Illuminate\Support\Facades\Log::warning('Login failed: Invalid credentials', ['login' => $req->login]);
+            // Track failed login attempts
+            if ($user) {
+                $user->increment('failed_login_attempts');
+                $user->last_failed_login_at = now();
+
+                // Lock account after exceeding max attempts
+                if ($user->failed_login_attempts >= self::MAX_FAILED_ATTEMPTS) {
+                    $user->locked_until = now()->addMinutes(self::LOCKOUT_MINUTES);
+                    Log::warning('Account locked due to failed attempts', [
+                        'user_id' => $user->id,
+                        'attempts' => $user->failed_login_attempts,
+                    ]);
+                }
+
+                $user->save();
+            }
+
+            Log::warning('Login failed: Invalid credentials', ['login' => $req->login]);
             return response()->json(['message' => 'Неверные данные'], 401);
         }
 
+        // Reset failed attempts on successful login
+        $user->update([
+            'failed_login_attempts' => 0,
+            'locked_until' => null,
+            'last_failed_login_at' => null,
+        ]);
+
         $token = $user->createToken('user-token')->plainTextToken;
-        \Illuminate\Support\Facades\Log::info('Login successful', ['user_id' => $user->id]);
+        Log::info('Login successful', ['user_id' => $user->id]);
 
         return response()->json([
             'token' => $token,
@@ -43,7 +90,6 @@ class SessionController extends Controller
                 'full_name' => $user->full_name,
                 'role' => $user->role,
                 'dealership_id' => $user->dealership_id,
-                'telegram_id' => $user->telegram_id,
                 'phone' => $user->phone,
                 'dealerships' => $user->dealerships,
             ],
@@ -52,7 +98,7 @@ class SessionController extends Controller
 
     public function destroy(Request $request)
     {
-        \Illuminate\Support\Facades\Log::info('Logout initiated', ['user_id' => $request->user()->id]);
+        Log::info('Logout initiated', ['user_id' => $request->user()->id]);
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Сессия завершена']);
@@ -63,11 +109,11 @@ class SessionController extends Controller
         $user = $request->user();
 
         if (!$user) {
-            \Illuminate\Support\Facades\Log::warning('Session check failed: No user found from token');
+            Log::warning('Session check failed: No user found from token');
             return response()->json(['message' => 'Не авторизован'], 401);
         }
 
-        \Illuminate\Support\Facades\Log::info('Session check successful', ['user_id' => $user->id]);
+        Log::info('Session check successful', ['user_id' => $user->id]);
 
         return response()->json([
             'user' => [
@@ -76,7 +122,6 @@ class SessionController extends Controller
                 'full_name' => $user->full_name,
                 'role' => $user->role,
                 'dealership_id' => $user->dealership_id,
-                'telegram_id' => $user->telegram_id,
                 'phone' => $user->phone,
                 'dealerships' => $user->dealerships,
             ],

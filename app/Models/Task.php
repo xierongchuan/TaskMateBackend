@@ -7,11 +7,13 @@ namespace App\Models;
 use App\Helpers\TimeHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
 class Task extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $table = 'tasks';
 
@@ -156,11 +158,15 @@ class Task extends Model
      * 4. acknowledged - at least one acknowledged
      * 5. overdue - deadline passed, not completed
      * 6. pending - default
+     *
+     * Note: This accessor uses relationLoaded() checks to avoid N+1 queries.
+     * Always eager load 'responses' and 'assignments' when fetching tasks.
      */
     public function getStatusAttribute()
     {
-        $responses = $this->responses;
-        $assignments = $this->assignments;
+        // Use already loaded relations or load them (with warning for N+1 prevention)
+        $responses = $this->relationLoaded('responses') ? $this->responses : $this->responses()->get();
+        $assignments = $this->relationLoaded('assignments') ? $this->assignments : $this->assignments()->get();
         $hasDeadline = $this->deadline !== null;
         $deadlinePassed = TimeHelper::isDeadlinePassed($this->deadline);
 
@@ -307,8 +313,8 @@ class Task extends Model
     }
 
     /**
-     * Scope to get only active tasks
-     * Currently uses is_active field, but prepares for future migration to archived_at
+     * Scope to get only active tasks.
+     * Active = is_active=true AND archived_at=null
      */
     public function scopeActive($query)
     {
@@ -316,13 +322,53 @@ class Task extends Model
     }
 
     /**
-     * Scope to get archived tasks
+     * Scope to get archived tasks.
+     * Archived = is_active=false OR archived_at IS NOT NULL
      */
     public function scopeArchived($query)
     {
         return $query->where(function ($q) {
             $q->where('is_active', false)->orWhereNotNull('archived_at');
         });
+    }
+
+    /**
+     * Accessor for checking if task is archived.
+     * Unifies the two archive indicators (is_active and archived_at).
+     */
+    public function getIsArchivedAttribute(): bool
+    {
+        return !$this->is_active || $this->archived_at !== null;
+    }
+
+    /**
+     * Archive the task with a reason.
+     * This method ensures both is_active and archived_at are set consistently.
+     *
+     * @param string|null $reason The reason for archiving
+     */
+    public function archive(?string $reason = null): void
+    {
+        $this->update([
+            'is_active' => false,
+            'archived_at' => now(),
+            'archive_reason' => $reason,
+        ]);
+    }
+
+    /**
+     * Restore the task from archive.
+     * This method ensures both is_active and archived_at are set consistently.
+     *
+     * Note: Named restoreFromArchive() to avoid conflict with SoftDeletes::restore()
+     */
+    public function restoreFromArchive(): void
+    {
+        $this->update([
+            'is_active' => true,
+            'archived_at' => null,
+            'archive_reason' => null,
+        ]);
     }
 
     /**
@@ -344,6 +390,9 @@ class Task extends Model
     /**
      * Get completion percentage for group tasks.
      * Returns percentage of assignees who have completed the task.
+     *
+     * Note: Uses relationLoaded() checks to avoid N+1 queries.
+     * Always eager load 'responses' and 'assignments' when needing this attribute.
      */
     public function getCompletionPercentageAttribute(): int
     {
@@ -351,14 +400,19 @@ class Task extends Model
             return $this->status === 'completed' ? 100 : 0;
         }
 
-        $totalAssignees = $this->assignments()->count();
+        // Use already loaded relations or load them
+        $assignments = $this->relationLoaded('assignments') ? $this->assignments : $this->assignments()->get();
+        $totalAssignees = $assignments->count();
+
         if ($totalAssignees === 0) {
             return 0;
         }
 
-        $completedCount = $this->responses()
+        $responses = $this->relationLoaded('responses') ? $this->responses : $this->responses()->get();
+        $completedCount = $responses
             ->where('status', 'completed')
-            ->distinct('user_id')
+            ->pluck('user_id')
+            ->unique()
             ->count();
 
         return (int) round(($completedCount / $totalAssignees) * 100);

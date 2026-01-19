@@ -174,7 +174,6 @@ describe('Users API', function () {
                     'full_name' => 'User',
                     'role' => Role::EMPLOYEE->value,
                     'phone' => '+1234567890',
-                    'telegram_id' => 1001,
                 ]);
             expect($response->status())->toBe(201);
 
@@ -186,7 +185,6 @@ describe('Users API', function () {
                     'full_name' => 'User',
                     'role' => Role::EMPLOYEE->value,
                     'phone' => '+1234567890',
-                    'telegram_id' => 1002,
                 ]);
             expect($response->status())->toBe(201);
 
@@ -198,7 +196,6 @@ describe('Users API', function () {
                     'full_name' => 'User',
                     'role' => Role::EMPLOYEE->value,
                     'phone' => '+1234567890',
-                    'telegram_id' => 1003,
                 ]);
             expect($response->status())->toBe(201);
         });

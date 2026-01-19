@@ -27,7 +27,7 @@ describe('Session API', function () {
             $response->assertStatus(200)
                 ->assertJsonStructure([
                     'token',
-                    'user' => ['id', 'login', 'full_name', 'role', 'dealership_id', 'telegram_id', 'phone'],
+                    'user' => ['id', 'login', 'full_name', 'role', 'dealership_id', 'phone'],
                 ]);
 
             expect($response->json('user.login'))->toBe('testuser')

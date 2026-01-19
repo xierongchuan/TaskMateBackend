@@ -27,7 +27,6 @@ class UserFactory extends Factory
         return [
             'login' => fake()->unique()->userName(),
             'full_name' => fake()->name(),
-            'telegram_id' => fake()->randomNumber(9),
             'phone' => fake()->phoneNumber(),
             'role' => fake()->randomElement([Role::EMPLOYEE->value, Role::MANAGER->value, Role::OBSERVER->value]),
             'password' => Hash::make('password123'),
@@ -45,13 +44,4 @@ class UserFactory extends Factory
     }
 
 
-    /**
-     * Indicate that the user should have a specific telegram ID.
-     */
-    public function telegramId(int $telegramId): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'telegram_id' => $telegramId,
-        ]);
-    }
 }

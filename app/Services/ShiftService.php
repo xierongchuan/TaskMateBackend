@@ -306,6 +306,21 @@ class ShiftService
     }
 
     /**
+     * Allowed image extensions for shift photos
+     */
+    private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+    /**
+     * Allowed MIME types for shift photos
+     */
+    private const ALLOWED_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+    ];
+
+    /**
      * Store shift photo with proper path structure
      *
      * @param UploadedFile $photo
@@ -313,10 +328,27 @@ class ShiftService
      * @param int $userId
      * @param int $dealershipId
      * @return string
+     * @throws \InvalidArgumentException
      */
     private function storeShiftPhoto(UploadedFile $photo, string $type, int $userId, int $dealershipId): string
     {
-        $filename = $type . '_' . time() . '_' . $userId . '.' . $photo->getClientOriginalExtension();
+        // Validate extension from whitelist (not from user input)
+        $extension = strtolower($photo->getClientOriginalExtension());
+        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+            throw new \InvalidArgumentException(
+                'Недопустимое расширение файла. Разрешены: ' . implode(', ', self::ALLOWED_EXTENSIONS)
+            );
+        }
+
+        // Additional MIME type verification for security
+        $mimeType = $photo->getMimeType();
+        if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
+            throw new \InvalidArgumentException(
+                'Недопустимый тип файла. Разрешены только изображения.'
+            );
+        }
+
+        $filename = $type . '_' . time() . '_' . $userId . '.' . $extension;
         $path = "dealerships/{$dealershipId}/shifts/{$userId}/" . date('Y/m/d');
 
         return $photo->storeAs($path, $filename, 'public');

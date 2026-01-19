@@ -77,7 +77,8 @@ class NotificationSetting extends Model
             ->where('channel_type', $channelType)
             ->first();
 
-        return $setting ? $setting->is_enabled : true; // Default to enabled if no setting exists
+        // Default to disabled (opt-in) - users must explicitly enable notifications
+        return $setting ? $setting->is_enabled : false;
     }
 
     /**

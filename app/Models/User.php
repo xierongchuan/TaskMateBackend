@@ -6,6 +6,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -15,6 +16,7 @@ class User extends Authenticatable
 {
     use HasApiTokens;
     use HasFactory;
+    use SoftDeletes;
 
     protected $table = 'users';
 
@@ -24,11 +26,16 @@ class User extends Authenticatable
         'phone',
         'role',
         'dealership_id',
-        'password'
+        'password',
+        'failed_login_attempts',
+        'locked_until',
+        'last_failed_login_at',
     ];
 
     protected $casts = [
         'role' => Role::class,
+        'locked_until' => 'datetime',
+        'last_failed_login_at' => 'datetime',
     ];
 
     protected $hidden = [

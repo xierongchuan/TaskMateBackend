@@ -83,7 +83,8 @@ describe('Task API', function () {
 
         // Assert
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+        // With SoftDeletes, the task should be soft deleted (deleted_at is not null)
+        $this->assertSoftDeleted('tasks', ['id' => $task->id]);
     });
     it('creates a task with tags', function () {
         // Arrange

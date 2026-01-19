@@ -14,19 +14,15 @@ use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TaskGeneratorController;
 use App\Http\Controllers\Api\V1\UserApiController;
-use App\Http\Controllers\FrontController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Webhook для Telegram
-Route::post('/webhook', [FrontController::class, 'webhook']);
-
 Route::prefix('v1')->group(function () {
-    // Открытие сессии (логин)
+    // Открытие сессии (логин) - с rate limiting для защиты от brute-force
     Route::post(
         '/session',
         [SessionController::class, 'store']
-    );
+    )->middleware('throttle:login');
 
     // Закрытие сессии (логаут)
     Route::delete(
@@ -45,7 +41,7 @@ Route::prefix('v1')->group(function () {
         return response()->json(['success' => true], 200);
     });
 
-    Route::middleware('auth:sanctum')
+    Route::middleware(['auth:sanctum', 'throttle:api'])
         ->group(function () {
             // Users - READ операции
             Route::get('/users', [UserApiController::class, 'index']);

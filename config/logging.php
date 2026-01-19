@@ -73,17 +73,6 @@ return [
             'replace_placeholders' => true,
         ],
 
-        'nutgram' => [
-            'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
-            'handler' => StreamHandler::class,
-            'formatter' => Nutgram\Laravel\Log\NutgramFormatter::class,
-            'with' => [
-                'stream' => 'php://stderr',
-            ],
-            'processors' => [PsrLogMessageProcessor::class],
-        ],
-
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

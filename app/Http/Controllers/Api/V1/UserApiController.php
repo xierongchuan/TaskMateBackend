@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Enums\Role;
@@ -14,8 +15,21 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
+/**
+ * Контроллер для управления пользователями.
+ *
+ * Предоставляет CRUD операции для пользователей системы.
+ */
 class UserApiController extends Controller
 {
+    use HasDealershipAccess;
+
+    /**
+     * Получает список пользователей с фильтрацией и пагинацией.
+     *
+     * @param Request $request HTTP-запрос с параметрами фильтрации
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+     */
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', '15');
@@ -32,8 +46,6 @@ class UserApiController extends Controller
         if ($phone === '') {
             $phone = (string) $request->query('phone_number', '');
         }
-
-        $hasTelegram = (string) $request->query('has_telegram', '');
 
         $query = User::query();
 
@@ -95,39 +107,24 @@ class UserApiController extends Controller
             }
         }
 
-        // Telegram connection filtering
-        if ($hasTelegram !== '') {
-            if ($hasTelegram === 'connected') {
-                $query->whereNotNull('telegram_id');
-            } elseif ($hasTelegram === 'not_connected') {
-                $query->whereNull('telegram_id');
-            }
-            // Ignore invalid values silently
-        }
-
         // Always eager load dealership and dealerships relationships
         $query->with(['dealership', 'dealerships']);
 
         // Scope by accessible dealerships for non-owners
         /** @var User $currentUser */
         $currentUser = $request->user();
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-            // Allow viewing users who belong to any of the accessible dealerships
-            // EITHER via primary dealership_id OR via pivot table
-            $query->where(function ($q) use ($accessibleIds) {
-                $q->whereIn('dealership_id', $accessibleIds)
-                  ->orWhereHas('dealerships', function ($subQ) use ($accessibleIds) {
-                      $subQ->whereIn('auto_dealerships.id', $accessibleIds);
-                  });
-            });
-        }
+        $this->scopeUsersByAccessibleDealerships($query, $currentUser);
 
         $users = $query->orderByDesc('created_at')->paginate($perPage);
         return UserResource::collection($users);
     }
 
+    /**
+     * Получает информацию о конкретном пользователе.
+     *
+     * @param int|string $id ID пользователя
+     * @return UserResource|JsonResponse
+     */
     public function show($id)
     {
         $user = User::find($id);
@@ -141,6 +138,12 @@ class UserApiController extends Controller
         return new UserResource($user);
     }
 
+    /**
+     * Проверяет статус активности пользователя.
+     *
+     * @param int|string $id ID пользователя
+     * @return JsonResponse
+     */
     public function status($id)
     {
         $user = User::find($id);
@@ -153,6 +156,13 @@ class UserApiController extends Controller
         ]);
     }
 
+    /**
+     * Обновляет данные пользователя.
+     *
+     * @param Request $request HTTP-запрос с данными для обновления
+     * @param int|string $id ID пользователя
+     * @return JsonResponse
+     */
     public function update(Request $request, $id): JsonResponse
     {
         $user = User::with('dealerships')->find($id);
@@ -168,7 +178,7 @@ class UserApiController extends Controller
         $currentUser = $request->user();
 
         // Security check: Non-owners cannot modify Owners
-        if ($currentUser->role !== Role::OWNER && $user->role === Role::OWNER) {
+        if (!$this->isOwner($currentUser) && $user->role === Role::OWNER) {
             return response()->json([
                 'success' => false,
                 'message' => 'У вас нет прав для редактирования Владельца'
@@ -176,26 +186,19 @@ class UserApiController extends Controller
         }
 
         // Security check: Scope access to assigned dealerships
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-            $userDealerships = array_merge(
-                $user->dealership_id ? [$user->dealership_id] : [],
-                $user->dealerships->pluck('id')->toArray()
-            );
-
-            // If user has NO dealerships, they might be global/unassigned.
-            // Policy choice: Managers can only edit users who share at least one dealership.
-            // If target has no dealerships, maybe Manager shouldn't see them?
-            // Let's assume strict intersection.
-            if (empty(array_intersect($userDealerships, $accessibleIds)) && !empty($userDealerships)) {
-                 return response()->json([
-                    'success' => false,
-                    'message' => 'У вас нет прав для редактирования сотрудника другого автосалона'
-                ], 403);
-            }
+        $accessError = $this->validateUserAccess($currentUser, $user);
+        if ($accessError) {
+            return response()->json([
+                'success' => false,
+                'message' => 'У вас нет прав для редактирования сотрудника другого автосалона'
+            ], 403);
         }
 
         $validator = Validator::make($request->all(), [
+            'current_password' => [
+                'required_with:password',
+                'string',
+            ],
             'password' => [
                 'sometimes',
                 'nullable',
@@ -247,6 +250,7 @@ class UserApiController extends Controller
                 'exists:auto_dealerships,id'
             ]
         ], [
+            'current_password.required_with' => 'Для смены пароля необходимо указать текущий пароль',
             'password.min' => 'Пароль должен содержать минимум 8 символов',
             'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
             'full_name.required' => 'Полное имя обязательно',
@@ -272,7 +276,7 @@ class UserApiController extends Controller
 
         // Security check: Non-owners cannot promote users to Owner
         if (isset($validated['role']) && $validated['role'] === Role::OWNER->value) {
-            if ($currentUser->role !== Role::OWNER) {
+            if (!$this->isOwner($currentUser)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Только Владелец может назначать роль Владельца'
@@ -280,27 +284,26 @@ class UserApiController extends Controller
             }
         }
 
-        // Security check: Ensure new dealerships are accessible
-        if ($currentUser->role !== Role::OWNER) {
-             $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-             if (isset($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
-                 return response()->json([
+        // Security check: Ensure new dealership is accessible
+        if (isset($validated['dealership_id'])) {
+            $accessError = $this->validateDealershipAccess($currentUser, (int) $validated['dealership_id']);
+            if ($accessError) {
+                return response()->json([
                     'success' => false,
                     'message' => 'Вы не можете привязать сотрудника к чужому автосалону'
                 ], 403);
-             }
+            }
+        }
 
-             if (isset($validated['dealership_ids'])) {
-                 foreach ($validated['dealership_ids'] as $did) {
-                     if (!in_array($did, $accessibleIds)) {
-                         return response()->json([
-                            'success' => false,
-                            'message' => 'Вы не можете управлять доступом к чужому автосалону'
-                        ], 403);
-                     }
-                 }
-             }
+        // Security check: Ensure new dealerships array is accessible
+        if (isset($validated['dealership_ids'])) {
+            $accessError = $this->validateMultipleDealershipsAccess($currentUser, $validated['dealership_ids']);
+            if ($accessError) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Вы не можете управлять доступом к чужому автосалону'
+                ], 403);
+            }
         }
 
         try {
@@ -308,6 +311,17 @@ class UserApiController extends Controller
 
             // Only update password if it's provided and not empty
             if (isset($validated['password']) && $validated['password'] !== '' && $validated['password'] !== null) {
+                // Security: If user is changing their OWN password, require current_password verification
+                // Owners/Managers can reset others' passwords without this check
+                if ($user->id === $currentUser->id) {
+                    if (!isset($validated['current_password']) || !Hash::check($validated['current_password'], $user->password)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Текущий пароль указан неверно',
+                            'errors' => ['current_password' => ['Неверный текущий пароль']]
+                        ], 422);
+                    }
+                }
                 $updateData['password'] = Hash::make($validated['password']);
             }
 
@@ -350,6 +364,12 @@ class UserApiController extends Controller
         }
     }
 
+    /**
+     * Создаёт нового пользователя.
+     *
+     * @param Request $request HTTP-запрос с данными нового пользователя
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -385,11 +405,6 @@ class UserApiController extends Controller
                 'string',
                 Rule::in(Role::values())
             ],
-            'telegram_id' => [
-                'nullable',
-                'integer',
-                'unique:users,telegram_id'
-            ],
             'dealership_id' => [
                 'nullable',
                 'integer',
@@ -417,7 +432,6 @@ class UserApiController extends Controller
             'phone.regex' => 'Некорректный формат телефона',
             'role.required' => 'Роль обязательна',
             'role.in' => 'Некорректная роль',
-            'telegram_id.unique' => 'Этот Telegram ID уже используется',
             'dealership_id.exists' => 'Автосалон не найден',
         ]);
 
@@ -436,7 +450,7 @@ class UserApiController extends Controller
 
         // Security check: Non-owners cannot create Owners
         if ($validated['role'] === Role::OWNER->value) {
-            if ($currentUser->role !== Role::OWNER) {
+            if (!$this->isOwner($currentUser)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Только Владелец может создавать пользователей с ролью Владельца'
@@ -444,27 +458,26 @@ class UserApiController extends Controller
             }
         }
 
-        // Security check: Ensure new dealerships are accessible
-        if ($currentUser->role !== Role::OWNER) {
-             $accessibleIds = $currentUser->getAccessibleDealershipIds();
-
-             if (!empty($validated['dealership_id']) && !in_array($validated['dealership_id'], $accessibleIds)) {
-                 return response()->json([
+        // Security check: Ensure new dealership is accessible
+        if (!empty($validated['dealership_id'])) {
+            $accessError = $this->validateDealershipAccess($currentUser, (int) $validated['dealership_id']);
+            if ($accessError) {
+                return response()->json([
                     'success' => false,
                     'message' => 'Вы не можете создать сотрудника в чужом автосалоне'
                 ], 403);
-             }
+            }
+        }
 
-             if (!empty($validated['dealership_ids'])) {
-                 foreach ($validated['dealership_ids'] as $did) {
-                     if (!in_array($did, $accessibleIds)) {
-                         return response()->json([
-                            'success' => false,
-                            'message' => 'Вы не можете дать доступ к чужому автосалону'
-                        ], 403);
-                     }
-                 }
-             }
+        // Security check: Ensure new dealerships array is accessible
+        if (!empty($validated['dealership_ids'])) {
+            $accessError = $this->validateMultipleDealershipsAccess($currentUser, $validated['dealership_ids']);
+            if ($accessError) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Вы не можете дать доступ к чужому автосалону'
+                ], 403);
+            }
         }
 
         try {
@@ -474,7 +487,6 @@ class UserApiController extends Controller
                 'full_name' => $validated['full_name'],
                 'phone' => $validated['phone'],
                 'role' => $validated['role'],
-                'telegram_id' => $validated['telegram_id'] ?? 0,
                 'dealership_id' => $validated['dealership_id'] ?? null,
             ]);
 
@@ -496,7 +508,13 @@ class UserApiController extends Controller
         }
     }
 
-    public function destroy($id): JsonResponse // Fixed: Added $request to argument usually or use global request() helper. Here I will use request() helper.
+    /**
+     * Удаляет пользователя.
+     *
+     * @param int|string $id ID пользователя
+     * @return JsonResponse
+     */
+    public function destroy($id): JsonResponse
     {
         $user = User::with('dealerships')->find($id);
 
@@ -511,28 +529,20 @@ class UserApiController extends Controller
         $currentUser = request()->user();
 
         // Security check: Only Owner can delete Owner
-        if ($user->role === Role::OWNER && $currentUser->role !== Role::OWNER) {
-             return response()->json([
+        if ($user->role === Role::OWNER && !$this->isOwner($currentUser)) {
+            return response()->json([
                 'success' => false,
                 'message' => 'У вас нет прав для удаления Владельца'
             ], 403);
         }
 
         // Security check: Scope access to assigned dealerships for deletion
-        if ($currentUser->role !== Role::OWNER) {
-            $accessibleIds = $currentUser->getAccessibleDealershipIds();
-            $userDealerships = array_merge(
-                $user->dealership_id ? [$user->dealership_id] : [],
-                $user->dealerships->pluck('id')->toArray()
-            );
-
-            // Can only delete if user is in your dealership
-            if (empty(array_intersect($userDealerships, $accessibleIds)) && !empty($userDealerships)) {
-                 return response()->json([
-                    'success' => false,
-                    'message' => 'У вас нет прав для удаления сотрудника другого автосалона'
-                ], 403);
-            }
+        $accessError = $this->validateUserAccess($currentUser, $user);
+        if ($accessError) {
+            return response()->json([
+                'success' => false,
+                'message' => 'У вас нет прав для удаления сотрудника другого автосалона'
+            ], 403);
         }
 
         // Проверяем наличие связанных данных

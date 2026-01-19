@@ -21,10 +21,8 @@ class UserResource extends JsonResource
             'login'        => $this->login,
             'full_name'    => $this->full_name,
             'role'         => $this->role,
-            'telegram_id'  => $this->telegram_id,
             'phone_number' => $this->phone,
             'dealership_id' => $this->dealership_id,
-            // 'status'       => $this->status,
         ];
 
         // Include dealership data if loaded
