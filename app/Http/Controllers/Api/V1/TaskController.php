@@ -15,6 +15,7 @@ use App\Services\SettingsService;
 use App\Services\TaskService;
 use App\Services\TaskFilterService;
 use App\Services\TaskProofService;
+use App\Services\TaskVerificationService;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -29,7 +30,8 @@ class TaskController extends Controller
     public function __construct(
         private readonly TaskService $taskService,
         private readonly TaskFilterService $taskFilterService,
-        private readonly TaskProofService $taskProofService
+        private readonly TaskProofService $taskProofService,
+        private readonly TaskVerificationService $taskVerificationService
     ) {}
 
     /**
@@ -240,7 +242,7 @@ class TaskController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,pending_review,completed',
+            'status' => 'required|string|in:pending,acknowledged,pending_review,completed',
             'complete_for_all' => 'sometimes|boolean',
             'proof_files' => 'sometimes|array|max:' . TaskProofService::MAX_FILES_PER_RESPONSE,
             'proof_files.*' => 'file|max:102400', // 100 MB max per file
@@ -314,6 +316,19 @@ class TaskController extends Controller
                 $task->responses()->delete();
                 break;
 
+            case 'acknowledged':
+                // Подтверждение для notification типа задач
+                $task->responses()->updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'status' => 'acknowledged',
+                        'responded_at' => TimeHelper::nowUtc(),
+                        'shift_id' => $shiftId,
+                        'completed_during_shift' => $completedDuringShift,
+                    ]
+                );
+                break;
+
             case 'pending_review':
             case 'completed':
                 // If manager/owner wants to complete for all assignees
@@ -333,7 +348,12 @@ class TaskController extends Controller
                         );
                     }
                 } else {
+                    // Проверяем, это повторная отправка после отклонения
+                    $existingResponse = $task->responses()->where('user_id', $user->id)->first();
+                    $isResubmission = $existingResponse && $existingResponse->status === 'rejected';
+
                     // Update or create response for current user only
+                    // При любом update очищаем поля верификации
                     $taskResponse = $task->responses()->updateOrCreate(
                         ['user_id' => $user->id],
                         [
@@ -341,6 +361,9 @@ class TaskController extends Controller
                             'responded_at' => TimeHelper::nowUtc(),
                             'shift_id' => $shiftId,
                             'completed_during_shift' => $completedDuringShift,
+                            'verified_at' => null,
+                            'verified_by' => null,
+                            'rejection_reason' => null,
                         ]
                     );
 
@@ -352,6 +375,13 @@ class TaskController extends Controller
                                 $request->file('proof_files'),
                                 $task->dealership_id
                             );
+
+                            // Записываем в историю верификации
+                            if ($isResubmission) {
+                                $this->taskVerificationService->recordResubmission($taskResponse, $user);
+                            } else {
+                                $this->taskVerificationService->recordSubmission($taskResponse, $user);
+                            }
                         } catch (InvalidArgumentException $e) {
                             return response()->json([
                                 'message' => $e->getMessage()
@@ -367,5 +397,71 @@ class TaskController extends Controller
                 ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier'])
                 ->toApiArray()
         );
+    }
+
+    /**
+     * Получает историю выполненных задач текущего пользователя.
+     *
+     * @param Request $request HTTP-запрос с параметрами фильтрации
+     * @return JsonResponse
+     */
+    public function myHistory(Request $request): JsonResponse
+    {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
+        $query = Task::with([
+            'creator',
+            'dealership',
+            'assignments.user',
+            'responses' => function ($q) use ($currentUser) {
+                $q->where('user_id', $currentUser->id)->with(['proofs', 'verifier']);
+            },
+        ])
+            ->whereHas('assignments', function ($q) use ($currentUser) {
+                $q->where('user_id', $currentUser->id);
+            })
+            ->whereHas('responses', function ($q) use ($currentUser) {
+                $q->where('user_id', $currentUser->id);
+            });
+
+        // Фильтр по статусу ответа
+        if ($request->filled('response_status')) {
+            $status = $request->input('response_status');
+            $query->whereHas('responses', function ($q) use ($currentUser, $status) {
+                $q->where('user_id', $currentUser->id)->where('status', $status);
+            });
+        }
+
+        // Фильтр по dealership
+        if ($request->filled('dealership_id')) {
+            $query->where('dealership_id', $request->input('dealership_id'));
+        }
+
+        // Сортировка
+        $query->orderByDesc('updated_at');
+
+        // Пагинация
+        $perPage = $request->input('per_page', 15);
+        $tasks = $query->paginate((int) $perPage);
+
+        // Transform tasks to API format
+        $tasksData = $tasks->getCollection()->map(function ($task) {
+            return $task->toApiArray();
+        });
+
+        return response()->json([
+            'data' => $tasksData,
+            'current_page' => $tasks->currentPage(),
+            'last_page' => $tasks->lastPage(),
+            'per_page' => $tasks->perPage(),
+            'total' => $tasks->total(),
+            'links' => [
+                'first' => $tasks->url(1),
+                'last' => $tasks->url($tasks->lastPage()),
+                'prev' => $tasks->previousPageUrl(),
+                'next' => $tasks->nextPageUrl(),
+            ],
+        ]);
     }
 }

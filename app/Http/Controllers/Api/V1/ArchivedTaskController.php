@@ -6,27 +6,36 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Enums\Role;
 
 class ArchivedTaskController extends Controller
 {
+    use HasDealershipAccess;
+
     /**
      * List archived tasks with filtering.
      */
     public function index(Request $request)
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
         $query = Task::with(['creator', 'dealership', 'assignments.user', 'generator'])
             ->whereNotNull('archived_at');
 
-        // Filter by dealership
+        // Filter by dealership with access validation
         if ($request->has('dealership_id')) {
-            $query->where('dealership_id', $request->dealership_id);
-        } elseif ($user->role !== Role::OWNER) {
-            $query->where('dealership_id', $user->dealership_id);
+            $dealershipId = (int) $request->dealership_id;
+            if ($accessError = $this->validateDealershipAccess($user, $dealershipId)) {
+                return $accessError;
+            }
+            $query->where('dealership_id', $dealershipId);
+        } else {
+            // Scope by accessible dealerships
+            $this->scopeByAccessibleDealerships($query, $user);
         }
 
         // Filter by archive reason (completed, expired)
@@ -92,9 +101,16 @@ class ArchivedTaskController extends Controller
     /**
      * Restore a task from archive.
      */
-    public function restore($id)
+    public function restore(Request $request, $id)
     {
+        /** @var \App\Models\User $user */
+        $user = $request->user();
         $task = Task::whereNotNull('archived_at')->findOrFail($id);
+
+        // Verify user has access to the task's dealership
+        if ($accessError = $this->validateDealershipAccess($user, $task->dealership_id)) {
+            return $accessError;
+        }
 
         // Restore the task
         $task->update([
@@ -117,16 +133,22 @@ class ArchivedTaskController extends Controller
      */
     public function export(Request $request)
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
         $query = Task::with(['creator', 'dealership', 'assignments.user'])
             ->whereNotNull('archived_at');
 
-        // Apply same filters as index
+        // Apply same filters as index with access validation
         if ($request->has('dealership_id')) {
-            $query->where('dealership_id', $request->dealership_id);
-        } elseif ($user->role !== Role::OWNER) {
-            $query->where('dealership_id', $user->dealership_id);
+            $dealershipId = (int) $request->dealership_id;
+            if ($accessError = $this->validateDealershipAccess($user, $dealershipId)) {
+                return $accessError;
+            }
+            $query->where('dealership_id', $dealershipId);
+        } else {
+            // Scope by accessible dealerships
+            $this->scopeByAccessibleDealerships($query, $user);
         }
 
         if ($request->has('archive_reason')) {

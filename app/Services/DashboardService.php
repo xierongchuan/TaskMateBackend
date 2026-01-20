@@ -56,6 +56,8 @@ class DashboardService
             'completed_tasks' => $taskStats['completed_today'],
             'overdue_tasks' => $taskStats['overdue'],
             'overdue_tasks_list' => $this->getOverdueTasksList($dealershipId),
+            'pending_review_count' => $this->getPendingReviewCount($dealershipId),
+            'pending_review_tasks' => $this->getPendingReviewTasks($dealershipId, 5),
             'open_shifts' => count($activeShifts),
             'late_shifts_today' => $this->getLateShiftsCount($dealershipId),
             'active_shifts' => $activeShifts,
@@ -219,6 +221,45 @@ class DashboardService
             ->when($dealershipId, fn ($q) => $q->where('dealership_id', $dealershipId))
             ->orderBy('deadline')
             ->limit(10)
+            ->get()
+            ->map(fn ($task) => $task->toApiArray());
+    }
+
+    /**
+     * Получает количество задач на проверке.
+     *
+     * @param int|null $dealershipId
+     * @return int
+     */
+    protected function getPendingReviewCount(?int $dealershipId): int
+    {
+        return TaskResponse::query()
+            ->where('status', 'pending_review')
+            ->when($dealershipId, function ($q) use ($dealershipId) {
+                $q->whereHas('task', fn ($tq) => $tq->where('dealership_id', $dealershipId));
+            })
+            ->count();
+    }
+
+    /**
+     * Получает список задач на проверке.
+     *
+     * @param int|null $dealershipId
+     * @param int $limit
+     * @return Collection
+     */
+    protected function getPendingReviewTasks(?int $dealershipId, int $limit = 5): Collection
+    {
+        return Task::with([
+            'creator:id,full_name',
+            'dealership:id,name',
+            'assignments.user:id,full_name',
+            'responses' => fn ($q) => $q->where('status', 'pending_review')->with(['user:id,full_name', 'proofs']),
+        ])
+            ->whereHas('responses', fn ($q) => $q->where('status', 'pending_review'))
+            ->when($dealershipId, fn ($q) => $q->where('dealership_id', $dealershipId))
+            ->orderByDesc('updated_at')
+            ->limit($limit)
             ->get()
             ->map(fn ($task) => $task->toApiArray());
     }

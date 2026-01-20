@@ -9,10 +9,18 @@ use App\Models\User;
 
 describe('Important Links API Endpoints', function () {
     beforeEach(function () {
-        // Create a manager user for authenticated requests
-        $this->manager = User::factory()->create(['role' => Role::MANAGER->value]);
-        $this->employee = User::factory()->create(['role' => Role::EMPLOYEE->value]);
+        // Create dealership first
         $this->dealership = AutoDealership::factory()->create();
+
+        // Create a manager user with access to the dealership
+        $this->manager = User::factory()->create([
+            'role' => Role::MANAGER->value,
+            'dealership_id' => $this->dealership->id,
+        ]);
+        $this->employee = User::factory()->create([
+            'role' => Role::EMPLOYEE->value,
+            'dealership_id' => $this->dealership->id,
+        ]);
     });
 
     describe('GET /api/v1/links', function () {
@@ -37,13 +45,14 @@ describe('Important Links API Endpoints', function () {
         });
 
         it('filters links by dealership_id', function () {
-            // Arrange
-            $dealership1 = AutoDealership::factory()->create();
+            // Arrange - use manager's dealership and create another one for comparison
             $dealership2 = AutoDealership::factory()->create();
+            // Give manager access to dealership2 as well
+            $this->manager->dealerships()->attach($dealership2->id);
 
             ImportantLink::factory()->count(3)->create([
                 'creator_id' => $this->manager->id,
-                'dealership_id' => $dealership1->id,
+                'dealership_id' => $this->dealership->id,
             ]);
             ImportantLink::factory()->count(2)->create([
                 'creator_id' => $this->manager->id,
@@ -52,7 +61,7 @@ describe('Important Links API Endpoints', function () {
 
             // Act
             $response = $this->actingAs($this->manager, 'sanctum')
-                ->getJson('/api/v1/links?dealership_id=' . $dealership1->id);
+                ->getJson('/api/v1/links?dealership_id=' . $this->dealership->id);
 
             // Assert
             $response->assertStatus(200);
@@ -63,10 +72,12 @@ describe('Important Links API Endpoints', function () {
             // Arrange
             ImportantLink::factory()->count(3)->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'is_active' => true,
             ]);
             ImportantLink::factory()->count(2)->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'is_active' => false,
             ]);
 
@@ -91,18 +102,21 @@ describe('Important Links API Endpoints', function () {
             // Arrange
             ImportantLink::factory()->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'title' => 'Internal Portal',
                 'url' => 'https://portal.example.com',
                 'description' => 'Access internal resources',
             ]);
             ImportantLink::factory()->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'title' => 'CRM System',
                 'url' => 'https://crm.example.com',
                 'description' => 'Customer management',
             ]);
             ImportantLink::factory()->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'title' => 'Dashboard',
                 'url' => 'https://dashboard.example.com',
                 'description' => 'Analytics dashboard',
@@ -133,7 +147,7 @@ describe('Important Links API Endpoints', function () {
 
     describe('GET /api/v1/links/{id}', function () {
         it('returns a single link with relations', function () {
-            // Arrange
+            // Arrange - create link in manager's dealership
             $link = ImportantLink::factory()->create([
                 'creator_id' => $this->manager->id,
                 'dealership_id' => $this->dealership->id,
@@ -174,7 +188,10 @@ describe('Important Links API Endpoints', function () {
 
         it('requires authentication', function () {
             // Arrange
-            $link = ImportantLink::factory()->create(['creator_id' => $this->manager->id]);
+            $link = ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
+            ]);
 
             // Act
             $response = $this->getJson('/api/v1/links/' . $link->id);
@@ -318,6 +335,7 @@ describe('Important Links API Endpoints', function () {
             // Arrange
             $link = ImportantLink::factory()->create([
                 'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
                 'title' => 'Original Title',
             ]);
 
@@ -357,7 +375,10 @@ describe('Important Links API Endpoints', function () {
 
         it('validates url format on update', function () {
             // Arrange
-            $link = ImportantLink::factory()->create(['creator_id' => $this->manager->id]);
+            $link = ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
+            ]);
 
             // Act
             $response = $this->actingAs($this->manager, 'sanctum')
@@ -370,7 +391,10 @@ describe('Important Links API Endpoints', function () {
 
         it('requires manager or owner role', function () {
             // Arrange
-            $link = ImportantLink::factory()->create(['creator_id' => $this->manager->id]);
+            $link = ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
+            ]);
 
             // Act
             $response = $this->actingAs($this->employee, 'sanctum')
@@ -384,7 +408,10 @@ describe('Important Links API Endpoints', function () {
     describe('DELETE /api/v1/links/{id}', function () {
         it('deletes link successfully', function () {
             // Arrange
-            $link = ImportantLink::factory()->create(['creator_id' => $this->manager->id]);
+            $link = ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
+            ]);
 
             // Act
             $response = $this->actingAs($this->manager, 'sanctum')
@@ -412,7 +439,10 @@ describe('Important Links API Endpoints', function () {
 
         it('requires manager or owner role', function () {
             // Arrange
-            $link = ImportantLink::factory()->create(['creator_id' => $this->manager->id]);
+            $link = ImportantLink::factory()->create([
+                'creator_id' => $this->manager->id,
+                'dealership_id' => $this->dealership->id,
+            ]);
 
             // Act
             $response = $this->actingAs($this->employee, 'sanctum')
@@ -426,9 +456,9 @@ describe('Important Links API Endpoints', function () {
     describe('Link Ordering', function () {
         it('returns links ordered by sort_order', function () {
             // Arrange
-            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'sort_order' => 30, 'title' => 'Third']);
-            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'sort_order' => 10, 'title' => 'First']);
-            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'sort_order' => 20, 'title' => 'Second']);
+            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'dealership_id' => $this->dealership->id, 'sort_order' => 30, 'title' => 'Third']);
+            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'dealership_id' => $this->dealership->id, 'sort_order' => 10, 'title' => 'First']);
+            ImportantLink::factory()->create(['creator_id' => $this->manager->id, 'dealership_id' => $this->dealership->id, 'sort_order' => 20, 'title' => 'Second']);
 
             // Act
             $response = $this->actingAs($this->manager, 'sanctum')

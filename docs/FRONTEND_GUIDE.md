@@ -58,8 +58,6 @@ DELETE /dealerships/{id}     - Удалить автосалон (Manager/Owner)
 
 GET    /settings             - Настройки
 POST   /settings             - Создать настройку (Manager/Owner)
-GET    /settings/bot-config  - Настройки бота
-PUT    /settings/bot-config  - Обновить настройки бота (Manager/Owner)
 
 GET    /dashboard            - Общая статистика
 ```

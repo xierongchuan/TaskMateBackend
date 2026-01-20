@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Carbon\Carbon|null $verified_at
  * @property int|null $verified_by
  * @property string|null $rejection_reason
+ * @property int $rejection_count
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property-read Task $task
@@ -30,10 +32,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Shift|null $shift
  * @property-read User|null $verifier
  * @property-read \Illuminate\Database\Eloquent\Collection<TaskProof> $proofs
+ * @property-read \Illuminate\Database\Eloquent\Collection<TaskVerificationHistory> $verificationHistory
  */
 class TaskResponse extends Model
 {
     use HasFactory;
+    use Auditable;
 
     protected $table = 'task_responses';
 
@@ -48,6 +52,7 @@ class TaskResponse extends Model
         'verified_at',
         'verified_by',
         'rejection_reason',
+        'rejection_count',
         'created_at',
     ];
 
@@ -57,6 +62,7 @@ class TaskResponse extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'completed_during_shift' => 'boolean',
+        'rejection_count' => 'integer',
     ];
 
     public function task(): BelongsTo
@@ -88,5 +94,38 @@ class TaskResponse extends Model
     public function proofs(): HasMany
     {
         return $this->hasMany(TaskProof::class, 'task_response_id');
+    }
+
+    /**
+     * История верификации.
+     */
+    public function verificationHistory(): HasMany
+    {
+        return $this->hasMany(TaskVerificationHistory::class, 'task_response_id')
+            ->orderByDesc('created_at');
+    }
+
+    /**
+     * Проверить, отклонен ли ответ.
+     */
+    public function isRejected(): bool
+    {
+        return $this->status === 'rejected';
+    }
+
+    /**
+     * Проверить, ожидает ли ответ проверки.
+     */
+    public function isPendingReview(): bool
+    {
+        return $this->status === 'pending_review';
+    }
+
+    /**
+     * Проверить, одобрен ли ответ.
+     */
+    public function isCompleted(): bool
+    {
+        return $this->status === 'completed';
     }
 }

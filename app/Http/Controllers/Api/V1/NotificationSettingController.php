@@ -7,28 +7,29 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\NotificationSetting;
 use App\Enums\Role;
+use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class NotificationSettingController extends Controller
 {
+    use HasDealershipAccess;
+
     /**
      * Get all notification settings for the user's dealership
      */
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
         // Get dealership ID - managers can manage their own dealership
         $dealershipId = (int) $request->input('dealership_id', $user->dealership_id);
 
         // Verify user has access to this dealership
-        // Verify user has access to this dealership
-        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
+        if ($accessError = $this->validateDealershipAccess($user, $dealershipId)) {
+            return $accessError;
         }
 
         // Ensure default settings exist for all channels
@@ -101,14 +102,8 @@ class NotificationSettingController extends Controller
      */
     public function update(Request $request, string $channelType): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
-
-        // Verify user has access
-        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
-        }
 
         $validated = $request->validate([
             'dealership_id' => 'sometimes|exists:auto_dealerships,id',
@@ -121,6 +116,11 @@ class NotificationSettingController extends Controller
         ]);
 
         $dealershipId = $validated['dealership_id'] ?? $user->dealership_id;
+
+        // Verify user has access to this dealership
+        if ($accessError = $this->validateDealershipAccess($user, (int) $dealershipId)) {
+            return $accessError;
+        }
 
         $setting = NotificationSetting::where('dealership_id', $dealershipId)
             ->where('channel_type', $channelType)
@@ -166,14 +166,8 @@ class NotificationSettingController extends Controller
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
-
-        // Verify user has access
-        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
-        }
 
         $validated = $request->validate([
             'dealership_id' => 'sometimes|exists:auto_dealerships,id',
@@ -185,6 +179,11 @@ class NotificationSettingController extends Controller
         ]);
 
         $dealershipId = $validated['dealership_id'] ?? $user->dealership_id;
+
+        // Verify user has access to this dealership
+        if ($accessError = $this->validateDealershipAccess($user, (int) $dealershipId)) {
+            return $accessError;
+        }
         $updatedCount = 0;
 
         foreach ($validated['settings'] as $settingData) {
@@ -219,16 +218,15 @@ class NotificationSettingController extends Controller
      */
     public function resetToDefaults(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
-        // Verify user has access
-        if (!in_array($user->role, [Role::OWNER, Role::MANAGER])) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
-        }
+        $dealershipId = (int) $request->input('dealership_id', $user->dealership_id);
 
-        $dealershipId = $request->input('dealership_id', $user->dealership_id);
+        // Verify user has access to this dealership
+        if ($accessError = $this->validateDealershipAccess($user, $dealershipId)) {
+            return $accessError;
+        }
 
         // Reset all settings to enabled
         NotificationSetting::where('dealership_id', $dealershipId)

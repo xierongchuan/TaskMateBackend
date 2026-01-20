@@ -9,10 +9,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Shift;
 use App\Models\Task;
 use App\Models\User;
+use App\Traits\HasDealershipAccess;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
+    use HasDealershipAccess;
     public function index(Request $request)
     {
         $user = $request->user();
@@ -34,8 +36,12 @@ class ReportController extends Controller
             // Для менеджера - только его автосалон
             $dealershipId = $user->dealership_id;
         } elseif ($request->filled('dealership_id')) {
-            // Для других ролей - можно выбрать автосалон
-            $dealershipId = $request->integer('dealership_id');
+            // Для других ролей - проверяем доступ к выбранному автосалону
+            $requestedDealershipId = $request->integer('dealership_id');
+            if ($accessError = $this->validateDealershipAccess($user, $requestedDealershipId)) {
+                return $accessError;
+            }
+            $dealershipId = $requestedDealershipId;
         }
 
         // Helper для применения фильтра по автосалону
@@ -405,8 +411,12 @@ class ReportController extends Controller
             // Для менеджера - только его автосалон
             $dealershipId = $user->dealership_id;
         } elseif ($request->filled('dealership_id')) {
-            // Для других ролей - можно выбрать автосалон
-            $dealershipId = $request->integer('dealership_id');
+            // Для других ролей - проверяем доступ к выбранному автосалону
+            $requestedDealershipId = $request->integer('dealership_id');
+            if ($accessError = $this->validateDealershipAccess($user, $requestedDealershipId)) {
+                return $accessError;
+            }
+            $dealershipId = $requestedDealershipId;
         }
 
         $applyTaskFilter = function ($query) use ($dealershipId) {

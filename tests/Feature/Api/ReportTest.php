@@ -11,8 +11,14 @@ use Carbon\Carbon;
 
 describe('Report API', function () {
     beforeEach(function () {
-        $this->manager = User::factory()->create(['role' => Role::MANAGER->value]);
+        // Create dealership first
         $this->dealership = AutoDealership::factory()->create();
+
+        // Create manager with access to the dealership
+        $this->manager = User::factory()->create([
+            'role' => Role::MANAGER->value,
+            'dealership_id' => $this->dealership->id,
+        ]);
     });
 
     it('returns reports', function () {

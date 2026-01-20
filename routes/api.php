@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\V1\TaskGeneratorController;
 use App\Http\Controllers\Api\V1\TaskProofController;
 use App\Http\Controllers\Api\V1\TaskVerificationController;
 use App\Http\Controllers\Api\V1\UserApiController;
+use App\Http\Controllers\Api\V1\ShiftPhotoController;
+use App\Http\Controllers\Api\V1\AuditLogController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -42,6 +44,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/up', function () {
         return response()->json(['success' => true], 200);
     });
+
+    // Shift Photos - доступ по подписанному URL (без auth:sanctum)
+    // Безопасность обеспечивается временной подписью URL (60 мин)
+    Route::get('/shifts/{id}/photo/{type}', [ShiftPhotoController::class, 'download'])
+        ->name('shift-photos.download')
+        ->middleware('throttle:api');
 
     Route::middleware(['auth:sanctum', 'throttle:api'])
         ->group(function () {
@@ -83,8 +91,14 @@ Route::prefix('v1')->group(function () {
             Route::put('/shifts/{id}', [ShiftController::class, 'update']);
             Route::delete('/shifts/{id}', [ShiftController::class, 'destroy']);
 
+            // Shift Photos - доступ с Bearer token авторизацией (stable URLs)
+            Route::get('/shift-photos/{id}/{type}', [ShiftPhotoController::class, 'show'])
+                ->where('type', 'opening|closing')
+                ->name('shift-photos.show');
+
             // Tasks - READ операции
             Route::get('/tasks', [TaskController::class, 'index']);
+            Route::get('/tasks/my-history', [TaskController::class, 'myHistory']);
             Route::get('/tasks/{id}', [TaskController::class, 'show']);
 
             // Tasks - WRITE операции (только managers и owners)
@@ -203,6 +217,13 @@ Route::prefix('v1')->group(function () {
             Route::delete('/calendar/{date}', [CalendarController::class, 'destroy'])
                 ->middleware('role:manager,owner');
             Route::post('/calendar/bulk', [CalendarController::class, 'bulkUpdate'])
+                ->middleware('role:manager,owner');
+
+            // Audit Logs - только owner
+            Route::get('/audit-logs', [AuditLogController::class, 'index'])
+                ->middleware('role:owner');
+            // История записи - managers и owners
+            Route::get('/audit-logs/{tableName}/{recordId}', [AuditLogController::class, 'forRecord'])
                 ->middleware('role:manager,owner');
         });
 });

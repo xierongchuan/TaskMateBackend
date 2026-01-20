@@ -60,11 +60,20 @@ class DealershipController extends Controller
     /**
      * Получает информацию о конкретном автосалоне.
      *
+     * @param Request $request HTTP-запрос
      * @param int|string $id ID автосалона
      * @return \Illuminate\Http\JsonResponse
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
+        // Проверка доступа к дилерству
+        if ($accessError = $this->validateDealershipAccess($currentUser, (int) $id)) {
+            return $accessError;
+        }
+
         $dealership = AutoDealership::with(['users', 'shifts', 'tasks'])
             ->find($id);
 

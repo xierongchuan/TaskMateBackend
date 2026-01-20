@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Enums\Role;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -15,10 +16,17 @@ class StoreTaskRequest extends FormRequest
 {
     /**
      * Определяет, авторизован ли пользователь для этого запроса.
+     * Только manager и owner могут создавать задачи.
      */
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        return in_array($user->role, [Role::MANAGER, Role::OWNER]);
     }
 
     /**

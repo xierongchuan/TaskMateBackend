@@ -53,13 +53,13 @@ describe('Shift API', function () {
         ]);
     });
 
-    it('employee cannot start a shift via API', function () {
+    it('employee can start their own shift via API', function () {
         // Arrange
         Carbon::setTestNow(Carbon::parse('09:00:00'));
         $user = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
         $file = \Illuminate\Http\Testing\File::image('photo.jpg');
 
-        // Act - Employee trying to open shift via API (should be denied)
+        // Act - Employee opening their own shift via API
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/shifts', [
                 'dealership_id' => $this->dealership->id,
@@ -67,9 +67,32 @@ describe('Shift API', function () {
                 'opening_photo' => $file,
             ]);
 
-        // Assert - Should be forbidden (employees must use Telegram bot)
+        // Assert - Should be allowed (employees can open their own shifts)
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('shifts', [
+            'user_id' => $user->id,
+            'dealership_id' => $this->dealership->id,
+            'status' => 'open',
+        ]);
+    });
+
+    it('employee cannot start a shift for another user via API', function () {
+        // Arrange
+        Carbon::setTestNow(Carbon::parse('09:00:00'));
+        $employee1 = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $employee2 = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $file = \Illuminate\Http\Testing\File::image('photo.jpg');
+
+        // Act - Employee trying to open shift for another employee (should be denied)
+        $response = $this->actingAs($employee1, 'sanctum')
+            ->postJson('/api/v1/shifts', [
+                'dealership_id' => $this->dealership->id,
+                'user_id' => $employee2->id,
+                'opening_photo' => $file,
+            ]);
+
+        // Assert - Should be forbidden
         $response->assertStatus(403);
-        expect($response->json('message'))->toContain('Telegram');
     });
 
     it('owner can end a shift via API', function () {
@@ -98,7 +121,7 @@ describe('Shift API', function () {
         ]);
     });
 
-    it('employee cannot end a shift via API', function () {
+    it('employee can end their own shift via API', function () {
         // Arrange
         $user = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
         $shift = Shift::factory()->create([
@@ -109,16 +132,42 @@ describe('Shift API', function () {
         ]);
         $file = \Illuminate\Http\Testing\File::image('closing.jpg');
 
-        // Act - Employee trying to close shift via API (should be denied)
+        // Act - Employee closing their own shift via API
         $response = $this->actingAs($user, 'sanctum')
             ->putJson("/api/v1/shifts/{$shift->id}", [
                 'closing_photo' => $file,
                 'status' => 'closed',
             ]);
 
-        // Assert - Should be forbidden (employees must use Telegram bot)
+        // Assert - Should be allowed (employees can close their own shifts)
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('shifts', [
+            'id' => $shift->id,
+            'status' => 'closed',
+        ]);
+    });
+
+    it('employee cannot end a shift of another user via API', function () {
+        // Arrange
+        $employee1 = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $employee2 = User::factory()->create(['role' => Role::EMPLOYEE->value, 'dealership_id' => $this->dealership->id]);
+        $shift = Shift::factory()->create([
+            'user_id' => $employee2->id,
+            'dealership_id' => $this->dealership->id,
+            'status' => 'open',
+            'shift_start' => Carbon::now()->subHours(8),
+        ]);
+        $file = \Illuminate\Http\Testing\File::image('closing.jpg');
+
+        // Act - Employee trying to close another employee's shift (should be denied)
+        $response = $this->actingAs($employee1, 'sanctum')
+            ->putJson("/api/v1/shifts/{$shift->id}", [
+                'closing_photo' => $file,
+                'status' => 'closed',
+            ]);
+
+        // Assert - Should be forbidden
         $response->assertStatus(403);
-        expect($response->json('message'))->toContain('Telegram');
     });
 });
 

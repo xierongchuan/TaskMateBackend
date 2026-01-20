@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Models\TaskResponse;
-use App\Services\TaskProofService;
+use App\Services\TaskVerificationService;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +21,7 @@ class TaskVerificationController extends Controller
     use HasDealershipAccess;
 
     public function __construct(
-        private readonly TaskProofService $taskProofService
+        private readonly TaskVerificationService $verificationService
     ) {}
 
     /**
@@ -63,20 +62,15 @@ class TaskVerificationController extends Controller
             ], 422);
         }
 
-        // Проверка наличия доказательств
-        if ($taskResponse->proofs->isEmpty()) {
+        // Проверка наличия доказательств (только для задач с типом completion_with_proof)
+        if ($task->response_type === 'completion_with_proof' && $taskResponse->proofs->isEmpty()) {
             return response()->json([
                 'message' => 'Нет доказательств для верификации'
             ], 422);
         }
 
-        // Обновляем статус
-        $taskResponse->update([
-            'status' => 'completed',
-            'verified_at' => TimeHelper::nowUtc(),
-            'verified_by' => $currentUser->id,
-            'rejection_reason' => null,
-        ]);
+        // Одобряем через сервис (записывает историю)
+        $this->verificationService->approve($taskResponse, $currentUser);
 
         return response()->json([
             'message' => 'Доказательство одобрено',
@@ -129,17 +123,8 @@ class TaskVerificationController extends Controller
             ], 422);
         }
 
-        // Удаляем все доказательства
-        $this->taskProofService->deleteAllProofs($taskResponse);
-
-        // Обновляем статус
-        $taskResponse->update([
-            'status' => 'pending',
-            'responded_at' => null,
-            'verified_at' => TimeHelper::nowUtc(),
-            'verified_by' => $currentUser->id,
-            'rejection_reason' => $validated['reason'],
-        ]);
+        // Отклоняем через сервис (удаляет файлы, записывает историю, статус -> 'rejected')
+        $this->verificationService->reject($taskResponse, $currentUser, $validated['reason']);
 
         return response()->json([
             'message' => 'Доказательство отклонено',

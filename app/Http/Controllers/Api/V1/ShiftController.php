@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ShiftResource;
 use App\Models\Shift;
 use App\Models\User;
 use App\Services\ShiftService;
@@ -71,7 +72,7 @@ class ShiftController extends Controller
 
         $shifts = $query->orderByDesc('shift_start')->paginate($perPage);
 
-        return response()->json($shifts);
+        return ShiftResource::collection($shifts)->response();
     }
 
     /**
@@ -116,12 +117,15 @@ class ShiftController extends Controller
         }
 
         // SECURITY CHECK: Role restriction
-        // Via API (admin panel): Only Owner can open shifts
-        // Employees must use Telegram bot to open/close shifts
-        if ($currentUser->role !== Role::OWNER) {
+        // Owner can open shifts for anyone, Employee can open only their own shift
+        $isOpeningOwnShift = (int)$data['user_id'] === $currentUser->id;
+        $canOpenShift = $currentUser->role === Role::OWNER ||
+                        ($currentUser->role === Role::EMPLOYEE && $isOpeningOwnShift);
+
+        if (!$canOpenShift) {
              return response()->json([
                 'success' => false,
-                'message' => 'Открытие смен через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
+                'message' => 'Открытие смен через админку доступно только Владельцу и сотрудникам (для своих смен).'
             ], 403);
         }
 
@@ -161,10 +165,11 @@ class ShiftController extends Controller
                 (int) $data['dealership_id']
             );
 
+            $shift->load(['user', 'dealership', 'replacement']);
             return response()->json([
                 'success' => true,
                 'message' => 'Shift opened successfully',
-                'data' => $shift->load(['user', 'dealership', 'replacement'])
+                'data' => new ShiftResource($shift)
             ], 201);
 
         } catch (\InvalidArgumentException $e) {
@@ -203,7 +208,7 @@ class ShiftController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $shift
+            'data' => new ShiftResource($shift)
         ]);
     }
 
@@ -223,21 +228,22 @@ class ShiftController extends Controller
         }
 
         // 1. If trying to close/edit someone else's shift -> Only Owner allowed
-        if ($shift->user_id !== $currentUser->id) {
-             if ($currentUser->role !== Role::OWNER) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Редактирование смен других пользователей доступно только Владельцу'
-                ], 403);
-             }
+        $isOwnShift = $shift->user_id === $currentUser->id;
+        if (!$isOwnShift && $currentUser->role !== Role::OWNER) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Редактирование смен других пользователей доступно только Владельцу'
+            ], 403);
         }
 
-        // 2. Via API (admin panel): Only Owner can close/edit shifts
-        // Employees must use Telegram bot to open/close shifts
-        if ($currentUser->role !== Role::OWNER) {
+        // 2. Owner can close/edit any shift, Employee can close/edit only their own shift
+        $canEditShift = $currentUser->role === Role::OWNER ||
+                        ($currentUser->role === Role::EMPLOYEE && $isOwnShift);
+
+        if (!$canEditShift) {
              return response()->json([
                 'success' => false,
-                'message' => 'Управление сменами через админку доступно только Владельцу. Сотрудники должны использовать Telegram-бот.'
+                'message' => 'Управление сменами через админку доступно только Владельцу и сотрудникам (для своих смен).'
             ], 403);
         }
 
@@ -260,11 +266,12 @@ class ShiftController extends Controller
             // If closing photo is provided, close the shift
             if (isset($data['closing_photo'])) {
                 $updatedShift = $this->shiftService->closeShift($shift, $data['closing_photo']);
+                $updatedShift->load(['user', 'dealership', 'replacement']);
 
                 return response()->json([
                     'success' => true,
                     'message' => 'Shift closed successfully',
-                    'data' => $updatedShift->load(['user', 'dealership', 'replacement'])
+                    'data' => new ShiftResource($updatedShift)
                 ]);
             }
 
@@ -276,10 +283,11 @@ class ShiftController extends Controller
                     $shift->update(['status' => $data['status']]);
                 }
 
+                $shift->load(['user', 'dealership', 'replacement']);
                 return response()->json([
                     'success' => true,
                     'message' => 'Shift updated successfully',
-                    'data' => $shift->load(['user', 'dealership', 'replacement'])
+                    'data' => new ShiftResource($shift)
                 ]);
             }
 
@@ -346,7 +354,7 @@ class ShiftController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $currentShifts
+            'data' => ShiftResource::collection($currentShifts)
         ]);
     }
 
@@ -403,7 +411,7 @@ class ShiftController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $shifts
+            'data' => ShiftResource::collection($shifts)
         ]);
     }
 
@@ -434,9 +442,10 @@ class ShiftController extends Controller
             ]);
         }
 
+        $shift->load(['dealership', 'replacement']);
         return response()->json([
             'success' => true,
-            'data' => $shift->load(['dealership', 'replacement'])
+            'data' => new ShiftResource($shift)
         ]);
     }
 }

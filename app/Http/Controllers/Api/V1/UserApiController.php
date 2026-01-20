@@ -122,14 +122,24 @@ class UserApiController extends Controller
     /**
      * Получает информацию о конкретном пользователе.
      *
+     * @param Request $request HTTP-запрос
      * @param int|string $id ID пользователя
      * @return UserResource|JsonResponse
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        /** @var User $currentUser */
+        $currentUser = $request->user();
         $user = User::find($id);
 
         if (! $user) {
+            return response()->json([
+                'message' => 'Пользователь не найден'
+            ], 404);
+        }
+
+        // Проверка доступа к пользователю через общие дилерства
+        if (!$this->hasAccessToUser($currentUser, $user)) {
             return response()->json([
                 'message' => 'Пользователь не найден'
             ], 404);
@@ -141,12 +151,20 @@ class UserApiController extends Controller
     /**
      * Проверяет статус активности пользователя.
      *
+     * @param Request $request HTTP-запрос
      * @param int|string $id ID пользователя
      * @return JsonResponse
      */
-    public function status($id)
+    public function status(Request $request, $id)
     {
+        /** @var User $currentUser */
+        $currentUser = $request->user();
         $user = User::find($id);
+
+        // Проверка доступа к пользователю через общие дилерства
+        if ($user && !$this->hasAccessToUser($currentUser, $user)) {
+            $user = null; // Делаем пользователя невидимым
+        }
 
         // Если пользователь не найден или поле active = false → возвращаем is_active = false
         $isActive = $user && ($user->status == 'active');
@@ -186,17 +204,43 @@ class UserApiController extends Controller
             ], 403);
         }
 
-        // Security check: Scope access to assigned dealerships
-        $accessError = $this->validateUserAccess($currentUser, $user);
-        if ($accessError) {
+        // Security check: Non-owners cannot modify other Managers (but can edit themselves)
+        if (!$this->isOwner($currentUser) && $user->role === Role::MANAGER && $user->id !== $currentUser->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'У вас нет прав для редактирования сотрудника другого автосалона',
+                'message' => 'У вас нет прав для редактирования Управляющего',
                 'error_type' => 'access_denied'
             ], 403);
         }
 
         $validated = $request->validated();
+
+        // Security check: Restrict self-editing - users cannot change their own critical fields
+        // This check MUST be first so it catches attempts before other validations
+        if ($user->id === $currentUser->id) {
+            $restrictedFields = ['login', 'role', 'dealership_id', 'dealership_ids'];
+            $attemptedChanges = array_intersect_key($validated, array_flip($restrictedFields));
+
+            if (!empty($attemptedChanges)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Вы не можете изменять логин, роль или автосалон своего аккаунта',
+                    'error_type' => 'self_edit_restricted'
+                ], 403);
+            }
+        }
+
+        // Security check: Scope access to assigned dealerships (skip for self-editing)
+        if ($user->id !== $currentUser->id) {
+            $accessError = $this->validateUserAccess($currentUser, $user);
+            if ($accessError) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'У вас нет прав для редактирования сотрудника другого автосалона',
+                    'error_type' => 'access_denied'
+                ], 403);
+            }
+        }
 
         // Security check: Non-owners cannot promote users to Owner
         if (isset($validated['role']) && $validated['role'] === Role::OWNER->value) {
@@ -371,11 +415,27 @@ class UserApiController extends Controller
         /** @var User $currentUser */
         $currentUser = request()->user();
 
+        // Security check: Users cannot delete themselves
+        if ($user->id === $currentUser->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Вы не можете удалить свой собственный аккаунт'
+            ], 403);
+        }
+
         // Security check: Only Owner can delete Owner
         if ($user->role === Role::OWNER && !$this->isOwner($currentUser)) {
             return response()->json([
                 'success' => false,
                 'message' => 'У вас нет прав для удаления Владельца'
+            ], 403);
+        }
+
+        // Security check: Non-owners cannot delete managers
+        if (!$this->isOwner($currentUser) && $user->role === Role::MANAGER) {
+            return response()->json([
+                'success' => false,
+                'message' => 'У вас нет прав для удаления Управляющего'
             ], 403);
         }
 

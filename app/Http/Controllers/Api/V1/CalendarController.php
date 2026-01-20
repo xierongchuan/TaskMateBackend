@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\CalendarDay;
+use App\Traits\HasDealershipAccess;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
  */
 class CalendarController extends Controller
 {
+    use HasDealershipAccess;
     /**
      * Получить календарь на год.
      *
@@ -78,6 +80,9 @@ class CalendarController extends Controller
      */
     public function update(Request $request, string $date): JsonResponse
     {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
         $validator = Validator::make(
             array_merge($request->all(), ['date' => $date]),
             [
@@ -100,6 +105,13 @@ class CalendarController extends Controller
         $carbonDate = Carbon::parse($data['date']);
         $dealershipId = $data['dealership_id'] ?? null;
 
+        // Проверка доступа к дилерству, если указан
+        if ($dealershipId !== null) {
+            if ($accessError = $this->validateDealershipAccess($currentUser, $dealershipId)) {
+                return $accessError;
+            }
+        }
+
         $calendarDay = CalendarDay::setDay(
             $carbonDate,
             $data['type'],
@@ -121,9 +133,18 @@ class CalendarController extends Controller
      */
     public function destroy(Request $request, string $date): JsonResponse
     {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
         $dealershipId = $request->query('dealership_id') !== null
             ? (int) $request->query('dealership_id')
             : null;
+
+        // Проверка доступа к дилерству, если указан
+        if ($dealershipId !== null) {
+            if ($accessError = $this->validateDealershipAccess($currentUser, $dealershipId)) {
+                return $accessError;
+            }
+        }
 
         try {
             $carbonDate = Carbon::parse($date);
@@ -155,6 +176,9 @@ class CalendarController extends Controller
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
         $validator = Validator::make($request->all(), [
             'operation' => 'required|in:set_weekdays,set_dates,clear_year',
             'year' => 'required|integer|min:2020|max:2100',
@@ -183,6 +207,14 @@ class CalendarController extends Controller
         $data = $validator->validated();
         $dealershipId = $data['dealership_id'] ?? null;
         $year = (int) $data['year'];
+
+        // Проверка доступа к дилерству, если указан
+        if ($dealershipId !== null) {
+            if ($accessError = $this->validateDealershipAccess($currentUser, $dealershipId)) {
+                return $accessError;
+            }
+        }
+
         $affectedCount = 0;
 
         switch ($data['operation']) {

@@ -7,12 +7,31 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\TaskGenerator;
 use App\Models\TaskGeneratorAssignment;
+use App\Traits\HasDealershipAccess;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Enums\Role;
 
 class TaskGeneratorController extends Controller
 {
+    use HasDealershipAccess;
+
+    /**
+     * Проверяет доступ к генератору задач.
+     */
+    private function validateGeneratorAccess(Request $request, TaskGenerator $generator): ?JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        if (!$this->hasAccessToDealership($user, $generator->dealership_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Нет доступа к этому генератору задач',
+            ], 403);
+        }
+        return null;
+    }
     /**
      * List all task generators with filtering.
      */
@@ -68,6 +87,11 @@ class TaskGeneratorController extends Controller
         $generator = TaskGenerator::with(['creator', 'dealership', 'assignments.user'])
             ->findOrFail($id);
 
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
+
         return response()->json([
             'success' => true,
             'data' => $generator->toApiArray(),
@@ -79,6 +103,9 @@ class TaskGeneratorController extends Controller
      */
     public function store(Request $request)
     {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -104,6 +131,11 @@ class TaskGeneratorController extends Controller
             'assignments' => 'required|array|min:1',
             'assignments.*' => 'exists:users,id',
         ]);
+
+        // Проверка доступа к дилерству
+        if ($accessError = $this->validateDealershipAccess($currentUser, (int) $validated['dealership_id'])) {
+            return $accessError;
+        }
 
         // Handle backwards compatibility: convert old single-value fields to arrays
         $daysOfWeek = $validated['recurrence_days_of_week'] ?? null;
@@ -200,6 +232,11 @@ class TaskGeneratorController extends Controller
     public function update(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -344,9 +381,15 @@ class TaskGeneratorController extends Controller
     /**
      * Delete a task generator.
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
+
         $generator->delete();
 
         return response()->json([
@@ -358,9 +401,15 @@ class TaskGeneratorController extends Controller
     /**
      * Pause a task generator.
      */
-    public function pause($id)
+    public function pause(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
+
         $generator->update(['is_active' => false]);
         $generator->load(['creator', 'dealership', 'assignments.user']);
 
@@ -374,9 +423,15 @@ class TaskGeneratorController extends Controller
     /**
      * Resume a paused task generator.
      */
-    public function resume($id)
+    public function resume(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
+
         $generator->update(['is_active' => true]);
         $generator->load(['creator', 'dealership', 'assignments.user']);
 
@@ -389,10 +444,20 @@ class TaskGeneratorController extends Controller
 
     /**
      * Pause all active task generators (Owner only).
+     * Для не-owner фильтрует по доступным дилерствам.
      */
-    public function pauseAll()
+    public function pauseAll(Request $request)
     {
-        $count = TaskGenerator::where('is_active', true)->update(['is_active' => false]);
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $query = TaskGenerator::where('is_active', true);
+
+        // Не-owner может остановить только генераторы своих дилерств
+        if (!$this->isOwner($user)) {
+            $query->whereIn('dealership_id', $this->getAccessibleDealershipIds($user));
+        }
+
+        $count = $query->update(['is_active' => false]);
 
         return response()->json([
             'success' => true,
@@ -403,10 +468,20 @@ class TaskGeneratorController extends Controller
 
     /**
      * Resume all paused task generators (Owner only).
+     * Для не-owner фильтрует по доступным дилерствам.
      */
-    public function resumeAll()
+    public function resumeAll(Request $request)
     {
-        $count = TaskGenerator::where('is_active', false)->update(['is_active' => true]);
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $query = TaskGenerator::where('is_active', false);
+
+        // Не-owner может запустить только генераторы своих дилерств
+        if (!$this->isOwner($user)) {
+            $query->whereIn('dealership_id', $this->getAccessibleDealershipIds($user));
+        }
+
+        $count = $query->update(['is_active' => true]);
 
         return response()->json([
             'success' => true,
@@ -421,6 +496,11 @@ class TaskGeneratorController extends Controller
     public function generatedTasks(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
 
         $query = $generator->generatedTasks()
             ->with(['creator', 'dealership', 'assignments.user', 'responses']);
@@ -449,9 +529,14 @@ class TaskGeneratorController extends Controller
      *
      * Returns statistics for all time, week, month, and year periods.
      */
-    public function statistics($id)
+    public function statistics(Request $request, $id)
     {
         $generator = TaskGenerator::findOrFail($id);
+
+        // Проверка доступа к генератору
+        if ($accessError = $this->validateGeneratorAccess($request, $generator)) {
+            return $accessError;
+        }
 
         $allTime = $this->getStatsForPeriod($generator, null);
         $week = $this->getStatsForPeriod($generator, 7);

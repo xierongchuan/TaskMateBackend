@@ -135,10 +135,11 @@ describe('CheckMaintenanceMode Middleware', function () {
                 'role' => Role::OWNER->value,
             ]);
 
-            // Act - владелец пытается изменить настройки
+            // Act - владелец пытается изменить настройки через общий settings endpoint
             $response = $this->actingAs($owner, 'sanctum')
-                ->putJson('/api/v1/settings/bot-config', [
-                    'maintenance_mode' => false, // Выключаем режим обслуживания
+                ->putJson('/api/v1/settings/maintenance_mode', [
+                    'value' => false, // Выключаем режим обслуживания
+                    'type' => 'boolean',
                 ]);
 
             // Assert - владелец может изменить настройки

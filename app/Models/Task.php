@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Helpers\TimeHelper;
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,6 +15,7 @@ class Task extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use Auditable;
 
     protected $table = 'tasks';
 
@@ -335,10 +337,20 @@ class Task extends Model
 
             $totalAssignees = $assignments->count();
             $completedCount = $responses->where('status', 'completed')->pluck('user_id')->unique()->count();
+            $pendingReviewCount = $responses->where('status', 'pending_review')->pluck('user_id')->unique()->count();
+
+            // Rejected = явный статус 'rejected' (отклонённые, ожидающие повторной отправки)
+            $rejectedCount = $responses->where('status', 'rejected')->pluck('user_id')->unique()->count();
+
+            // Pending = те, кто ещё не ответил (нет response или status pending)
+            $pendingCount = max(0, $totalAssignees - $completedCount - $pendingReviewCount - $rejectedCount);
 
             $data['completion_progress'] = [
                 'total_assignees' => $totalAssignees,
                 'completed_count' => $completedCount,
+                'pending_review_count' => $pendingReviewCount,
+                'rejected_count' => $rejectedCount,
+                'pending_count' => $pendingCount,
                 'percentage' => $totalAssignees > 0 ? (int) round(($completedCount / $totalAssignees) * 100) : 0,
             ];
         }

@@ -32,7 +32,8 @@ class UpdateUserRequest extends FormRequest
     {
         return [
             'current_password' => [
-                'required_with:password',
+                'sometimes',
+                'nullable',
                 'string',
             ],
             'password' => [
@@ -96,7 +97,6 @@ class UpdateUserRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'current_password.required_with' => 'Для смены пароля необходимо указать текущий пароль',
             'password.min' => 'Пароль должен содержать минимум 8 символов',
             'password.regex' => 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву и одну цифру',
             'full_name.required' => 'Полное имя обязательно',
