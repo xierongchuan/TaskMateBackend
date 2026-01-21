@@ -51,6 +51,15 @@ Route::prefix('v1')->group(function () {
         ->name('shift-photos.download')
         ->middleware('throttle:api');
 
+    // Task Proofs - доступ по подписанному URL (без auth:sanctum)
+    // Безопасность обеспечивается подписанным URL:
+    // - URL генерируется только для авторизованных пользователей
+    // - URL имеет ограниченное время жизни (60 мин)
+    // - Проверка прав происходит при генерации URL, а не при скачивании
+    Route::get('/task-proofs/{id}/download', [TaskProofController::class, 'download'])
+        ->name('task-proofs.download')
+        ->middleware('throttle:api');
+
     Route::middleware(['auth:sanctum', 'throttle:api'])
         ->group(function () {
             // Users - READ операции
@@ -113,9 +122,8 @@ Route::prefix('v1')->group(function () {
             Route::patch('/tasks/{id}/status', [TaskController::class, 'updateStatus']);
 
             // Task Proofs - доказательства выполнения
+            // (download вынесен за пределы auth:sanctum - доступ по подписанному URL)
             Route::get('/task-proofs/{id}', [TaskProofController::class, 'show']);
-            Route::get('/task-proofs/{id}/download', [TaskProofController::class, 'download'])
-                ->name('task-proofs.download');
             Route::delete('/task-proofs/{id}', [TaskProofController::class, 'destroy']);
 
             // Task Verification - верификация доказательств (только managers и owners)

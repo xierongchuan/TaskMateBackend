@@ -64,8 +64,13 @@ class TaskProofController extends Controller
     /**
      * Скачать файл доказательства.
      *
-     * Доступ по подписанному URL с проверкой авторизации.
+     * Доступ по подписанному URL (без auth:sanctum middleware).
      * URL генерируется в модели TaskProof::getUrlAttribute().
+     *
+     * Безопасность обеспечивается подписанным URL:
+     * - URL генерируется только для авторизованных пользователей
+     * - URL имеет ограниченное время жизни (60 мин)
+     * - Проверка прав происходит при генерации URL, а не при скачивании
      *
      * @param Request $request HTTP-запрос
      * @param int|string $id ID доказательства
@@ -73,7 +78,7 @@ class TaskProofController extends Controller
      */
     public function download(Request $request, $id): StreamedResponse|JsonResponse
     {
-        // Проверка подписи URL
+        // Проверка подписи URL (единственная проверка безопасности)
         if (!$request->hasValidSignature()) {
             return response()->json([
                 'message' => 'Ссылка недействительна или истекла'
@@ -86,31 +91,6 @@ class TaskProofController extends Controller
             return response()->json([
                 'message' => 'Доказательство не найдено'
             ], 404);
-        }
-
-        /** @var \App\Models\User|null $currentUser */
-        $currentUser = auth()->user();
-
-        // Требуем авторизацию для скачивания
-        if (!$currentUser) {
-            return response()->json([
-                'message' => 'Необходима авторизация'
-            ], 401);
-        }
-
-        $task = $proof->taskResponse->task;
-
-        // Проверка доступа к задаче
-        if (!$this->isOwner($currentUser)) {
-            $isCreator = $task->creator_id === $currentUser->id;
-            $isAssigned = $task->assignments()->where('user_id', $currentUser->id)->exists();
-            $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
-
-            if (!$hasAccess && !$isCreator && !$isAssigned) {
-                return response()->json([
-                    'message' => 'У вас нет доступа к этому файлу'
-                ], 403);
-            }
         }
 
         // Проверяем существование файла
@@ -195,6 +175,7 @@ class TaskProofController extends Controller
      */
     private function getContentDisposition(string $mimeType): string
     {
+        // Типы, которые открываются в браузере (inline)
         $inlineTypes = [
             'image/jpeg',
             'image/png',
@@ -203,6 +184,14 @@ class TaskProofController extends Controller
             'application/pdf',
             'video/mp4',
             'video/webm',
+            'video/quicktime',
+            'audio/mpeg',
+            'audio/wav',
+            'audio/ogg',
+            'audio/mp4',
+            'text/plain',
+            'text/html',
+            'text/csv',
         ];
 
         return in_array($mimeType, $inlineTypes, true) ? 'inline' : 'attachment';
