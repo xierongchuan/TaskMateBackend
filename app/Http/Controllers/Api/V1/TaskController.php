@@ -4,23 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\Role;
 use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreTaskRequest;
 use App\Http\Requests\Api\V1\UpdateTaskRequest;
+use App\Models\Shift;
 use App\Models\Task;
 use App\Models\TaskAssignment;
-use App\Models\Shift;
 use App\Services\SettingsService;
-use App\Services\TaskService;
 use App\Services\TaskFilterService;
 use App\Services\TaskProofService;
+use App\Services\TaskService;
 use App\Services\TaskVerificationService;
 use App\Traits\HasDealershipAccess;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Carbon\Carbon;
-use App\Enums\Role;
+use Illuminate\Http\Request;
 use InvalidArgumentException;
 
 class TaskController extends Controller
@@ -37,8 +36,7 @@ class TaskController extends Controller
     /**
      * Получает список задач с фильтрацией и пагинацией.
      *
-     * @param Request $request HTTP-запрос с параметрами фильтрации
-     * @return JsonResponse
+     * @param  Request  $request  HTTP-запрос с параметрами фильтрации
      */
     public function index(Request $request): JsonResponse
     {
@@ -63,14 +61,14 @@ class TaskController extends Controller
                 'last' => $tasks->url($tasks->lastPage()),
                 'prev' => $tasks->previousPageUrl(),
                 'next' => $tasks->nextPageUrl(),
-            ]
+            ],
         ]);
     }
 
     /**
      * Получает детальную информацию о задаче.
      *
-     * @param int|string $id ID задачи
+     * @param  int|string  $id  ID задачи
      * @return \Illuminate\Http\JsonResponse
      */
     public function show($id)
@@ -81,12 +79,12 @@ class TaskController extends Controller
             'assignments.user',
             'responses.user',
             'responses.proofs',
-            'responses.verifier'
+            'responses.verifier',
         ])->find($id);
 
-        if (!$task) {
+        if (! $task) {
             return response()->json([
-                'message' => 'Задача не найдена'
+                'message' => 'Задача не найдена',
             ], 404);
         }
 
@@ -94,15 +92,15 @@ class TaskController extends Controller
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if (!$this->isOwner($currentUser)) {
+        if (! $this->isOwner($currentUser)) {
             // Check visibility: dealership match OR created by me OR assigned to me
             $isCreator = $task->creator_id === $currentUser->id;
             $isAssigned = $task->assignments->contains('user_id', $currentUser->id);
             $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
 
-            if (!$hasAccess && !$isCreator && !$isAssigned) {
+            if (! $hasAccess && ! $isCreator && ! $isAssigned) {
                 return response()->json([
-                    'message' => 'У вас нет доступа к этой задаче'
+                    'message' => 'У вас нет доступа к этой задаче',
                 ], 403);
             }
         }
@@ -113,8 +111,7 @@ class TaskController extends Controller
     /**
      * Создаёт новую задачу.
      *
-     * @param StoreTaskRequest $request Валидированный запрос
-     * @return JsonResponse
+     * @param  StoreTaskRequest  $request  Валидированный запрос
      */
     public function store(StoreTaskRequest $request): JsonResponse
     {
@@ -123,11 +120,11 @@ class TaskController extends Controller
 
         // Security check: Ensure dealership is accessible
         $validated = $request->validated();
-        if (!empty($validated['dealership_id'])) {
-            if (!$this->taskService->canAccessDealership($currentUser, (int) $validated['dealership_id'])) {
+        if (! empty($validated['dealership_id'])) {
+            if (! $this->taskService->canAccessDealership($currentUser, (int) $validated['dealership_id'])) {
                 return response()->json([
                     'message' => 'Вы не можете создать задачу в чужом автосалоне',
-                    'error_type' => 'access_denied'
+                    'error_type' => 'access_denied',
                 ], 403);
             }
         }
@@ -140,17 +137,16 @@ class TaskController extends Controller
     /**
      * Обновляет существующую задачу.
      *
-     * @param UpdateTaskRequest $request Валидированный запрос
-     * @param int|string $id ID задачи
-     * @return JsonResponse
+     * @param  UpdateTaskRequest  $request  Валидированный запрос
+     * @param  int|string  $id  ID задачи
      */
     public function update(UpdateTaskRequest $request, $id): JsonResponse
     {
         $task = Task::find($id);
 
-        if (!$task) {
+        if (! $task) {
             return response()->json([
-                'message' => 'Задача не найдена'
+                'message' => 'Задача не найдена',
             ], 404);
         }
 
@@ -158,10 +154,10 @@ class TaskController extends Controller
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if (!$this->taskService->canEditTask($currentUser, $task)) {
+        if (! $this->taskService->canEditTask($currentUser, $task)) {
             return response()->json([
                 'message' => 'У вас нет прав для редактирования этой задачи',
-                'error_type' => 'access_denied'
+                'error_type' => 'access_denied',
             ], 403);
         }
 
@@ -169,10 +165,10 @@ class TaskController extends Controller
 
         // Security check: Ensure new dealership is accessible
         if (isset($validated['dealership_id'])) {
-            if (!$this->taskService->canAccessDealership($currentUser, (int) $validated['dealership_id'])) {
+            if (! $this->taskService->canAccessDealership($currentUser, (int) $validated['dealership_id'])) {
                 return response()->json([
                     'message' => 'Вы не можете перенести задачу в чужой автосалон',
-                    'error_type' => 'access_denied'
+                    'error_type' => 'access_denied',
                 ], 403);
             }
         }
@@ -185,16 +181,16 @@ class TaskController extends Controller
     /**
      * Удаляет задачу.
      *
-     * @param int|string $id ID задачи
+     * @param  int|string  $id  ID задачи
      * @return \Illuminate\Http\JsonResponse
      */
     public function destroy($id)
     {
         $task = Task::find($id);
 
-        if (!$task) {
-             return response()->json([
-                'message' => 'Задача не найдена'
+        if (! $task) {
+            return response()->json([
+                'message' => 'Задача не найдена',
             ], 404);
         }
 
@@ -202,11 +198,11 @@ class TaskController extends Controller
         $currentUser = auth()->user();
 
         // Security check: Access scope
-        if (!$this->isOwner($currentUser)) {
+        if (! $this->isOwner($currentUser)) {
             $hasAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id);
-            if (!$hasAccess && $task->creator_id !== $currentUser->id) {
+            if (! $hasAccess && $task->creator_id !== $currentUser->id) {
                 return response()->json([
-                    'message' => 'У вас нет прав для удаления этой задачи'
+                    'message' => 'У вас нет прав для удаления этой задачи',
                 ], 403);
             }
         }
@@ -218,7 +214,7 @@ class TaskController extends Controller
         $task->delete();
 
         return response()->json([
-            'message' => 'Задача успешно удалена'
+            'message' => 'Задача успешно удалена',
         ]);
     }
 
@@ -227,24 +223,24 @@ class TaskController extends Controller
      *
      * Поддерживает загрузку файлов доказательств для задач типа completion_with_proof.
      *
-     * @param Request $request HTTP-запрос со статусом и файлами
-     * @param int|string $id ID задачи
+     * @param  Request  $request  HTTP-запрос со статусом и файлами
+     * @param  int|string  $id  ID задачи
      * @return \Illuminate\Http\JsonResponse
      */
     public function updateStatus(Request $request, $id)
     {
         $task = Task::with(['assignments'])->find($id);
 
-        if (!$task) {
+        if (! $task) {
             return response()->json([
-                'message' => 'Задача не найдена'
+                'message' => 'Задача не найдена',
             ], 404);
         }
 
         $validated = $request->validate([
             'status' => 'required|string|in:pending,acknowledged,pending_review,completed',
             'complete_for_all' => 'sometimes|boolean',
-            'proof_files' => 'sometimes|array|max:' . TaskProofService::MAX_FILES_PER_RESPONSE,
+            'proof_files' => 'sometimes|array|max:'.TaskProofService::MAX_FILES_PER_RESPONSE,
             'proof_files.*' => 'file|max:102400', // 100 MB max per file
         ]);
 
@@ -256,14 +252,14 @@ class TaskController extends Controller
         // Для задач с доказательством: проверяем наличие файлов
         if ($task->response_type === 'completion_with_proof') {
             // При попытке завершить задачу (не pending) требуется минимум 1 файл
-            if (in_array($status, ['pending_review', 'completed']) && !$request->hasFile('proof_files')) {
+            if (in_array($status, ['pending_review', 'completed']) && ! $request->hasFile('proof_files')) {
                 // Проверяем, есть ли уже загруженные файлы
                 $existingResponse = $task->responses()->where('user_id', $user->id)->first();
                 $hasExistingProofs = $existingResponse && $existingResponse->proofs()->exists();
 
-                if (!$hasExistingProofs) {
+                if (! $hasExistingProofs) {
                     return response()->json([
-                        'message' => 'Для выполнения этой задачи необходимо загрузить доказательство'
+                        'message' => 'Для выполнения этой задачи необходимо загрузить доказательство',
                     ], 422);
                 }
             }
@@ -292,11 +288,11 @@ class TaskController extends Controller
                 ->where('status', 'open')
                 ->first();
 
-            if ($requiresShift && !$openShift) {
+            if ($requiresShift && ! $openShift) {
                 // Managers and owners can complete without open shift
-                if (!in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+                if (! in_array($user->role, [Role::MANAGER, Role::OWNER])) {
                     return response()->json([
-                        'message' => 'Для выполнения задачи необходимо открыть смену'
+                        'message' => 'Для выполнения задачи необходимо открыть смену',
                     ], 422);
                 }
             }
@@ -335,9 +331,10 @@ class TaskController extends Controller
                 if ($completeForAll && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
                     // Create responses for ALL assigned users
                     $assignedUserIds = $task->assignments->pluck('user_id')->unique()->toArray();
+                    $firstResponse = null;
 
                     foreach ($assignedUserIds as $assignedUserId) {
-                        $task->responses()->updateOrCreate(
+                        $response = $task->responses()->updateOrCreate(
                             ['user_id' => $assignedUserId],
                             [
                                 'status' => $status,
@@ -346,6 +343,26 @@ class TaskController extends Controller
                                 'completed_during_shift' => false,
                             ]
                         );
+                        // Сохраняем первый ответ для привязки файлов
+                        if ($firstResponse === null) {
+                            $firstResponse = $response;
+                        }
+                    }
+
+                    // Загрузка файлов доказательств к первому ответу
+                    if ($request->hasFile('proof_files') && $firstResponse) {
+                        try {
+                            $this->taskProofService->storeProofs(
+                                $firstResponse,
+                                $request->file('proof_files'),
+                                $task->dealership_id
+                            );
+                            $this->taskVerificationService->recordSubmission($firstResponse, $user);
+                        } catch (InvalidArgumentException $e) {
+                            return response()->json([
+                                'message' => $e->getMessage(),
+                            ], 422);
+                        }
                     }
                 } else {
                     // Проверяем, это повторная отправка после отклонения
@@ -384,7 +401,7 @@ class TaskController extends Controller
                             }
                         } catch (InvalidArgumentException $e) {
                             return response()->json([
-                                'message' => $e->getMessage()
+                                'message' => $e->getMessage(),
                             ], 422);
                         }
                     }
@@ -402,8 +419,7 @@ class TaskController extends Controller
     /**
      * Получает историю выполненных задач текущего пользователя.
      *
-     * @param Request $request HTTP-запрос с параметрами фильтрации
-     * @return JsonResponse
+     * @param  Request  $request  HTTP-запрос с параметрами фильтрации
      */
     public function myHistory(Request $request): JsonResponse
     {

@@ -78,6 +78,9 @@ COPY --from=build /usr/bin/composer /usr/bin/composer
 # Копируем Caddyfile
 COPY Caddyfile /etc/caddy/Caddyfile
 
+# Копируем кастомный php.ini для увеличения лимитов загрузки файлов
+COPY docker/php.ini /usr/local/etc/php/conf.d/99-taskmate.ini
+
 # Права
 RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
   && chmod -R 755 storage storage/framework bootstrap/cache || true
