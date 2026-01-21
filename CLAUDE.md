@@ -7,12 +7,13 @@ TaskMateBackend - это автономная система управлени�
 ## Технический стек
 
 - **Backend**: Laravel 12 (PHP 8.4)
-- **База данных**: PostgreSQL
-- **Кеширование и очереди**: Valkey (Redis-совместимый)
-- **Аутентификация**: Laravel Sanctum
-- **API документация**: OpenAPI/Swagger 3.0
+- **База данных**: PostgreSQL 18
+- **Кеширование и очереди**: Valkey (Redis-совместимый) via Predis
+- **Аутентификация**: Laravel Sanctum (Bearer tokens)
+- **Application Server**: FrankenPHP v1 (Caddy-based)
 - **Тестирование**: Pest PHP
 - **Code Quality**: PHP CS Fixer, PHP_CodeSniffer, Laravel Pint
+- **Контейнеризация**: Docker Compose
 
 ## Архитектура проекта
 
@@ -353,6 +354,53 @@ Copyright: © 2023-2025 谢榕川 All rights reserved
 - GitHub Issues: <https://github.com/xierongchuan/TaskMateBackend/issues>
 - Upstream Repository: <https://github.com/xierongchuan/TaskMate>
 
+## Правила разработки (User Rules)
+
+### Общие правила
+
+1. **Язык**: Русский для всех UI, комментариев и документации
+2. **Работа с инструментами**: При работе с инструментами окружения используй всё через Docker контейнеры
+
+### Backend
+
+1. **ВСЕГДА** запускать тесты при любых изменениях:
+   ```bash
+   docker compose exec backend_api php artisan test
+   # или
+   composer test
+   ```
+2. Проверять актуальность существующих тестов при изменении логики
+3. Обновлять README.md после успешного внедрения изменений
+4. Минимальное покрытие тестами: 50% (`composer test:coverage`)
+5. PostgreSQL only (не MySQL-совместимый)
+6. Приватные файлы хранятся в `storage/app/private/task_proofs/`, доступ через подписанные URL
+7. Система готова к миграции на S3 (см. `config/filesystems.php`)
+
+### Frontend & API
+
+1. При изменении Backend **обязательно** проверять совместимость с Frontend и документацией API
+2. При изменении Frontend сверяться с документацией API и проверять корректность запросов
+3. Поддерживать синхронизацию между Backend, Frontend и API-коллекцией
+
+### Development Workflow
+
+1. Запуск через Docker: `docker compose up -d --build`
+2. Инициализация Backend:
+   ```bash
+   docker compose exec backend_api composer install
+   docker compose exec backend_api php artisan migrate --force
+   docker compose exec backend_api php artisan db:seed-demo
+   docker compose exec backend_api php artisan storage:link
+   ```
+3. Режим разработки с автоперезагрузкой: `composer dev`
+4. Тестирование воркеров: `php artisan workers:test`
+
+### Code Quality
+
+- Форматирование: `vendor/bin/pint` или `vendor/bin/php-cs-fixer fix`
+- Тесты: `composer test` (unit, feature, api)
+- Покрытие: `composer test:coverage`
+
 ## Дополнительные ресурсы
 
 - [README.md](README.md) - Краткое описание и быстрый старт
@@ -360,3 +408,5 @@ Copyright: © 2023-2025 谢榕川 All rights reserved
 - [swagger.yaml](swagger.yaml) - OpenAPI спецификация
 - [docs/](docs/) - Дополнительная документация
 - [check-scheduler.md](check-scheduler.md) - Проверка планировщика задач
+- [../CLAUDE.md](../CLAUDE.md) - Общая документация проекта TaskMate
+- [../TaskMateFrontend/CLAUDE.md](../TaskMateFrontend/CLAUDE.md) - Frontend архитектура
