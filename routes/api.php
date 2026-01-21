@@ -222,6 +222,9 @@ Route::prefix('v1')->group(function () {
             // Audit Logs - только owner
             Route::get('/audit-logs', [AuditLogController::class, 'index'])
                 ->middleware('role:owner');
+            // Список пользователей, совершавших действия (для фильтра)
+            Route::get('/audit-logs/actors', [AuditLogController::class, 'actors'])
+                ->middleware('role:owner');
             // История записи - managers и owners
             Route::get('/audit-logs/{tableName}/{recordId}', [AuditLogController::class, 'forRecord'])
                 ->middleware('role:manager,owner');

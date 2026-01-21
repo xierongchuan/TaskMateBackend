@@ -11,12 +11,14 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Enums\Role;
+use App\Traits\Auditable;
 
 class User extends Authenticatable
 {
     use HasApiTokens;
     use HasFactory;
     use SoftDeletes;
+    use Auditable;
 
     protected $table = 'users';
 
