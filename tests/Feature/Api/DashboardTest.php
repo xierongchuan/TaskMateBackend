@@ -79,7 +79,8 @@ describe('Dashboard API', function () {
         Task::factory()->create(['is_active' => true, 'dealership_id' => $this->dealership->id]);
 
         // Completed today - use UTC timezone to match TimeHelper::nowUtc()
-        $completedTask = Task::factory()->create(['is_active' => true, 'dealership_id' => $this->dealership->id]);
+        // Явно указываем task_type='individual' чтобы не требовались assignments
+        $completedTask = Task::factory()->create(['is_active' => true, 'dealership_id' => $this->dealership->id, 'task_type' => 'individual']);
         TaskResponse::factory()->create([
             'task_id' => $completedTask->id,
             'status' => 'completed',

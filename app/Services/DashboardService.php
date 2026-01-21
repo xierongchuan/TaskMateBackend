@@ -8,7 +8,6 @@ use App\Helpers\TimeHelper;
 use App\Models\Shift;
 use App\Models\Task;
 use App\Models\TaskGenerator;
-use App\Models\TaskResponse;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -99,15 +98,40 @@ class DashboardService
             ->when($dealershipId, fn ($q) => $q->where('dealership_id', $dealershipId))
             ->count();
 
-        // Подсчёт завершённых сегодня
-        $completedToday = TaskResponse::query()
-            ->where('status', 'completed')
-            ->whereBetween('responded_at', [$todayStart, $todayEnd])
-            ->when($dealershipId, function ($q) use ($dealershipId) {
-                $q->whereHas('task', fn ($tq) => $tq->where('dealership_id', $dealershipId));
+        // Подсчёт завершённых сегодня (используем ту же логику что и TaskFilterService)
+        $completedToday = Task::query()
+            ->whereNull('archived_at')
+            ->when($dealershipId, fn ($q) => $q->where('dealership_id', $dealershipId))
+            ->where(function ($q) use ($todayStart, $todayEnd) {
+                // Индивидуальные задачи: хотя бы один completed response за сегодня
+                $q->where(function ($individual) use ($todayStart, $todayEnd) {
+                    $individual->where('task_type', 'individual')
+                        ->whereHas('responses', fn ($r) => $r->where('status', 'completed')
+                            ->whereBetween('responded_at', [$todayStart, $todayEnd]));
+                })
+                // Групповые задачи: ВСЕ назначенные выполнили И хотя бы один за сегодня
+                ->orWhere(function ($group) use ($todayStart, $todayEnd) {
+                    $group->where('task_type', 'group')
+                        ->whereHas('assignments')
+                        ->whereHas('responses', fn ($r) => $r->where('status', 'completed')
+                            ->whereBetween('responded_at', [$todayStart, $todayEnd]))
+                        ->whereRaw('(
+                            SELECT COUNT(DISTINCT ta.user_id)
+                            FROM task_assignments ta
+                            WHERE ta.task_id = tasks.id AND ta.deleted_at IS NULL
+                        ) > 0')
+                        ->whereRaw('(
+                            SELECT COUNT(DISTINCT ta.user_id)
+                            FROM task_assignments ta
+                            WHERE ta.task_id = tasks.id AND ta.deleted_at IS NULL
+                        ) = (
+                            SELECT COUNT(DISTINCT tr.user_id)
+                            FROM task_responses tr
+                            WHERE tr.task_id = tasks.id AND tr.status = ?
+                        )', ['completed']);
+                });
             })
-            ->distinct('task_id')
-            ->count('task_id');
+            ->count();
 
         return [
             'total_active' => (int) ($query->total_active ?? 0),
@@ -233,11 +257,10 @@ class DashboardService
      */
     protected function getPendingReviewCount(?int $dealershipId): int
     {
-        return TaskResponse::query()
-            ->where('status', 'pending_review')
-            ->when($dealershipId, function ($q) use ($dealershipId) {
-                $q->whereHas('task', fn ($tq) => $tq->where('dealership_id', $dealershipId));
-            })
+        return Task::query()
+            ->whereHas('responses', fn ($q) => $q->where('status', 'pending_review'))
+            ->when($dealershipId, fn ($q) => $q->where('dealership_id', $dealershipId))
+            ->whereNull('archived_at')
             ->count();
     }
 
