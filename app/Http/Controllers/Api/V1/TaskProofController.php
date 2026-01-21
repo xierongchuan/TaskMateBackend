@@ -176,12 +176,12 @@ class TaskProofController extends Controller
     private function getContentDisposition(string $mimeType): string
     {
         // Типы, которые открываются в браузере (inline)
+        // PDF и текстовые файлы убраны - они скачиваются
         $inlineTypes = [
             'image/jpeg',
             'image/png',
             'image/gif',
             'image/webp',
-            'application/pdf',
             'video/mp4',
             'video/webm',
             'video/quicktime',
@@ -189,9 +189,6 @@ class TaskProofController extends Controller
             'audio/wav',
             'audio/ogg',
             'audio/mp4',
-            'text/plain',
-            'text/html',
-            'text/csv',
         ];
 
         return in_array($mimeType, $inlineTypes, true) ? 'inline' : 'attachment';
