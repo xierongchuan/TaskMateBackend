@@ -33,7 +33,14 @@ class TaskFilterService
      */
     public function getFilteredTasks(Request $request, User $currentUser): LengthAwarePaginator
     {
-        $query = Task::with(['creator', 'dealership', 'assignments.user', 'responses.user']);
+        $query = Task::with([
+            'creator',
+            'dealership',
+            'assignments.user',
+            'responses.user',
+            'responses.proofs',
+            'responses.verifier',
+        ]);
 
         $this->applyDateRangeFilter($query, $request);
         $this->applyDealershipFilter($query, $request, $currentUser);
