@@ -1,11 +1,72 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: TaskMate Telegram Bot API
-  description: API documentation for TaskMate Telegram Bot backend
-  version: 1.0.0
+  title: TaskMate API
+  description: |
+    REST API для системы управления задачами автосалонов TaskMate.
+
+    ## Аутентификация
+    API использует Bearer Token аутентификацию через Laravel Sanctum.
+    Получите токен через `POST /api/v1/session` и передавайте его в заголовке:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Роли пользователей
+    - **owner** — владелец, полный доступ ко всем функциям
+    - **manager** — менеджер, управление задачами и пользователями в своих автосалонах
+    - **observer** — наблюдатель, только просмотр данных
+    - **employee** — сотрудник, выполнение назначенных задач
+
+    ## Формат ответов
+    Все ответы возвращаются в формате JSON. Успешные ответы содержат поле `data`,
+    ошибки содержат поля `message` и `errors`.
+
+    ## Пагинация
+    Списки возвращают пагинированные результаты с полями:
+    - `data` — массив элементов
+    - `meta` — информация о пагинации (current_page, last_page, per_page, total)
+    - `links` — ссылки на страницы (first, last, prev, next)
+  version: 2.0.0
+  contact:
+    name: TaskMate Support
+
 servers:
-  - url: http://localhost:8000/api
+  - url: http://localhost:8007/api
     description: Local Development Server
+  - url: https://api.taskmate.ru/api
+    description: Production Server
+
+tags:
+  - name: Auth
+    description: Аутентификация и сессии
+  - name: Users
+    description: Управление пользователями
+  - name: Dealerships
+    description: Управление автосалонами
+  - name: Shifts
+    description: Управление сменами
+  - name: Tasks
+    description: Управление задачами
+  - name: Task Verification
+    description: Верификация доказательств выполнения
+  - name: Task Generators
+    description: Генераторы повторяющихся задач
+  - name: Archived Tasks
+    description: Архив выполненных задач
+  - name: Links
+    description: Важные ссылки
+  - name: Dashboard
+    description: Дашборд и статистика
+  - name: Reports
+    description: Отчёты
+  - name: Settings
+    description: Системные настройки
+  - name: Notification Settings
+    description: Настройки уведомлений
+  - name: Calendar
+    description: Календарь рабочих/выходных дней
+  - name: Audit Logs
+    description: Журнал аудита
 
 components:
   securitySchemes:
@@ -13,6 +74,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Bearer токен, полученный при логине
 
   schemas:
     User:
@@ -20,21 +82,36 @@ components:
       properties:
         id:
           type: integer
+          example: 1
         login:
           type: string
+          example: "admin"
         full_name:
           type: string
+          example: "Иванов Иван Иванович"
         phone:
           type: string
+          example: "+7 (999) 123-45-67"
         role:
           type: string
           enum: [owner, manager, employee, observer]
+          example: "manager"
         telegram_id:
           type: integer
           nullable: true
+          example: 123456789
+        is_active:
+          type: boolean
+          example: true
         dealership_id:
           type: integer
           nullable: true
+          example: 1
+        dealership_ids:
+          type: array
+          items:
+            type: integer
+          example: [1, 2]
         created_at:
           type: string
           format: date-time
@@ -43,25 +120,35 @@ components:
           format: date-time
         dealership:
           $ref: '#/components/schemas/Dealership'
+        dealerships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dealership'
 
     Dealership:
       type: object
       properties:
         id:
           type: integer
+          example: 1
         name:
           type: string
+          example: "Автосалон Центральный"
         address:
           type: string
           nullable: true
+          example: "г. Москва, ул. Ленина, д. 1"
         phone:
           type: string
           nullable: true
+          example: "+7 (495) 123-45-67"
         description:
           type: string
           nullable: true
+          example: "Главный автосалон сети"
         is_active:
           type: boolean
+          example: true
         created_at:
           type: string
           format: date-time
@@ -74,10 +161,17 @@ components:
       properties:
         id:
           type: integer
+          example: 1
         user_id:
           type: integer
+          example: 5
         dealership_id:
           type: integer
+          example: 1
+        shift_type:
+          type: string
+          enum: [shift_1, shift_2]
+          example: "shift_1"
         shift_start:
           type: string
           format: date-time
@@ -88,15 +182,27 @@ components:
         status:
           type: string
           enum: [open, closed, replaced]
-        opening_photo_path:
-          type: string
-        closing_photo_path:
+          example: "open"
+        opening_photo_url:
           type: string
           nullable: true
+          example: "/api/v1/shift-photos/1/opening"
+        closing_photo_url:
+          type: string
+          nullable: true
+          example: "/api/v1/shift-photos/1/closing"
         late_minutes:
           type: integer
+          example: 0
         is_late:
           type: boolean
+          example: false
+        replacing_user_id:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+          nullable: true
         user:
           $ref: '#/components/schemas/User'
         dealership:
@@ -107,43 +213,234 @@ components:
       properties:
         id:
           type: integer
+          example: 1
         title:
           type: string
+          example: "Проверить наличие автомобилей"
+        description:
+          type: string
+          nullable: true
+          example: "Провести инвентаризацию автомобилей на площадке"
+        comment:
+          type: string
+          nullable: true
+          example: "Обратить внимание на новые поступления"
+        creator_id:
+          type: integer
+          example: 1
+        dealership_id:
+          type: integer
+          nullable: true
+          example: 1
+        appear_date:
+          type: string
+          format: date-time
+          example: "2025-01-20T09:00:00Z"
+        deadline:
+          type: string
+          format: date-time
+          example: "2025-01-20T18:00:00Z"
+        task_type:
+          type: string
+          enum: [individual, group]
+          example: "individual"
+        response_type:
+          type: string
+          enum: [notification, completion, completion_with_proof]
+          example: "completion_with_proof"
+        priority:
+          type: string
+          enum: [low, medium, high]
+          example: "medium"
+        is_active:
+          type: boolean
+          example: true
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["инвентаризация", "срочно"]
+        notification_settings:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskAssignment'
+        responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskResponse'
+        creator:
+          $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
+
+    TaskAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 5
+        user:
+          $ref: '#/components/schemas/User'
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 5
+        status:
+          type: string
+          enum: [pending, acknowledged, pending_review, completed, rejected]
+          example: "pending_review"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejection_reason:
+          type: string
+          nullable: true
+        verified_by:
+          type: integer
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        proofs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskProof'
+        user:
+          $ref: '#/components/schemas/User'
+
+    TaskProof:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        task_response_id:
+          type: integer
+          example: 1
+        file_name:
+          type: string
+          example: "photo_123.jpg"
+        original_name:
+          type: string
+          example: "фото_выполнения.jpg"
+        mime_type:
+          type: string
+          example: "image/jpeg"
+        file_size:
+          type: integer
+          example: 1024000
+        download_url:
+          type: string
+          example: "/api/v1/task-proofs/1/download?signature=..."
+        created_at:
+          type: string
+          format: date-time
+
+    TaskGenerator:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Ежедневная проверка"
         description:
           type: string
           nullable: true
         comment:
           type: string
           nullable: true
-        creator_id:
-          type: integer
         dealership_id:
           type: integer
-          nullable: true
-        appear_date:
-          type: string
-          format: date-time
-          nullable: true
-        deadline:
-          type: string
-          format: date-time
-          nullable: true
+          example: 1
+        creator_id:
+          type: integer
+          example: 1
         recurrence:
           type: string
-          enum: [none, daily, weekly, monthly]
+          enum: [daily, weekly, monthly]
+          example: "daily"
+        recurrence_time:
+          type: string
+          example: "09:00"
+        deadline_time:
+          type: string
+          example: "18:00"
+        recurrence_days_of_week:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [1, 2, 3, 4, 5]
+        recurrence_days_of_month:
+          type: array
+          items:
+            type: integer
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          example: "2025-01-01"
+        end_date:
+          type: string
+          format: date
           nullable: true
         task_type:
           type: string
           enum: [individual, group]
+          example: "individual"
         response_type:
           type: string
-          enum: [acknowledge, complete]
-        is_active:
-          type: boolean
+          enum: [notification, completion, completion_with_proof]
+          example: "completion"
+        priority:
+          type: string
+          enum: [low, medium, high]
+          example: "medium"
         tags:
           type: array
           items:
             type: string
+        is_active:
+          type: boolean
+          example: true
+        last_generated_at:
+          type: string
+          format: date-time
+          nullable: true
+        next_generation_at:
+          type: string
+          format: date-time
           nullable: true
         created_at:
           type: string
@@ -151,35 +448,56 @@ components:
         assignments:
           type: array
           items:
-            $ref: '#/components/schemas/TaskAssignment'
+            $ref: '#/components/schemas/User'
+        dealership:
+          $ref: '#/components/schemas/Dealership'
 
-    TaskAssignment:
+    ArchivedTask:
       type: object
       properties:
         id:
           type: integer
-        task_id:
+          example: 1
+        original_task_id:
           type: integer
-        user_id:
+          example: 100
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        dealership_id:
           type: integer
-        user:
-          $ref: '#/components/schemas/User'
+        archive_reason:
+          type: string
+          enum: [completed, expired]
+        archived_at:
+          type: string
+          format: date-time
+        task_data:
+          type: object
+          description: Полные данные задачи на момент архивации
 
     ImportantLink:
       type: object
       properties:
         id:
           type: integer
+          example: 1
         title:
           type: string
+          example: "Портал дилера"
         url:
           type: string
+          example: "https://dealer.example.com"
         description:
           type: string
           nullable: true
+          example: "Основной портал для работы с заказами"
         category:
           type: string
           nullable: true
+          example: "Порталы"
         dealership_id:
           type: integer
           nullable: true
@@ -187,45 +505,242 @@ components:
           type: integer
         sort_order:
           type: integer
+          example: 1
         is_active:
           type: boolean
+          example: true
         created_at:
           type: string
           format: date-time
+
+    Setting:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        key:
+          type: string
+          example: "shift_1_start_time"
+        value:
+          oneOf:
+            - type: string
+            - type: integer
+            - type: boolean
+            - type: object
+          example: "09:00"
+        type:
+          type: string
+          enum: [string, integer, boolean, json, time]
+          example: "time"
+        description:
+          type: string
+          nullable: true
+          example: "Время начала первой смены"
+        dealership_id:
+          type: integer
+          nullable: true
 
     NotificationSetting:
       type: object
       properties:
         id:
           type: integer
+          example: 1
         channel_type:
           type: string
+          example: "task_assigned"
         channel_label:
           type: string
+          example: "Назначение задачи"
         is_enabled:
           type: boolean
+          example: true
         notification_time:
           type: string
           nullable: true
+          example: "09:00"
         notification_day:
           type: string
           nullable: true
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
         notification_offset:
           type: integer
           nullable: true
+          example: 30
+          description: Смещение в минутах
         recipient_roles:
           type: array
           items:
             type: string
           nullable: true
+          example: ["manager", "employee"]
+        dealership_id:
+          type: integer
+          nullable: true
+
+    CalendarDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-01-01"
+        type:
+          type: string
+          enum: [holiday, workday]
+          example: "holiday"
+        description:
+          type: string
+          nullable: true
+          example: "Новый год"
+        dealership_id:
+          type: integer
+          nullable: true
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        table_name:
+          type: string
+          example: "tasks"
+        record_id:
+          type: integer
+          example: 100
+        action:
+          type: string
+          enum: [created, updated, deleted]
+          example: "updated"
+        actor_id:
+          type: integer
+          example: 1
+        actor_name:
+          type: string
+          example: "Иванов Иван"
+        dealership_id:
+          type: integer
+          nullable: true
+        old_values:
+          type: object
+          nullable: true
+        new_values:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    DashboardData:
+      type: object
+      properties:
+        total_users:
+          type: integer
+          example: 25
+        active_users:
+          type: integer
+          example: 20
+        total_dealerships:
+          type: integer
+          example: 3
+        active_shifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Shift'
+        tasks_summary:
+          type: object
+          properties:
+            total:
+              type: integer
+            pending:
+              type: integer
+            completed:
+              type: integer
+            overdue:
+              type: integer
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Ошибка валидации"
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            login: ["Поле login обязательно для заполнения"]
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        from:
+          type: integer
+          example: 1
+        last_page:
+          type: integer
+          example: 5
+        per_page:
+          type: integer
+          example: 15
+        to:
+          type: integer
+          example: 15
+        total:
+          type: integer
+          example: 73
 
 security:
   - bearerAuth: []
 
 paths:
+  # ============================================
+  # AUTH ENDPOINTS
+  # ============================================
+  /v1/up:
+    get:
+      summary: Проверка работоспособности API
+      description: |
+        Проверяет, что API доступен и работает.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/up"
+        ```
+      tags: [Auth]
+      security: []
+      responses:
+        '200':
+          description: API работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
   /v1/session:
     post:
-      summary: Login
+      summary: Логин (получение токена)
+      description: |
+        Аутентификация пользователя и получение Bearer токена.
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/session" \
+          -H "Content-Type: application/json" \
+          -d '{"login": "admin", "password": "password"}'
+        ```
       tags: [Auth]
       security: []
       requestBody:
@@ -238,11 +753,17 @@ paths:
               properties:
                 login:
                   type: string
+                  minLength: 4
+                  maxLength: 64
+                  example: "admin"
                 password:
                   type: string
+                  minLength: 6
+                  maxLength: 255
+                  example: "password"
       responses:
-        200:
-          description: Successful login
+        '200':
+          description: Успешная аутентификация
           content:
             application/json:
               schema:
@@ -250,24 +771,62 @@ paths:
                 properties:
                   token:
                     type: string
+                    example: "1|abc123..."
                   user:
                     $ref: '#/components/schemas/User'
-        401:
-          description: Invalid credentials
+        '401':
+          description: Неверные учётные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     delete:
-      summary: Logout
+      summary: Логаут (удаление токена)
+      description: |
+        Выход из системы и удаление текущего токена.
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/session" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Auth]
       responses:
-        200:
-          description: Successfully logged out
+        '200':
+          description: Успешный выход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Выход выполнен успешно"
+        '401':
+          description: Не авторизован
 
   /v1/session/current:
     get:
-      summary: Get current user
+      summary: Получить текущего пользователя
+      description: |
+        Возвращает данные авторизованного пользователя.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/session/current" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Auth]
       responses:
-        200:
-          description: Current user data
+        '200':
+          description: Данные пользователя
           content:
             application/json:
               schema:
@@ -275,35 +834,72 @@ paths:
                 properties:
                   user:
                     $ref: '#/components/schemas/User'
+        '401':
+          description: Не авторизован
 
+  # ============================================
+  # USERS ENDPOINTS
+  # ============================================
   /v1/users:
     get:
-      summary: List users
+      summary: Список пользователей
+      description: |
+        Получить список пользователей с фильтрацией и пагинацией.
+
+        **Доступ:** все авторизованные пользователи
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/users?per_page=15&role=employee&dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Users]
       parameters:
-        - in: query
-          name: page
+        - name: per_page
+          in: query
           schema:
             type: integer
-        - in: query
-          name: per_page
+            default: 15
+          description: Количество записей на странице
+        - name: page
+          in: query
           schema:
             type: integer
-        - in: query
-          name: search
+            default: 1
+        - name: search
+          in: query
           schema:
             type: string
-        - in: query
-          name: role
+          description: Поиск по логину, ФИО или телефону
+        - name: login
+          in: query
           schema:
             type: string
-        - in: query
-          name: dealership_id
+          description: Точный поиск по логину
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Поиск по ФИО
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [owner, manager, employee, observer]
+          description: Фильтр по роли
+        - name: phone
+          in: query
+          schema:
+            type: string
+          description: Поиск по номеру телефона
+        - name: dealership_id
+          in: query
           schema:
             type: integer
+          description: Фильтр по автосалону
       responses:
-        200:
-          description: List of users
+        '200':
+          description: Список пользователей
           content:
             application/json:
               schema:
@@ -313,8 +909,30 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
     post:
-      summary: Create user
+      summary: Создать пользователя
+      description: |
+        Создать нового пользователя.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/users" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "login": "new_user",
+            "password": "SecurePass123!",
+            "full_name": "Петров Пётр Петрович",
+            "phone": "+7 (999) 111-22-33",
+            "role": "employee",
+            "dealership_ids": [1, 2]
+          }'
+        ```
       tags: [Users]
       requestBody:
         required: true
@@ -326,26 +944,37 @@ paths:
               properties:
                 login:
                   type: string
+                  minLength: 4
+                  maxLength: 64
+                  example: "new_user"
                 password:
                   type: string
+                  minLength: 8
+                  example: "SecurePass123!"
+                  description: "Минимум 8 символов, буквы и цифры"
                 full_name:
                   type: string
+                  minLength: 2
+                  maxLength: 255
+                  example: "Петров Пётр Петрович"
                 phone:
                   type: string
+                  example: "+7 (999) 111-22-33"
                 role:
                   type: string
                   enum: [owner, manager, employee, observer]
-                telegram_id:
-                  type: integer
+                  example: "employee"
                 dealership_id:
                   type: integer
+                  description: Основной автосалон
                 dealership_ids:
                   type: array
                   items:
                     type: integer
+                  description: Список автосалонов для доступа
       responses:
-        201:
-          description: User created
+        '201':
+          description: Пользователь создан
           content:
             application/json:
               schema:
@@ -353,32 +982,70 @@ paths:
                 properties:
                   success:
                     type: boolean
+                    example: true
                   data:
                     $ref: '#/components/schemas/User'
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
 
   /v1/users/{id}:
     get:
-      summary: Get user details
+      summary: Получить пользователя
+      description: |
+        Получить информацию о конкретном пользователе.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/users/5" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Users]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: User details
+        '200':
+          description: Данные пользователя
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: Пользователь не найден
+
     put:
-      summary: Update user
+      summary: Обновить пользователя
+      description: |
+        Обновить данные пользователя.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/users/5" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "full_name": "Петров Пётр Сергеевич",
+            "role": "manager"
+          }'
+        ```
       tags: [Users]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
@@ -388,14 +1055,19 @@ paths:
             schema:
               type: object
               properties:
+                password:
+                  type: string
+                  minLength: 8
+                current_password:
+                  type: string
+                  description: Требуется при смене своего пароля
                 full_name:
                   type: string
                 phone:
                   type: string
                 role:
                   type: string
-                password:
-                  type: string
+                  enum: [owner, manager, employee, observer]
                 dealership_id:
                   type: integer
                 dealership_ids:
@@ -403,37 +1075,121 @@ paths:
                   items:
                     type: integer
       responses:
-        200:
-          description: User updated
+        '200':
+          description: Пользователь обновлён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Пользователь не найден
+
     delete:
-      summary: Delete user
+      summary: Удалить пользователя
+      description: |
+        Удалить пользователя (soft delete).
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/users/5" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Users]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: User deleted
+        '200':
+          description: Пользователь удалён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Пользователь успешно удалён"
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Пользователь не найден
 
+  /v1/users/{id}/status:
+    get:
+      summary: Проверить статус пользователя
+      description: |
+        Проверить статус активности пользователя.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/users/5/status" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Статус пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_active:
+                    type: boolean
+                  has_open_shift:
+                    type: boolean
+                  current_shift:
+                    $ref: '#/components/schemas/Shift'
+
+  # ============================================
+  # DEALERSHIPS ENDPOINTS
+  # ============================================
   /v1/dealerships:
     get:
-      summary: List dealerships
+      summary: Список автосалонов
+      description: |
+        Получить список автосалонов с фильтрацией.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/dealerships?is_active=true&search=центр" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Dealerships]
       parameters:
-        - in: query
-          name: is_active
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 15
+        - name: is_active
+          in: query
           schema:
             type: boolean
-        - in: query
-          name: search
+        - name: search
+          in: query
           schema:
             type: string
+          description: Поиск по названию, адресу, описанию, телефону
       responses:
-        200:
-          description: List of dealerships
+        '200':
+          description: Список автосалонов
           content:
             application/json:
               schema:
@@ -443,8 +1199,28 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Dealership'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
     post:
-      summary: Create dealership
+      summary: Создать автосалон
+      description: |
+        Создать новый автосалон.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/dealerships" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "Автосалон Северный",
+            "address": "г. Москва, ул. Северная, д. 10",
+            "phone": "+7 (495) 999-88-77",
+            "is_active": true
+          }'
+        ```
       tags: [Dealerships]
       requestBody:
         required: true
@@ -456,45 +1232,81 @@ paths:
               properties:
                 name:
                   type: string
+                  maxLength: 255
+                  example: "Автосалон Северный"
                 address:
                   type: string
+                  maxLength: 500
                 phone:
                   type: string
+                  maxLength: 50
                 description:
                   type: string
                 is_active:
                   type: boolean
+                  default: true
       responses:
-        201:
-          description: Dealership created
+        '201':
+          description: Автосалон создан
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dealership'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Dealership'
+        '403':
+          description: Недостаточно прав
 
   /v1/dealerships/{id}:
     get:
-      summary: Get dealership details
+      summary: Получить автосалон
+      description: |
+        Получить информацию об автосалоне.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/dealerships/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Dealerships]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Dealership details
+        '200':
+          description: Данные автосалона
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dealership'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Dealership'
+        '404':
+          description: Автосалон не найден
+
     put:
-      summary: Update dealership
+      summary: Обновить автосалон
+      description: |
+        Обновить данные автосалона.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/dealerships/1" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"name": "Автосалон Центральный (обновлён)"}'
+        ```
       tags: [Dealerships]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
@@ -515,46 +1327,89 @@ paths:
                 is_active:
                   type: boolean
       responses:
-        200:
-          description: Dealership updated
+        '200':
+          description: Автосалон обновлён
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Автосалон не найден
+
     delete:
-      summary: Delete dealership
+      summary: Удалить автосалон
+      description: |
+        Удалить автосалон.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/dealerships/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Dealerships]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Dealership deleted
+        '200':
+          description: Автосалон удалён
+        '403':
+          description: Недостаточно прав
 
+  # ============================================
+  # SHIFTS ENDPOINTS
+  # ============================================
   /v1/shifts:
     get:
-      summary: List shifts
+      summary: Список смен
+      description: |
+        Получить список смен с фильтрацией.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts?dealership_id=1&status=open&date=2025-01-20" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Shifts]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: per_page
+          in: query
           schema:
             type: integer
-        - in: query
-          name: user_id
+        - name: dealership_id
+          in: query
           schema:
             type: integer
-        - in: query
-          name: status
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
           schema:
             type: string
-        - in: query
-          name: date
+            enum: [open, closed, replaced]
+        - name: shift_type
+          in: query
+          schema:
+            type: string
+            enum: [shift_1, shift_2]
+        - name: is_late
+          in: query
+          schema:
+            type: boolean
+        - name: date
+          in: query
           schema:
             type: string
             format: date
+          description: Фильтр по дате (ISO формат)
       responses:
-        200:
-          description: List of shifts
+        '200':
+          description: Список смен
           content:
             application/json:
               schema:
@@ -564,8 +1419,22 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Shift'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
     post:
-      summary: Open shift
+      summary: Открыть смену
+      description: |
+        Открыть новую смену с загрузкой фото.
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/shifts" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -F "user_id=5" \
+          -F "dealership_id=1" \
+          -F "opening_photo=@/path/to/photo.jpg"
+        ```
       tags: [Shifts]
       requestBody:
         required: true
@@ -582,27 +1451,193 @@ paths:
                 opening_photo:
                   type: string
                   format: binary
+                  description: Фото открытия смены (макс 5MB, JPG/PNG/GIF/WebP)
                 replacing_user_id:
                   type: integer
+                  description: ID заменяемого пользователя
                 reason:
                   type: string
+                  maxLength: 255
+                  description: Причина замены
       responses:
-        201:
-          description: Shift opened
+        '201':
+          description: Смена открыта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Shift'
+        '422':
+          description: Ошибка валидации
+
+  /v1/shifts/current:
+    get:
+      summary: Текущие открытые смены
+      description: |
+        Получить список текущих открытых смен.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/current?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Shifts]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список открытых смен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shift'
+
+  /v1/shifts/statistics:
+    get:
+      summary: Статистика смен
+      description: |
+        Получить статистику по сменам.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/statistics?start_date=2025-01-01&end_date=2025-01-31" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Shifts]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Статистика смен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_shifts:
+                    type: integer
+                  late_shifts:
+                    type: integer
+                  average_late_minutes:
+                    type: number
+                  by_user:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/shifts/my:
+    get:
+      summary: Мои смены
+      description: |
+        Получить смены текущего пользователя.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/my?status=closed" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Shifts]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed, replaced]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Список смен пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shift'
+
+  /v1/shifts/my/current:
+    get:
+      summary: Моя текущая смена
+      description: |
+        Получить текущую открытую смену пользователя.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/my/current" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Shifts]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Текущая смена или null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Shift'
 
   /v1/shifts/{id}:
     get:
-      summary: Get shift details
+      summary: Получить смену
+      description: |
+        Получить информацию о смене.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Shifts]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Shift details
+        '200':
+          description: Данные смены
           content:
             application/json:
               schema:
@@ -612,12 +1647,25 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/Shift'
+        '404':
+          description: Смена не найдена
+
     put:
-      summary: Update/Close shift
+      summary: Обновить/закрыть смену
+      description: |
+        Обновить или закрыть смену.
+
+        **curl пример (закрытие смены):**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/shifts/1" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -F "status=closed" \
+          -F "closing_photo=@/path/to/photo.jpg"
+        ```
       tags: [Shifts]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
@@ -630,101 +1678,201 @@ paths:
                 closing_photo:
                   type: string
                   format: binary
+                  description: Фото закрытия смены
                 status:
                   type: string
                   enum: [open, closed, replaced]
       responses:
-        200:
-          description: Shift updated/closed
+        '200':
+          description: Смена обновлена
+        '404':
+          description: Смена не найдена
+
     delete:
-      summary: Delete shift
+      summary: Удалить смену
+      description: |
+        Удалить смену.
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/shifts/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Shifts]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Shift deleted
+        '200':
+          description: Смена удалена
+        '404':
+          description: Смена не найдена
 
-  /v1/shifts/current:
+  /v1/shift-photos/{id}/{type}:
     get:
-      summary: Get current open shifts
+      summary: Показать фото смены
+      description: |
+        Получить фото смены по Bearer токену (стабильный URL).
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shift-photos/1/opening" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          --output photo.jpg
+        ```
       tags: [Shifts]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: id
+          in: path
+          required: true
           schema:
             type: integer
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [opening, closing]
       responses:
-        200:
-          description: List of current shifts
+        '200':
+          description: Файл изображения
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Фото не найдено
 
-  /v1/shifts/statistics:
+  /v1/shifts/{id}/photo/{type}:
     get:
-      summary: Get shift statistics
+      summary: Скачать фото смены (подписанный URL)
+      description: |
+        Скачать фото смены по подписанному URL (без Bearer токена).
+        URL генерируется сервером и включает signature для проверки.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/shifts/1/photo/opening?signature=abc123..." \
+          --output photo.jpg
+        ```
       tags: [Shifts]
+      security: []
       parameters:
-        - in: query
-          name: dealership_id
+        - name: id
+          in: path
+          required: true
           schema:
             type: integer
-        - in: query
-          name: start_date
+        - name: type
+          in: path
+          required: true
           schema:
             type: string
-            format: date
-        - in: query
-          name: end_date
+            enum: [opening, closing]
+        - name: signature
+          in: query
+          required: true
           schema:
             type: string
-            format: date
+          description: Подпись URL (генерируется сервером)
       responses:
-        200:
-          description: Shift statistics
+        '200':
+          description: Файл изображения
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Неверная подпись
+        '404':
+          description: Фото не найдено
 
-  /v1/shifts/my:
-    get:
-      summary: Get my shifts
-      tags: [Shifts]
-      responses:
-        200:
-          description: List of user's shifts
-
-  /v1/shifts/my/current:
-    get:
-      summary: Get my current shift
-      tags: [Shifts]
-      responses:
-        200:
-          description: User's current shift
-
+  # ============================================
+  # TASKS ENDPOINTS
+  # ============================================
   /v1/tasks:
     get:
-      summary: List tasks
+      summary: Список задач
+      description: |
+        Получить список задач с расширенной фильтрацией.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/tasks?dealership_id=1&status=pending&response_type=completion_with_proof&sort_by=deadline&sort_dir=asc" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Tasks]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: per_page
+          in: query
           schema:
             type: integer
-        - in: query
-          name: status
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
           schema:
             type: string
-        - in: query
-          name: search
+        - name: response_status
+          in: query
           schema:
             type: string
-        - in: query
-          name: recurrence
+            enum: [pending, acknowledged, pending_review, completed, rejected]
+        - name: priority
+          in: query
           schema:
             type: string
+            enum: [low, medium, high]
+        - name: task_type
+          in: query
+          schema:
+            type: string
+            enum: [individual, group]
+        - name: response_type
+          in: query
+          schema:
+            type: string
+            enum: [notification, completion, completion_with_proof]
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Поиск по названию
+        - name: tags
+          in: query
+          schema:
+            type: string
+          description: Фильтр по тегам (через запятую)
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [created_at, deadline, priority, title]
+        - name: sort_dir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
-        200:
-          description: List of tasks
+        '200':
+          description: Список задач
           content:
             application/json:
               schema:
@@ -734,8 +1882,34 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Task'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
     post:
-      summary: Create task
+      summary: Создать задачу
+      description: |
+        Создать новую задачу.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/tasks" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "title": "Проверить автомобили на площадке",
+            "description": "Провести осмотр всех автомобилей",
+            "dealership_id": 1,
+            "appear_date": "2025-01-20T09:00:00Z",
+            "deadline": "2025-01-20T18:00:00Z",
+            "task_type": "individual",
+            "response_type": "completion_with_proof",
+            "priority": "high",
+            "assignments": [5, 6, 7],
+            "tags": ["инвентаризация", "срочно"]
+          }'
+        ```
       tags: [Tasks]
       requestBody:
         required: true
@@ -743,67 +1917,167 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, task_type, response_type]
+              required: [title, appear_date, deadline, task_type, response_type]
               properties:
                 title:
                   type: string
+                  maxLength: 255
                 description:
+                  type: string
+                comment:
                   type: string
                 dealership_id:
                   type: integer
+                appear_date:
+                  type: string
+                  format: date-time
+                  description: Дата/время появления задачи
                 deadline:
                   type: string
                   format: date-time
+                  description: Дедлайн выполнения
+                recurrence:
+                  type: string
+                  enum: [none, daily, weekly, monthly]
+                  default: none
+                recurrence_time:
+                  type: string
+                  example: "09:00"
+                  description: Время для daily рекурренции
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                  description: День недели для weekly (1=Пн, 7=Вс)
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: 1
+                  maximum: 31
+                  description: День месяца для monthly
                 task_type:
                   type: string
                   enum: [individual, group]
                 response_type:
                   type: string
-                  enum: [acknowledge, complete]
+                  enum: [notification, completion, completion_with_proof]
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                  default: medium
                 assignments:
                   type: array
                   items:
                     type: integer
-                recurrence:
-                  type: string
-                  enum: [none, daily, weekly, monthly]
-                recurrence_time:
-                  type: string
-                recurrence_day_of_week:
-                  type: integer
-                recurrence_day_of_month:
-                  type: integer
+                  description: Массив ID пользователей
+                tags:
+                  type: array
+                  items:
+                    type: string
+                notification_settings:
+                  type: object
       responses:
-        201:
-          description: Task created
+        '201':
+          description: Задача создана
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+        '422':
+          description: Ошибка валидации
+        '403':
+          description: Недостаточно прав
+
+  /v1/tasks/my-history:
+    get:
+      summary: История моих задач
+      description: |
+        Получить историю выполненных задач текущего пользователя.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/tasks/my-history?response_status=completed" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Tasks]
+      parameters:
+        - name: response_status
+          in: query
+          schema:
+            type: string
+            enum: [completed, rejected]
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: История задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
 
   /v1/tasks/{id}:
     get:
-      summary: Get task details
+      summary: Получить задачу
+      description: |
+        Получить детальную информацию о задаче.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/tasks/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Tasks]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Task details
+        '200':
+          description: Данные задачи
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+        '404':
+          description: Задача не найдена
+
     put:
-      summary: Update task
+      summary: Обновить задачу
+      description: |
+        Обновить задачу.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/tasks/1" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"title": "Обновлённое название", "priority": "high"}'
+        ```
       tags: [Tasks]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
@@ -816,6 +2090,537 @@ paths:
                 title:
                   type: string
                 description:
+                  type: string
+                comment:
+                  type: string
+                deadline:
+                  type: string
+                  format: date-time
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                is_active:
+                  type: boolean
+                assignments:
+                  type: array
+                  items:
+                    type: integer
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Задача обновлена
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Задача не найдена
+
+    delete:
+      summary: Удалить задачу
+      description: |
+        Удалить задачу.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/tasks/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Задача удалена
+        '403':
+          description: Недостаточно прав
+
+  /v1/tasks/{id}/status:
+    patch:
+      summary: Обновить статус задачи
+      description: |
+        Обновить статус выполнения задачи. Для задач типа completion_with_proof
+        можно загрузить файлы доказательств.
+
+        **Доступ:** все авторизованные пользователи
+
+        **curl пример (простое выполнение):**
+        ```bash
+        curl -X PATCH "http://localhost:8007/api/v1/tasks/1/status" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"status": "completed"}'
+        ```
+
+        **curl пример (с загрузкой доказательств):**
+        ```bash
+        curl -X PATCH "http://localhost:8007/api/v1/tasks/1/status" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -F "status=pending_review" \
+          -F "proof_files[]=@/path/to/photo1.jpg" \
+          -F "proof_files[]=@/path/to/photo2.jpg"
+        ```
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, acknowledged, pending_review, completed]
+                complete_for_all:
+                  type: boolean
+                  description: Выполнить для всех назначенных (только для менеджеров)
+          multipart/form-data:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, acknowledged, pending_review, completed]
+                proof_files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Файлы доказательств (макс 5 файлов, 200MB общий размер).
+                    Форматы: JPG, PNG, GIF, WebP, MP4, MOV, PDF, ZIP.
+      responses:
+        '200':
+          description: Статус обновлён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+        '422':
+          description: Ошибка валидации
+
+  # ============================================
+  # TASK VERIFICATION ENDPOINTS
+  # ============================================
+  /v1/task-responses/{id}/approve:
+    post:
+      summary: Одобрить доказательство
+      description: |
+        Одобрить доказательство выполнения задачи.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-responses/1/approve" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Verification]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID ответа на задачу (TaskResponse)
+      responses:
+        '200':
+          description: Доказательство одобрено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Доказательство одобрено"
+                  data:
+                    $ref: '#/components/schemas/TaskResponse'
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Ответ не найден
+
+  /v1/task-responses/{id}/reject:
+    post:
+      summary: Отклонить доказательство
+      description: |
+        Отклонить доказательство выполнения задачи с указанием причины.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-responses/1/reject" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"reason": "Фото нечёткое, пожалуйста, загрузите новое"}'
+        ```
+      tags: [Task Verification]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 1000
+                  example: "Фото нечёткое, пожалуйста, загрузите новое"
+      responses:
+        '200':
+          description: Доказательство отклонено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/TaskResponse'
+        '403':
+          description: Недостаточно прав
+        '422':
+          description: Ошибка валидации
+
+  /v1/task-proofs/{id}:
+    get:
+      summary: Получить информацию о доказательстве
+      description: |
+        Получить метаданные файла доказательства.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-proofs/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Verification]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Данные доказательства
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TaskProof'
+        '404':
+          description: Доказательство не найдено
+
+    delete:
+      summary: Удалить доказательство
+      description: |
+        Удалить файл доказательства.
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/task-proofs/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Verification]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Доказательство удалено
+        '403':
+          description: Недостаточно прав
+
+  /v1/task-proofs/{id}/download:
+    get:
+      summary: Скачать файл доказательства
+      description: |
+        Скачать файл доказательства по подписанному URL.
+        URL генерируется сервером с временной подписью (60 минут).
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-proofs/1/download?signature=abc123..." \
+          --output proof.jpg
+        ```
+      tags: [Task Verification]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: signature
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Файл доказательства
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Неверная или истёкшая подпись
+        '404':
+          description: Файл не найден
+
+  # ============================================
+  # TASK GENERATORS ENDPOINTS
+  # ============================================
+  /v1/task-generators:
+    get:
+      summary: Список генераторов задач
+      description: |
+        Получить список генераторов повторяющихся задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-generators?dealership_id=1&is_active=true&recurrence=daily" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: recurrence
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+        - name: sort_dir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список генераторов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskGenerator'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      summary: Создать генератор задач
+      description: |
+        Создать новый генератор повторяющихся задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-generators" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "title": "Ежедневная проверка",
+            "dealership_id": 1,
+            "recurrence": "daily",
+            "recurrence_time": "09:00",
+            "deadline_time": "18:00",
+            "start_date": "2025-01-01",
+            "task_type": "individual",
+            "response_type": "completion",
+            "assignments": [5, 6]
+          }'
+        ```
+      tags: [Task Generators]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, dealership_id, recurrence, recurrence_time, deadline_time, start_date, assignments]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                comment:
+                  type: string
+                dealership_id:
+                  type: integer
+                recurrence:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                recurrence_time:
+                  type: string
+                  example: "09:00"
+                deadline_time:
+                  type: string
+                  example: "18:00"
+                recurrence_days_of_week:
+                  type: array
+                  items:
+                    type: integer
+                  description: Для weekly (1-7)
+                recurrence_days_of_month:
+                  type: array
+                  items:
+                    type: integer
+                  description: Для monthly (1-31)
+                start_date:
+                  type: string
+                  format: date
+                end_date:
+                  type: string
+                  format: date
+                task_type:
+                  type: string
+                  enum: [individual, group]
+                response_type:
+                  type: string
+                  enum: [notification, completion, completion_with_proof]
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                tags:
+                  type: array
+                  items:
+                    type: string
+                notification_settings:
+                  type: object
+                assignments:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '201':
+          description: Генератор создан
+        '403':
+          description: Недостаточно прав
+        '422':
+          description: Ошибка валидации
+
+  /v1/task-generators/{id}:
+    get:
+      summary: Получить генератор
+      description: |
+        Получить информацию о генераторе задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-generators/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Данные генератора
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TaskGenerator'
+        '404':
+          description: Генератор не найден
+
+    put:
+      summary: Обновить генератор
+      description: |
+        Обновить генератор задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/task-generators/1" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"title": "Обновлённое название"}'
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                recurrence_time:
+                  type: string
+                deadline_time:
                   type: string
                 is_active:
                   type: boolean
@@ -824,41 +2629,426 @@ paths:
                   items:
                     type: integer
       responses:
-        200:
-          description: Task updated
+        '200':
+          description: Генератор обновлён
+        '403':
+          description: Недостаточно прав
+
     delete:
-      summary: Delete task
-      tags: [Tasks]
+      summary: Удалить генератор
+      description: |
+        Удалить генератор задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/task-generators/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Task deleted
+        '200':
+          description: Генератор удалён
+        '403':
+          description: Недостаточно прав
 
-  /v1/links:
+  /v1/task-generators/{id}/tasks:
     get:
-      summary: List important links
-      tags: [Links]
+      summary: Задачи генератора
+      description: |
+        Получить задачи, созданные данным генератором.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-generators/1/tasks?archived=false" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+        - name: per_page
+          in: query
           schema:
             type: integer
       responses:
-        200:
-          description: List of links
+        '200':
+          description: Список задач генератора
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ImportantLink'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+
+  /v1/task-generators/{id}/stats:
+    get:
+      summary: Статистика генератора
+      description: |
+        Получить статистику генератора задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/task-generators/1/stats" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Статистика генератора
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_generated:
+                    type: integer
+                  completed:
+                    type: integer
+                  pending:
+                    type: integer
+                  completion_rate:
+                    type: number
+
+  /v1/task-generators/{id}/pause:
     post:
-      summary: Create link
+      summary: Приостановить генератор
+      description: |
+        Приостановить генератор задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-generators/1/pause" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Генератор приостановлен
+        '403':
+          description: Недостаточно прав
+
+  /v1/task-generators/{id}/resume:
+    post:
+      summary: Возобновить генератор
+      description: |
+        Возобновить приостановленный генератор.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-generators/1/resume" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Генератор возобновлён
+        '403':
+          description: Недостаточно прав
+
+  /v1/task-generators/pause-all:
+    post:
+      summary: Приостановить все генераторы
+      description: |
+        Приостановить все активные генераторы.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-generators/pause-all" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      responses:
+        '200':
+          description: Все генераторы приостановлены
+        '403':
+          description: Недостаточно прав
+
+  /v1/task-generators/resume-all:
+    post:
+      summary: Возобновить все генераторы
+      description: |
+        Возобновить все приостановленные генераторы.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/task-generators/resume-all" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Task Generators]
+      responses:
+        '200':
+          description: Все генераторы возобновлены
+        '403':
+          description: Недостаточно прав
+
+  # ============================================
+  # ARCHIVED TASKS ENDPOINTS
+  # ============================================
+  /v1/archived-tasks:
+    get:
+      summary: Список архивированных задач
+      description: |
+        Получить список архивированных задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/archived-tasks?dealership_id=1&archive_reason=completed&date_from=2025-01-01" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Archived Tasks]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: archive_reason
+          in: query
+          schema:
+            type: string
+            enum: [completed, expired]
+        - name: generator_id
+          in: query
+          schema:
+            type: integer
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: assignee_id
+          in: query
+          schema:
+            type: integer
+        - name: tags
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+        - name: sort_dir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список архивированных задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArchivedTask'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /v1/archived-tasks/export:
+    get:
+      summary: Экспорт архивированных задач
+      description: |
+        Экспортировать архивированные задачи в CSV.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/archived-tasks/export?date_from=2025-01-01&date_to=2025-01-31" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          --output archived_tasks.csv
+        ```
+      tags: [Archived Tasks]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: archive_reason
+          in: query
+          schema:
+            type: string
+            enum: [completed, expired]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: CSV файл
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /v1/archived-tasks/{id}/restore:
+    post:
+      summary: Восстановить задачу из архива
+      description: |
+        Восстановить задачу из архива.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/archived-tasks/1/restore" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Archived Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Задача восстановлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Task'
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Архивированная задача не найдена
+
+  # ============================================
+  # LINKS ENDPOINTS
+  # ============================================
+  /v1/links:
+    get:
+      summary: Список важных ссылок
+      description: |
+        Получить список важных ссылок.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/links?dealership_id=1&is_active=true" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Links]
+      parameters:
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Поиск по названию, URL, описанию
+      responses:
+        '200':
+          description: Список ссылок
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportantLink'
+
+    post:
+      summary: Создать ссылку
+      description: |
+        Создать новую важную ссылку.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/links" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "title": "Портал дилера",
+            "url": "https://dealer.example.com",
+            "description": "Основной рабочий портал",
+            "category": "Порталы",
+            "dealership_id": 1
+          }'
+        ```
       tags: [Links]
       requestBody:
         required: true
@@ -870,39 +3060,80 @@ paths:
               properties:
                 title:
                   type: string
+                  maxLength: 255
                 url:
                   type: string
+                  maxLength: 1000
+                  format: uri
                 description:
                   type: string
+                category:
+                  type: string
+                  maxLength: 50
                 dealership_id:
                   type: integer
+                sort_order:
+                  type: integer
+                is_active:
+                  type: boolean
+                  default: true
       responses:
-        201:
-          description: Link created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportantLink'
+        '201':
+          description: Ссылка создана
+        '403':
+          description: Недостаточно прав
+        '422':
+          description: Ошибка валидации
 
   /v1/links/{id}:
     get:
-      summary: Get link details
+      summary: Получить ссылку
+      description: |
+        Получить информацию о ссылке.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/links/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Links]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Link details
+        '200':
+          description: Данные ссылки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ImportantLink'
+        '404':
+          description: Ссылка не найдена
+
     put:
-      summary: Update link
+      summary: Обновить ссылку
+      description: |
+        Обновить важную ссылку.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/links/1" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"title": "Обновлённое название"}'
+        ```
       tags: [Links]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
@@ -916,96 +3147,287 @@ paths:
                   type: string
                 url:
                   type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                sort_order:
+                  type: integer
+                is_active:
+                  type: boolean
       responses:
-        200:
-          description: Link updated
+        '200':
+          description: Ссылка обновлена
+        '403':
+          description: Недостаточно прав
+
     delete:
-      summary: Delete link
+      summary: Удалить ссылку
+      description: |
+        Удалить важную ссылку.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/links/1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Links]
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: integer
       responses:
-        200:
-          description: Link deleted
+        '200':
+          description: Ссылка удалена
+        '403':
+          description: Недостаточно прав
 
+  # ============================================
+  # DASHBOARD ENDPOINTS
+  # ============================================
   /v1/dashboard:
     get:
-      summary: Get dashboard statistics
+      summary: Данные дашборда
+      description: |
+        Получить сводные данные для дашборда.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/dashboard?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Dashboard]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: dealership_id
+          in: query
           schema:
             type: integer
       responses:
-        200:
-          description: Dashboard stats
+        '200':
+          description: Данные дашборда
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+
+  # ============================================
+  # REPORTS ENDPOINTS
+  # ============================================
+  /v1/reports:
+    get:
+      summary: Получить отчёт
+      description: |
+        Получить развёрнутый отчёт за период.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/reports?date_from=2025-01-01&date_to=2025-01-31&dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Reports]
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+          description: Для менеджеров — только свой автосалон
+      responses:
+        '200':
+          description: Данные отчёта
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  total_users:
+                  period:
+                    type: object
+                    properties:
+                      from:
+                        type: string
+                        format: date
+                      to:
+                        type: string
+                        format: date
+                  summary:
+                    type: object
+                    properties:
+                      total_tasks:
+                        type: integer
+                      completed_tasks:
+                        type: integer
+                      overdue_tasks:
+                        type: integer
+                      total_shifts:
+                        type: integer
+                      late_shifts:
+                        type: integer
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        count:
+                          type: integer
+                        severity:
+                          type: string
+                          enum: [low, medium, high]
+
+  /v1/reports/issues/{type}:
+    get:
+      summary: Детали проблемы
+      description: |
+        Получить детальную информацию о конкретном типе проблемы.
+
+        **Типы проблем:**
+        - `overdue_tasks` — просроченные задачи
+        - `late_shifts` — опоздания на смену
+        - `frequent_postponements` — частые переносы
+        - `pending_review_tasks` — задачи на проверке
+        - `low_performers` — сотрудники с низкой производительностью
+        - `stale_pending_tasks` — застоявшиеся задачи
+        - `missed_shifts` — пропущенные смены
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/reports/issues/overdue_tasks?date_from=2025-01-01&date_to=2025-01-31" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Reports]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [overdue_tasks, late_shifts, frequent_postponements, pending_review_tasks, low_performers, stale_pending_tasks, missed_shifts]
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Детали проблемы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  count:
                     type: integer
-                  active_users:
-                    type: integer
-                  active_shifts:
+                  items:
                     type: array
                     items:
                       type: object
 
-  /v1/reports:
-    get:
-      summary: Get reports
-      tags: [Reports]
-      parameters:
-        - in: query
-          name: date_from
-          required: true
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: date_to
-          required: true
-          schema:
-            type: string
-            format: date
-      responses:
-        200:
-          description: Report data
-
+  # ============================================
+  # SETTINGS ENDPOINTS
+  # ============================================
   /v1/settings:
     get:
-      summary: Get global settings
+      summary: Получить все настройки
+      description: |
+        Получить все глобальные настройки системы.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Settings]
       responses:
-        200:
-          description: Global settings
+        '200':
+          description: Список настроек
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Setting'
 
   /v1/settings/{key}:
     get:
-      summary: Get specific setting
+      summary: Получить настройку
+      description: |
+        Получить конкретную настройку по ключу.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings/shift_1_start_time" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Settings]
       parameters:
-        - in: path
-          name: key
+        - name: key
+          in: path
           required: true
           schema:
             type: string
       responses:
-        200:
-          description: Setting value
+        '200':
+          description: Значение настройки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Setting'
+        '404':
+          description: Настройка не найдена
+
     put:
-      summary: Update setting
+      summary: Обновить настройку
+      description: |
+        Обновить глобальную настройку.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/settings/shift_1_start_time" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"value": "08:30", "type": "time"}'
+        ```
       tags: [Settings]
       parameters:
-        - in: path
-          name: key
+        - name: key
+          in: path
           required: true
           schema:
             type: string
@@ -1018,29 +3440,81 @@ paths:
               required: [value]
               properties:
                 value:
-                  type: string
+                  oneOf:
+                    - type: string
+                    - type: integer
+                    - type: boolean
+                    - type: object
                 type:
                   type: string
+                  enum: [string, integer, boolean, json, time]
                 description:
                   type: string
       responses:
-        200:
-          description: Setting updated
+        '200':
+          description: Настройка обновлена
+        '403':
+          description: Недостаточно прав
 
   /v1/settings/shift-config:
     get:
-      summary: Get shift configuration
+      summary: Конфигурация смен
+      description: |
+        Получить конфигурацию смен.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings/shift-config?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
       tags: [Settings]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: dealership_id
+          in: query
           schema:
             type: integer
       responses:
-        200:
-          description: Shift config
+        '200':
+          description: Конфигурация смен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shift_1_start_time:
+                    type: string
+                    example: "09:00"
+                  shift_1_end_time:
+                    type: string
+                    example: "18:00"
+                  shift_2_start_time:
+                    type: string
+                    example: "14:00"
+                  shift_2_end_time:
+                    type: string
+                    example: "23:00"
+                  late_tolerance_minutes:
+                    type: integer
+                    example: 15
+
     post:
-      summary: Update shift configuration
+      summary: Обновить конфигурацию смен
+      description: |
+        Обновить конфигурацию смен.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/settings/shift-config" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "shift_1_start_time": "08:30",
+            "shift_1_end_time": "17:30",
+            "late_tolerance_minutes": 10
+          }'
+        ```
       tags: [Settings]
       requestBody:
         content:
@@ -1050,6 +3524,7 @@ paths:
               properties:
                 shift_1_start_time:
                   type: string
+                  pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
                 shift_1_end_time:
                   type: string
                 shift_2_start_time:
@@ -1058,24 +3533,286 @@ paths:
                   type: string
                 late_tolerance_minutes:
                   type: integer
+                  minimum: 0
+                  maximum: 120
                 dealership_id:
                   type: integer
       responses:
-        200:
-          description: Config updated
+        '200':
+          description: Конфигурация обновлена
+        '403':
+          description: Недостаточно прав
 
-  /v1/notification-settings:
+  /v1/settings/notification-config:
     get:
-      summary: Get notification settings
-      tags: [Notification Settings]
+      summary: Конфигурация уведомлений
+      description: |
+        Получить настройки уведомлений и автоматизации.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings/notification-config" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Settings]
       parameters:
-        - in: query
-          name: dealership_id
+        - name: dealership_id
+          in: query
           schema:
             type: integer
       responses:
-        200:
-          description: List of notification settings
+        '200':
+          description: Конфигурация уведомлений
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification_enabled:
+                    type: boolean
+                    description: Включены ли уведомления
+                  auto_close_shifts:
+                    type: boolean
+                    description: Автоматическое закрытие смен
+                  shift_reminder_minutes:
+                    type: integer
+                    description: За сколько минут напоминать о начале смены
+                  rows_per_page:
+                    type: integer
+                    description: Количество строк на странице
+                  notification_types:
+                    type: object
+                    description: Типы активных уведомлений
+                    properties:
+                      task_overdue:
+                        type: boolean
+                      shift_late:
+                        type: boolean
+                      task_completed:
+                        type: boolean
+                      system_errors:
+                        type: boolean
+
+    put:
+      summary: Обновить конфигурацию уведомлений
+      description: |
+        Обновить настройки уведомлений и автоматизации.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/settings/notification-config" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "notification_enabled": true,
+            "shift_reminder_minutes": 30
+          }'
+        ```
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notification_enabled:
+                  type: boolean
+                auto_close_shifts:
+                  type: boolean
+                shift_reminder_minutes:
+                  type: integer
+                  minimum: 1
+                  maximum: 60
+                rows_per_page:
+                  type: integer
+                  minimum: 5
+                  maximum: 100
+                notification_types:
+                  type: object
+                dealership_id:
+                  type: integer
+      responses:
+        '200':
+          description: Конфигурация обновлена
+        '403':
+          description: Недостаточно прав
+
+  /v1/settings/archive-config:
+    get:
+      summary: Конфигурация архивации
+      description: |
+        Получить настройки автоматической архивации задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings/archive-config" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Settings]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Конфигурация архивации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  archive_completed_time:
+                    type: string
+                    description: Время архивации выполненных задач (HH:MM)
+                    example: "03:00"
+                  archive_overdue_day_of_week:
+                    type: integer
+                    description: День недели для архивации просроченных (0=отключено, 1-7=Пн-Вс)
+                    minimum: 0
+                    maximum: 7
+                  archive_overdue_time:
+                    type: string
+                    description: Время архивации просроченных задач (HH:MM)
+                    example: "03:00"
+
+    put:
+      summary: Обновить конфигурацию архивации
+      description: |
+        Обновить настройки автоматической архивации задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/settings/archive-config" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "archive_completed_time": "02:00",
+            "archive_overdue_day_of_week": 1
+          }'
+        ```
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                archive_completed_time:
+                  type: string
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                archive_overdue_day_of_week:
+                  type: integer
+                  minimum: 0
+                  maximum: 7
+                archive_overdue_time:
+                  type: string
+                  pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+                dealership_id:
+                  type: integer
+      responses:
+        '200':
+          description: Конфигурация обновлена
+        '403':
+          description: Недостаточно прав
+
+  /v1/settings/task-config:
+    get:
+      summary: Конфигурация задач
+      description: |
+        Получить конфигурацию задач.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/settings/task-config" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Settings]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Конфигурация задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_requires_open_shift:
+                    type: boolean
+                  archive_overdue_hours_after_shift:
+                    type: integer
+
+    put:
+      summary: Обновить конфигурацию задач
+      description: |
+        Обновить конфигурацию задач.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/settings/task-config" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "task_requires_open_shift": true,
+            "archive_overdue_hours_after_shift": 24
+          }'
+        ```
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                task_requires_open_shift:
+                  type: boolean
+                archive_overdue_hours_after_shift:
+                  type: integer
+                  minimum: 1
+                  maximum: 48
+                dealership_id:
+                  type: integer
+      responses:
+        '200':
+          description: Конфигурация обновлена
+        '403':
+          description: Недостаточно прав
+
+  # ============================================
+  # NOTIFICATION SETTINGS ENDPOINTS
+  # ============================================
+  /v1/notification-settings:
+    get:
+      summary: Настройки уведомлений
+      description: |
+        Получить настройки уведомлений.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/notification-settings?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Notification Settings]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список настроек уведомлений
           content:
             application/json:
               schema:
@@ -1088,14 +3825,34 @@ paths:
 
   /v1/notification-settings/{channelType}:
     put:
-      summary: Update notification setting
+      summary: Обновить настройку уведомления
+      description: |
+        Обновить настройку конкретного канала уведомлений.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/notification-settings/task_assigned" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "is_enabled": true,
+            "notification_offset": 30,
+            "recipient_roles": ["manager", "employee"]
+          }'
+        ```
       tags: [Notification Settings]
       parameters:
-        - in: path
-          name: channelType
+        - name: channelType
+          in: path
           required: true
           schema:
             type: string
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
       requestBody:
         content:
           application/json:
@@ -1108,19 +3865,41 @@ paths:
                   type: string
                 notification_day:
                   type: string
+                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
                 notification_offset:
                   type: integer
+                  minimum: 1
+                  maximum: 1440
                 recipient_roles:
                   type: array
                   items:
                     type: string
       responses:
-        200:
-          description: Setting updated
+        '200':
+          description: Настройка обновлена
+        '403':
+          description: Недостаточно прав
 
   /v1/notification-settings/bulk:
     post:
-      summary: Bulk update notification settings
+      summary: Массовое обновление настроек
+      description: |
+        Массовое обновление настроек уведомлений.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/notification-settings/bulk" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "settings": [
+              {"channel_type": "task_assigned", "is_enabled": true},
+              {"channel_type": "task_completed", "is_enabled": false}
+            ]
+          }'
+        ```
       tags: [Notification Settings]
       requestBody:
         required: true
@@ -1142,13 +3921,31 @@ paths:
                         type: string
                       is_enabled:
                         type: boolean
+                      notification_time:
+                        type: string
+                      notification_offset:
+                        type: integer
       responses:
-        200:
-          description: Settings updated
+        '200':
+          description: Настройки обновлены
+        '403':
+          description: Недостаточно прав
 
   /v1/notification-settings/reset:
     post:
-      summary: Reset notification settings
+      summary: Сбросить настройки
+      description: |
+        Сбросить настройки уведомлений на значения по умолчанию.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/notification-settings/reset" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"dealership_id": 1}'
+        ```
       tags: [Notification Settings]
       requestBody:
         content:
@@ -1159,5 +3956,433 @@ paths:
                 dealership_id:
                   type: integer
       responses:
-        200:
-          description: Settings reset
+        '200':
+          description: Настройки сброшены
+        '403':
+          description: Недостаточно прав
+
+  # ============================================
+  # CALENDAR ENDPOINTS
+  # ============================================
+  /v1/calendar/{year}:
+    get:
+      summary: Календарь на год
+      description: |
+        Получить календарь рабочих/выходных дней на год.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/calendar/2025?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Calendar]
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 2020
+            maximum: 2100
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Календарь на год
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  year:
+                    type: integer
+                  days:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CalendarDay'
+
+  /v1/calendar/{year}/holidays:
+    get:
+      summary: Выходные дни за год
+      description: |
+        Получить все выходные дни за год.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/calendar/2025/holidays" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Calendar]
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список выходных дней
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CalendarDay'
+
+  /v1/calendar/check/{date}:
+    get:
+      summary: Проверить дату
+      description: |
+        Проверить, является ли дата выходным днём.
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/calendar/check/2025-01-01" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Calendar]
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Информация о дате
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  is_holiday:
+                    type: boolean
+                  type:
+                    type: string
+                    enum: [holiday, workday]
+                  description:
+                    type: string
+                    nullable: true
+
+  /v1/calendar/{date}:
+    put:
+      summary: Установить день
+      description: |
+        Установить или обновить тип дня (выходной/рабочий).
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X PUT "http://localhost:8007/api/v1/calendar/2025-01-01" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "type": "holiday",
+            "description": "Новый год"
+          }'
+        ```
+      tags: [Calendar]
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [holiday, workday]
+                description:
+                  type: string
+                dealership_id:
+                  type: integer
+      responses:
+        '200':
+          description: День установлен
+        '403':
+          description: Недостаточно прав
+
+    delete:
+      summary: Удалить настройку дня
+      description: |
+        Удалить настройку дня (вернуть к стандартному).
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X DELETE "http://localhost:8007/api/v1/calendar/2025-01-01?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Calendar]
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Настройка удалена
+        '403':
+          description: Недостаточно прав
+
+  /v1/calendar/bulk:
+    post:
+      summary: Массовое обновление дней
+      description: |
+        Массовое обновление дней календаря.
+
+        **Операции:**
+        - `set_weekdays` — установить выходными определённые дни недели
+        - `set_dates` — установить выходными конкретные даты
+        - `clear_year` — очистить все настройки за год
+
+        **Доступ:** manager, owner
+
+        **curl пример (установить субботу и воскресенье выходными):**
+        ```bash
+        curl -X POST "http://localhost:8007/api/v1/calendar/bulk" \
+          -H "Authorization: Bearer YOUR_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "operation": "set_weekdays",
+            "year": 2025,
+            "weekdays": [6, 7],
+            "type": "holiday"
+          }'
+        ```
+      tags: [Calendar]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operation, year]
+              properties:
+                operation:
+                  type: string
+                  enum: [set_weekdays, set_dates, clear_year]
+                year:
+                  type: integer
+                  minimum: 2020
+                  maximum: 2100
+                dealership_id:
+                  type: integer
+                weekdays:
+                  type: array
+                  items:
+                    type: integer
+                    minimum: 1
+                    maximum: 7
+                  description: Дни недели (1=Пн, 7=Вс) для set_weekdays
+                dates:
+                  type: array
+                  items:
+                    type: string
+                    format: date
+                  description: Список дат для set_dates
+                type:
+                  type: string
+                  enum: [holiday, workday]
+                  description: Тип дня для set_weekdays/set_dates
+      responses:
+        '200':
+          description: Дни обновлены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  updated_count:
+                    type: integer
+        '403':
+          description: Недостаточно прав
+
+  # ============================================
+  # AUDIT LOGS ENDPOINTS
+  # ============================================
+  /v1/audit-logs:
+    get:
+      summary: Журнал аудита
+      description: |
+        Получить список записей журнала аудита.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/audit-logs?table_name=tasks&action=updated&from_date=2025-01-01" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Audit Logs]
+      parameters:
+        - name: table_name
+          in: query
+          schema:
+            type: string
+          description: Фильтр по таблице (tasks, users, shifts, etc.)
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [created, updated, deleted]
+        - name: actor_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по ID пользователя, совершившего действие
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: record_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по ID записи
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        '200':
+          description: Список записей аудита
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '403':
+          description: Недостаточно прав
+
+  /v1/audit-logs/actors:
+    get:
+      summary: Список авторов действий
+      description: |
+        Получить список пользователей, совершавших действия в системе.
+
+        **Доступ:** owner
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/audit-logs/actors" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Audit Logs]
+      responses:
+        '200':
+          description: Список авторов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        full_name:
+                          type: string
+                        login:
+                          type: string
+        '403':
+          description: Недостаточно прав
+
+  /v1/audit-logs/{tableName}/{recordId}:
+    get:
+      summary: История записи
+      description: |
+        Получить историю изменений конкретной записи.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/audit-logs/tasks/100" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Audit Logs]
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Имя таблицы (tasks, users, shifts, etc.)
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID записи
+      responses:
+        '200':
+          description: История изменений записи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+        '403':
+          description: Недостаточно прав
+        '404':
+          description: Запись не найдена

@@ -181,25 +181,19 @@ class SettingsController extends Controller
     }
 
     /**
-     * Get bot configuration
+     * Get notification configuration
      *
-     * GET /api/v1/settings/bot-config
+     * GET /api/v1/settings/notification-config
      */
-    public function getBotConfig(Request $request): JsonResponse
+    public function getNotificationConfig(Request $request): JsonResponse
     {
         $dealershipId = $request->query('dealership_id');
 
-        $botConfig = [
+        $notificationConfig = [
             'notification_enabled' => (bool) $this->settingsService->getSettingWithFallback('notification_enabled', $dealershipId, true),
             'auto_close_shifts' => (bool) $this->settingsService->getSettingWithFallback('auto_close_shifts', $dealershipId, false),
             'shift_reminder_minutes' => (int) $this->settingsService->getSettingWithFallback('shift_reminder_minutes', $dealershipId, 15),
-            // maintenance_mode всегда глобальная настройка (dealership_id = null)
-            'maintenance_mode' => (bool) $this->settingsService->get('maintenance_mode', null, false),
             'rows_per_page' => (int) $this->settingsService->getSettingWithFallback('rows_per_page', $dealershipId, 10),
-            // Archive settings - separate for completed and overdue tasks
-            'archive_completed_time' => $this->settingsService->getSettingWithFallback('archive_completed_time', $dealershipId, '03:00'), // Time for daily completed tasks archiving
-            'archive_overdue_day_of_week' => (int) $this->settingsService->getSettingWithFallback('archive_overdue_day_of_week', $dealershipId, 0), // 0 = disabled, 1-7 = Monday-Sunday
-            'archive_overdue_time' => $this->settingsService->getSettingWithFallback('archive_overdue_time', $dealershipId, '03:00'), // Time for overdue tasks archiving
             'notification_types' => $this->settingsService->getSettingWithFallback('notification_types', $dealershipId, [
                 'task_overdue' => true,
                 'shift_late' => true,
@@ -210,27 +204,22 @@ class SettingsController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $botConfig,
+            'data' => $notificationConfig,
         ]);
     }
 
     /**
-     * Update bot configuration
+     * Update notification configuration
      *
-     * PUT /api/v1/settings/bot-config
+     * PUT /api/v1/settings/notification-config
      */
-    public function updateBotConfig(Request $request): JsonResponse
+    public function updateNotificationConfig(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'notification_enabled' => ['nullable', 'boolean'],
             'auto_close_shifts' => ['nullable', 'boolean'],
             'shift_reminder_minutes' => ['nullable', 'integer', 'min:1', 'max:60'],
-            'maintenance_mode' => ['nullable', 'boolean'],
             'rows_per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
-            // Archive settings - separate for completed and overdue tasks
-            'archive_completed_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'], // HH:MM format
-            'archive_overdue_day_of_week' => ['nullable', 'integer', 'min:0', 'max:7'], // 0 = disabled, 1-7 = Monday-Sunday
-            'archive_overdue_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'], // HH:MM format
             'notification_types' => ['nullable', 'array'],
             'dealership_id' => ['nullable', 'integer'],
         ]);
@@ -256,17 +245,84 @@ class SettingsController extends Controller
                     elseif (is_int($value)) $type = 'integer';
                     elseif (is_array($value)) $type = 'json';
 
-                    // maintenance_mode всегда сохраняется глобально (dealership_id = null)
-                    $targetDealershipId = ($key === 'maintenance_mode') ? null : $dealershipId;
-
-                    $this->settingsService->set($key, $value, $targetDealershipId, $type);
+                    $this->settingsService->set($key, $value, $dealershipId, $type);
                     $updatedSettings[$key] = $value;
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Bot configuration updated successfully',
+                'message' => 'Notification configuration updated successfully',
+                'data' => $updatedSettings,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Get archive configuration
+     *
+     * GET /api/v1/settings/archive-config
+     */
+    public function getArchiveConfig(Request $request): JsonResponse
+    {
+        $dealershipId = $request->query('dealership_id');
+
+        $archiveConfig = [
+            'archive_completed_time' => $this->settingsService->getSettingWithFallback('archive_completed_time', $dealershipId, '03:00'),
+            'archive_overdue_day_of_week' => (int) $this->settingsService->getSettingWithFallback('archive_overdue_day_of_week', $dealershipId, 0),
+            'archive_overdue_time' => $this->settingsService->getSettingWithFallback('archive_overdue_time', $dealershipId, '03:00'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $archiveConfig,
+        ]);
+    }
+
+    /**
+     * Update archive configuration
+     *
+     * PUT /api/v1/settings/archive-config
+     */
+    public function updateArchiveConfig(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'archive_completed_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'archive_overdue_day_of_week' => ['nullable', 'integer', 'min:0', 'max:7'],
+            'archive_overdue_time' => ['nullable', 'string', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'dealership_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $data = $validator->validated();
+            $dealershipId = $data['dealership_id'] ?? null;
+            unset($data['dealership_id']);
+
+            $updatedSettings = [];
+            foreach ($data as $key => $value) {
+                if ($value !== null) {
+                    $type = is_int($value) ? 'integer' : 'time';
+                    $this->settingsService->set($key, $value, $dealershipId, $type);
+                    $updatedSettings[$key] = $value;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Archive configuration updated successfully',
                 'data' => $updatedSettings,
             ]);
         } catch (\InvalidArgumentException $e) {
