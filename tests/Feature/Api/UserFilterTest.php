@@ -80,4 +80,68 @@ describe('Users API Filtering', function () {
         expect($ids2)->not->toContain($userD1->id);
         expect($ids2)->not->toContain($userD3->id);
     });
+
+    it('returns orphan users when orphan_only=true', function () {
+        // Arrange
+        $owner = User::factory()->create(['role' => Role::OWNER->value]);
+        $dealership = AutoDealership::factory()->create(['name' => 'TestD']);
+
+        // User with dealership (primary)
+        $userWithDealership = User::factory()->create([
+            'dealership_id' => $dealership->id,
+            'role' => Role::EMPLOYEE->value,
+        ]);
+
+        // User with dealership (attached via many-to-many)
+        $userWithAttached = User::factory()->create([
+            'dealership_id' => null,
+            'role' => Role::EMPLOYEE->value,
+        ]);
+        $userWithAttached->dealerships()->attach($dealership->id);
+
+        // Orphan user (no dealership_id, no dealerships relation)
+        $orphanUser = User::factory()->create([
+            'dealership_id' => null,
+            'role' => Role::EMPLOYEE->value,
+        ]);
+
+        // Act
+        $response = $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/v1/users?orphan_only=true');
+
+        // Assert
+        $response->assertStatus(200);
+        $ids = array_column($response->json('data'), 'id');
+
+        expect($ids)->toContain($orphanUser->id);
+        expect($ids)->not->toContain($userWithDealership->id);
+        expect($ids)->not->toContain($userWithAttached->id);
+    });
+
+    it('ignores orphan_only when dealership_id is also provided', function () {
+        // Arrange
+        $owner = User::factory()->create(['role' => Role::OWNER->value]);
+        $dealership = AutoDealership::factory()->create(['name' => 'TestD2']);
+
+        $userWithDealership = User::factory()->create([
+            'dealership_id' => $dealership->id,
+            'role' => Role::EMPLOYEE->value,
+        ]);
+
+        $orphanUser = User::factory()->create([
+            'dealership_id' => null,
+            'role' => Role::EMPLOYEE->value,
+        ]);
+
+        // Act - dealership_id takes priority over orphan_only
+        $response = $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/v1/users?dealership_id={$dealership->id}&orphan_only=true");
+
+        // Assert - should filter by dealership_id, ignoring orphan_only
+        $response->assertStatus(200);
+        $ids = array_column($response->json('data'), 'id');
+
+        expect($ids)->toContain($userWithDealership->id);
+        expect($ids)->not->toContain($orphanUser->id);
+    });
 });

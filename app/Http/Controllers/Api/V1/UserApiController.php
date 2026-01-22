@@ -71,6 +71,7 @@ class UserApiController extends Controller
             $query->where('role', $role);
         }
 
+        // Фильтрация по автосалону (приоритет над orphan_only)
         if ($request->filled('dealership_id')) {
             $dealershipId = $request->input('dealership_id');
 
@@ -81,6 +82,10 @@ class UserApiController extends Controller
                       $subQ->where('auto_dealerships.id', $dealershipId);
                   });
             });
+        } elseif ($request->filled('orphan_only') && in_array($request->query('orphan_only'), ['true', '1'], true)) {
+            // Режим "orphan users" - пользователи без привязки к автосалонам
+            $query->whereNull('users.dealership_id')
+                  ->whereDoesntHave('dealerships');
         }
 
         // Phone filtering with normalization (existing logic)

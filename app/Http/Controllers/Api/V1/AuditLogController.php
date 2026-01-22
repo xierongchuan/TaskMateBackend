@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\GetAuditActorsRequest;
+use App\Http\Requests\Api\V1\GetAuditLogsRequest;
 use App\Models\AuditLog;
 use App\Models\AutoDealership;
 use App\Models\User;
@@ -27,10 +29,10 @@ class AuditLogController extends Controller
     /**
      * Получает список логов аудита с пагинацией и фильтрацией.
      *
-     * @param Request $request HTTP-запрос
+     * @param GetAuditLogsRequest $request HTTP-запрос с валидацией
      * @return JsonResponse
      */
-    public function index(Request $request): JsonResponse
+    public function index(GetAuditLogsRequest $request): JsonResponse
     {
         $query = AuditLog::query()
             ->orderByDesc('created_at');
@@ -129,26 +131,52 @@ class AuditLogController extends Controller
     }
 
     /**
-     * Получает список пользователей для фильтра (те, кто совершал действия).
+     * Получает список пользователей для фильтра (все пользователи автосалона).
      *
+     * @param GetAuditActorsRequest $request HTTP-запрос с валидацией
      * @return JsonResponse
      */
-    public function actors(): JsonResponse
+    public function actors(GetAuditActorsRequest $request): JsonResponse
     {
-        $actorIds = AuditLog::query()
-            ->whereNotNull('actor_id')
-            ->distinct()
-            ->pluck('actor_id');
+        $query = User::query();
 
-        $actors = User::whereIn('id', $actorIds)
+        // Фильтрация по автосалону
+        if ($request->filled('dealership_id')) {
+            $dealershipId = $request->input('dealership_id');
+
+            $query->where(function ($q) use ($dealershipId) {
+                // Пользователи с primary dealership_id = X
+                $q->where('users.dealership_id', $dealershipId)
+                  // ИЛИ прикрепленные через pivot таблицу
+                  ->orWhereHas('dealerships', function ($subQ) use ($dealershipId) {
+                      $subQ->where('auto_dealerships.id', $dealershipId);
+                  });
+            });
+        } else {
+            // Пользователи без привязки к автосалонам (orphan users)
+            $query->whereNull('users.dealership_id')
+                  ->whereDoesntHave('dealerships');
+        }
+
+        // Сортировка: сначала по роли, потом по имени
+        $actors = $query->orderByRaw("
+                CASE role
+                    WHEN 'owner' THEN 1
+                    WHEN 'manager' THEN 2
+                    WHEN 'employee' THEN 3
+                    WHEN 'observer' THEN 4
+                    ELSE 5
+                END
+            ")
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'email']);
+            ->get(['id', 'full_name', 'login', 'role']);
 
         return response()->json([
             'data' => $actors->map(fn ($user) => [
                 'id' => $user->id,
                 'full_name' => $user->full_name,
-                'email' => $user->email,
+                'login' => $user->login,
+                'role' => $user->role,
             ]),
         ]);
     }
@@ -176,7 +204,7 @@ class AuditLogController extends Controller
             ? [
                 'id' => $actors[$log->actor_id]->id,
                 'full_name' => $actors[$log->actor_id]->full_name,
-                'email' => $actors[$log->actor_id]->email,
+                'login' => $actors[$log->actor_id]->login,
             ]
             : null;
 
