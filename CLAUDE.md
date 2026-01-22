@@ -1,412 +1,85 @@
-# TaskMateBackend
+# TaskMateBackend — CLAUDE.md
 
-## О проекте
+Backend REST API для TaskMate. Общие правила см. в [../CLAUDE.md](../CLAUDE.md).
 
-TaskMateBackend - это автономная система управления задачами и сменами для автосалонов.
-
-## Технический стек
-
-- **Backend**: Laravel 12 (PHP 8.4)
-- **База данных**: PostgreSQL 18
-- **Кеширование и очереди**: Valkey (Redis-совместимый) via Predis
-- **Аутентификация**: Laravel Sanctum (Bearer tokens)
-- **Application Server**: FrankenPHP v1 (Caddy-based)
-- **Тестирование**: Pest PHP
-- **Code Quality**: PHP CS Fixer, PHP_CodeSniffer, Laravel Pint
-- **Контейнеризация**: Docker Compose
-
-## Архитектура проекта
-
-### Структура директорий
+## Структура проекта
 
 ```
 app/
-├── Console/                # Artisan команды
+├── Console/           # Artisan команды
 ├── Http/
-│   ├── Controllers/        # REST API контроллеры
-│   └── Middleware/         # HTTP middleware
-├── Jobs/                   # Фоновые задачи и воркеры
-├── Models/                 # Eloquent модели
-├── Services/               # Бизнес-логика
-└── Traits/                 # Переиспользуемые трейты
+│   ├── Controllers/   # REST API контроллеры
+│   ├── Requests/      # Form Requests (валидация)
+│   └── Resources/     # API Resources (форматирование)
+├── Jobs/              # Фоновые задачи
+├── Models/            # Eloquent модели
+├── Services/          # Бизнес-логика
+└── Exceptions/        # Кастомные исключения
 
-database/
-├── migrations/             # Миграции БД
-├── seeders/               # Сиды для тестовых данных
-└── factories/             # Фабрики для тестирования
-
-docs/                       # Документация проекта
-tests/                      # Тесты (Pest PHP)
+tests/
+├── Unit/              # Unit тесты
+├── Feature/           # Feature тесты
+└── Api/               # API тесты
 ```
 
-### Основные модели данных
+## Основные модели
 
-#### User
+| Модель | Описание | Особенности |
+|--------|----------|-------------|
+| User | Пользователи | Роли: employee, manager, observer, owner. SoftDeletes |
+| AutoDealership | Автосалоны | Multi-tenant. SoftDeletes |
+| Task | Задачи | Типы: notification, completion, completion_with_proof. SoftDeletes |
+| Shift | Смены | Статусы: open, closed. Фото открытия/закрытия |
+| Setting | Настройки | Типы: string, integer, boolean, json, time |
 
-Пользователи системы (сотрудники, менеджеры, владельцы)
+## Сервисы
 
-- **Роли**: employee, manager, observer, owner
-- **Связи**: автосалон, смены, задачи, ответы на задачи
+- `TaskService` — CRUD задач, проверка дубликатов
+- `TaskFilterService` — фильтрация задач по параметрам
+- `TaskProofService` — загрузка и валидация доказательств
+- `DashboardService` — аналитика для дашборда
+- `ShiftService` — управление сменами
+- `SettingsService` — системные настройки
 
-#### AutoDealership
+## Workflow задач с доказательствами
 
-Автосалоны (филиалы компании)
+```
+pending → in_progress → pending_review → verified
+                    ↘   (rejected) ↩ in_progress
+```
 
-- **Данные**: название, адрес, телефон, описание
-- **Связи**: пользователи, смены, задачи, настройки
+Сотрудник загружает файлы → статус `pending_review` → менеджер проверяет → `verified` или `rejected` (с комментарием).
 
-#### Task
-
-Задачи для сотрудников
-
-- **Типы**: individual (индивидуальная), group (групповая)
-- **Типы ответа**:
-  - `notification` — уведомление (только просмотр)
-  - `completion` — выполнение (требует отметки о выполнении)
-  - `completion_with_proof` — выполнение с доказательством (требует загрузки файлов)
-- **Функции**: повторяющиеся задачи (daily, weekly, monthly), дедлайны, теги
-- **Связи**: создатель, исполнители, ответы, доказательства выполнения
-
-#### Shift
-
-Смены сотрудников
-
-- **Статусы**: open, closed
-- **Функции**: отслеживание опозданий, фото открытия/закрытия, замены
-- **Связи**: пользователь, автосалон, замена
-
-#### Setting
-
-Настройки системы
-
-- **Типы**: string, integer, boolean, json, time
-- **Уровни**: глобальные или по автосалону
-- **Примеры**: время смен, допустимое опоздание
-
-## Ключевые функции
-
-### 1. Управление задачами
-
-- Создание индивидуальных и групповых задач
-- Назначение задач пользователям или ролям
-- Три типа задач:
-  - **Уведомление** (notification) — информирование без требования ответа
-  - **Выполнение** (completion) — требует отметки о выполнении
-  - **Выполнение с доказательством** (completion_with_proof) — требует загрузки фото/видео/документов
-- Загрузка доказательств выполнения:
-  - До 5 файлов на задачу
-  - Общий размер до 200 МБ
-  - Поддерживаемые форматы: изображения (JPG, PNG, GIF, WebP), видео (MP4, MOV), PDF, ZIP
-  - Приватное хранилище с доступом только для авторизованных пользователей
-  - Подписанные временные URL (срок действия 60 минут)
-  - Валидация содержимого файлов (защита от подмены расширений)
-- Workflow верификации:
-  - Сотрудник отмечает задачу как выполненную → статус `pending_review`
-  - Менеджер проверяет доказательства → подтверждает (`verified`) или отклоняет (`rejected`)
-  - При отклонении задача возвращается в `in_progress` с комментарием менеджера
-- Дедлайны с напоминаниями (за 1, 2, 4 часа)
-- Повторяющиеся задачи (ежедневные, еженедельные, ежемесячные)
-- Теги для категоризации
-- Отслеживание статусов (pending, in_progress, pending_review, verified, rejected, overdue)
-- Возможность отложить задачу
-- Архивация старых задач
-
-### 2. Управление сменами
-
-- Открытие/закрытие смен
-- Фотоотчеты при открытии и закрытии
-- Отслеживание опозданий
-- Система замен сотрудников
-- Статистика по сменам
-- Запланированное время смен
-
-### 3. REST API
-
-Полноценный REST API для интеграции с фронтендом или другими системами:
-
-- Аутентификация (login/logout/register)
-- CRUD операции для всех сущностей
-- Расширенная фильтрация и поиск
-- Пагинация
-- Dashboard с аналитикой
-
-## Фоновые воркеры (Jobs)
-
-Система использует очереди (queue) для выполнения фоновых задач:
-
-### Расписание воркеров
-
-| Воркер | Частота | Назначение |
-|--------|---------|------------|
-| `SendScheduledTasksJob` | 5 минут | Отправка задач когда наступает appear_date |
-| `CheckOverdueTasksJob` | 10 минут | Проверка и уведомление о просроченных задачах |
-| `CheckUpcomingDeadlinesJob` | 15 минут | Напоминания о дедлайнах (за 1ч, 2ч, 4ч) |
-| `CheckUnrespondedTasksJob` | 30 минут | Напоминания о задачах без ответа (2ч, 6ч, 24ч) |
-| `SendDailySummaryJob` | 20:00 ежедневно | Ежедневная сводка для менеджеров |
-| `SendWeeklyReportJob` | Пн 09:00 | Еженедельные отчеты |
-| `ArchiveOldTasksJob` | 02:00 ежедневно | Архивация старых выполненных задач |
-
-Подробнее см. [README_WORKERS.md](README_WORKERS.md)
-
-## Контекст из TaskMate
-
-TaskMateBackend является частью экосистемы TaskMate, которая включает:
-
-- **TaskMateAPI** - API документация
-- **TaskMateBackend** - административная панель
-- **TaskMateFrontend** - пользовательский интерфейс
-- **TaskMateBackend** - Backend (этот репозиторий)
-
-Все компоненты разворачиваются через Docker Compose и работают автономно.
-
-## Установка и запуск
-
-### Требования
-
-- PHP 8.4+
-- Composer
-- Docker и Docker Compose (рекомендуется)
-- PostgreSQL (или через Docker)
-- Valkey/Redis (или через Docker)
-
-### Установка зависимостей
+## Тестирование
 
 ```bash
-composer install
+# Внутри контейнера или через docker compose exec backend_api
+composer test              # Все тесты
+composer test:unit         # Unit
+composer test:feature      # Feature
+composer test:api          # API
+composer test:coverage     # С покрытием (min 50%)
+
+# Тестирование воркеров
+php artisan workers:test           # Все
+php artisan workers:test overdue   # Конкретный
 ```
 
-### Конфигурация
-
-1. Скопировать `.env.example` в `.env`
-2. Настроить переменные окружения:
-   - `DB_*` - настройки базы данных
-   - `REDIS_*` - настройки Valkey/Redis
-3. Сгенерировать ключ приложения:
+## Code Quality
 
 ```bash
-php artisan key:generate
+vendor/bin/pint              # Laravel Pint
+vendor/bin/php-cs-fixer fix  # PHP CS Fixer
 ```
 
-### Запуск через Docker
+## Ключевые файлы
 
-```bash
-docker-compose up -d --build
-```
+- `routes/api.php` — API роуты
+- `config/filesystems.php` — настройки хранилища (готово к S3)
+- `app/Console/Kernel.php` — расписание воркеров
+- `database/seeders/DemoSeeder.php` — демо-данные
 
-### Миграции и сиды
+## Дополнительно
 
-```bash
-php artisan migrate
-php artisan db:seed  # опционально для тестовых данных
-```
-
-### Запуск воркеров
-
-```bash
-# В продакшене используйте Supervisor (см. supervisor.conf)
-php artisan queue:work --queue=notifications --sleep=3 --tries=3
-```
-
-## Разработка
-
-### Запуск в режиме разработки
-
-```bash
-composer dev
-```
-
-Это запустит:
-
-- PHP сервер (artisan serve)
-- Queue воркер
-- Логи (pail)
-- Vite dev сервер
-
-### Тестирование
-
-```bash
-composer test
-# или
-php artisan test
-```
-
-### Проверка кода
-
-```bash
-# PHP CS Fixer
-vendor/bin/php-cs-fixer fix
-
-# PHP CodeSniffer
-vendor/bin/phpcs
-
-# Laravel Pint
-vendor/bin/pint
-```
-
-### Тестирование воркеров
-
-```bash
-# Все воркеры
-php artisan workers:test
-
-# Конкретный воркер
-php artisan workers:test overdue
-php artisan workers:test upcoming
-php artisan workers:test unresponded
-```
-
-## API документация
-
-API документирован в формате OpenAPI 3.0 в файле [swagger.yaml](swagger.yaml).
-
-Основные эндпоинты:
-
-- `/api/v1/session` - Аутентификация
-- `/api/v1/users` - Управление пользователями
-- `/api/v1/dealerships` - Управление автосалонами
-- `/api/v1/shifts` - Управление сменами
-- `/api/v1/tasks` - Управление задачами
-- `/api/v1/settings` - Настройки системы
-- `/api/v1/dashboard` - Дашборд для менеджеров
-
-Подробнее см. [docs/API_USER_REGISTRATION.md](docs/API_USER_REGISTRATION.md)
-
-## Безопасность
-
-- Аутентификация через Laravel Sanctum (Bearer tokens)
-- Rate limiting для всех API эндпоинтов
-- Валидация всех входных данных
-- Хеширование паролей (bcrypt)
-- CORS настройки
-- Audit logging для всех действий пользователей
-- **Приватное хранилище файлов**:
-  - Доказательства выполнения задач хранятся в приватной директории
-  - Доступ только через подписанные временные URL (60 минут)
-  - Трёхуровневая проверка: подпись URL + Bearer токен + права доступа
-  - Валидация содержимого файлов (getimagesize, magic bytes)
-  - Транзакционная загрузка с откатом при ошибках
-- Проприетарная лицензия - см. [LICENSE.md](LICENSE.md)
-
-## Мониторинг
-
-### Просмотр логов
-
-```bash
-# Laravel logs
-tail -f storage/logs/laravel.log
-
-# Worker logs (если используется Supervisor)
-sudo supervisorctl tail taskmate-workers
-
-# Realtime logs
-php artisan pail
-```
-
-### Мониторинг очередей
-
-```bash
-# Статус очереди
-php artisan queue:monitor notifications
-
-# Очистка зависших задач
-php artisan queue:clear notifications
-
-# Повтор неудачных задач
-php artisan queue:retry all
-```
-
-## Производительность
-
-- Redis/Valkey для кеширования и очередей
-- Оптимизированные SQL запросы с индексами
-- Eager loading для предотвращения N+1 проблем
-- Кеширование конфигурации и роутов в продакшене
-- Rate limiting для защиты от перегрузки
-
-## Хранилище файлов
-
-### Локальное хранилище (по умолчанию)
-
-Файлы доказательств выполнения задач хранятся в приватной директории `storage/app/private/task_proofs/`:
-- Недоступны напрямую через веб-сервер
-- Организованы по автосалонам: `{dealership_id}/{hash}_{filename}`
-- Доступ только через API с авторизацией
-
-## Поддержка часовых поясов
-
-Система поддерживает работу с разными часовыми поясами:
-
-- Все даты хранятся в UTC
-- Конвертация в локальный часовой пояс пользователя при отображении
-- Настройка часового пояса в профиле пользователя
-
-## Лицензия и авторские права
-
-```
-License: Proprietary License
-Copyright: © 2023-2025 谢榕川 All rights reserved
-```
-
-Использование, копирование, распространение и модификация этого программного обеспечения возможны только с явного письменного разрешения правообладателя.
-
-## Контакты и поддержка
-
-- GitHub Issues: <https://github.com/xierongchuan/TaskMateBackend/issues>
-- Upstream Repository: <https://github.com/xierongchuan/TaskMate>
-
-## Правила разработки (User Rules)
-
-### Общие правила
-
-1. **Язык**: Русский для всех UI, комментариев и документации
-2. **Работа с инструментами**: При работе с инструментами окружения используй всё через Docker контейнеры
-
-### Backend
-
-1. **ВСЕГДА** запускать тесты при любых изменениях:
-   ```bash
-   docker compose exec backend_api php artisan test
-   # или
-   composer test
-   ```
-2. Проверять актуальность существующих тестов при изменении логики
-3. Обновлять README.md после успешного внедрения изменений
-4. Минимальное покрытие тестами: 50% (`composer test:coverage`)
-5. PostgreSQL only (не MySQL-совместимый)
-6. Приватные файлы хранятся в `storage/app/private/task_proofs/`, доступ через подписанные URL
-7. Система готова к миграции на S3 (см. `config/filesystems.php`)
-
-### Frontend & API
-
-1. При изменении Backend **обязательно** проверять совместимость с Frontend и документацией API
-2. При изменении Frontend сверяться с документацией API и проверять корректность запросов
-3. Поддерживать синхронизацию между Backend, Frontend и API-коллекцией
-
-### Development Workflow
-
-1. Запуск через Docker: `docker compose up -d --build`
-2. Инициализация Backend:
-   ```bash
-   docker compose exec backend_api composer install
-   docker compose exec backend_api php artisan migrate --force
-   docker compose exec backend_api php artisan db:seed-demo
-   docker compose exec backend_api php artisan storage:link
-   ```
-3. Режим разработки с автоперезагрузкой: `composer dev`
-4. Тестирование воркеров: `php artisan workers:test`
-
-### Code Quality
-
-- Форматирование: `vendor/bin/pint` или `vendor/bin/php-cs-fixer fix`
-- Тесты: `composer test` (unit, feature, api)
-- Покрытие: `composer test:coverage`
-
-## Дополнительные ресурсы
-
-- [README.md](README.md) - Краткое описание и быстрый старт
-- [README_WORKERS.md](README_WORKERS.md) - Подробная информация о воркерах
-- [swagger.yaml](swagger.yaml) - OpenAPI спецификация
-- [docs/](docs/) - Дополнительная документация
-- [check-scheduler.md](check-scheduler.md) - Проверка планировщика задач
-- [../CLAUDE.md](../CLAUDE.md) - Общая документация проекта TaskMate
-- [../TaskMateFrontend/CLAUDE.md](../TaskMateFrontend/CLAUDE.md) - Frontend архитектура
+- [README.md](README.md) — полное описание проекта
+- [swagger.yaml](swagger.yaml) — OpenAPI спецификация
