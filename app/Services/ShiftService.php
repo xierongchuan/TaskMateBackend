@@ -190,7 +190,7 @@ class ShiftService
     public function getUserOpenShift(User $user, ?int $dealershipId = null): ?Shift
     {
         $query = Shift::where('user_id', $user->id)
-            ->where('status', '!=', 'closed');
+            ->whereIn('status', ['open', 'late']);
 
         if ($dealershipId) {
             $query->where('dealership_id', $dealershipId);
@@ -208,7 +208,7 @@ class ShiftService
     public function getCurrentShifts(?int $dealershipId = null)
     {
         $query = Shift::with(['user', 'dealership', 'replacement'])
-            ->where('status', '!=', 'closed')
+            ->whereIn('status', ['open', 'late'])
             ->orderBy('shift_start', 'desc');
 
         if ($dealershipId) {
@@ -301,6 +301,10 @@ class ShiftService
             'shift_end' => Carbon::now(),
             'status' => $status,
         ]);
+
+        // Логируем незавершённые задачи (как в closeShift)
+        $shift->load('user');
+        $this->logIncompleteTasks($shift, $shift->user);
 
         return $shift;
     }

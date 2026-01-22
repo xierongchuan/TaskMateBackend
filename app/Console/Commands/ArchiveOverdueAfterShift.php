@@ -41,7 +41,10 @@ class ArchiveOverdueAfterShift extends Command
 
         // Get all dealerships with closed shifts that need to be processed
         $closedShifts = Shift::whereNotNull('shift_end')
-            ->whereNull('archived_tasks_processed')
+            ->where(function ($query) {
+                $query->whereNull('archived_tasks_processed')
+                      ->orWhere('archived_tasks_processed', false);
+            })
             ->orderBy('shift_end', 'asc')
             ->get();
 

@@ -60,7 +60,20 @@ class ShiftController extends Controller
         if ($isLate !== null && $isLate !== '') {
             $isLateValue = filter_var($isLate, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             if ($isLateValue !== null) {
-                $query->where('is_late', $isLateValue);
+                if ($isLateValue) {
+                    // Опоздание: статус 'late' ИЛИ late_minutes > 0
+                    $query->where(function ($q) {
+                        $q->where('status', 'late')
+                          ->orWhere('late_minutes', '>', 0);
+                    });
+                } else {
+                    // Без опоздания: статус НЕ 'late' И late_minutes <= 0
+                    $query->where('status', '!=', 'late')
+                          ->where(function ($q) {
+                              $q->where('late_minutes', '<=', 0)
+                                ->orWhereNull('late_minutes');
+                          });
+                }
             }
         }
 
