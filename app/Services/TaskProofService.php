@@ -31,7 +31,7 @@ class TaskProofService
         // Изображения
         'jpg', 'jpeg', 'png', 'gif', 'webp',
         // Документы
-        'pdf', 'docx', 'xlsx', 'csv', 'odt', 'txt', 'json',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'odt', 'txt', 'json',
         // Архивы
         'zip', 'tar', '7z',
         // Видео
@@ -49,12 +49,14 @@ class TaskProofService
         'image/webp',
         // Документы
         'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/msword', // .doc файлы
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx файлы
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx файлы
+        'application/vnd.ms-excel', // .xls файлы
         'text/csv',
         'text/plain',
         'application/json',
-        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.text', // .odt файлы
         // Архивы
         'application/zip',
         'application/x-tar',
@@ -114,7 +116,7 @@ class TaskProofService
             'task_response_id' => $response->id,
             'file_path' => $storedPath,
             'original_filename' => $file->getClientOriginalName(),
-            'mime_type' => $file->getMimeType() ?? 'application/octet-stream',
+            'mime_type' => $this->getCorrectMimeType($file),
             'file_size' => $file->getSize(),
         ]);
     }
@@ -192,7 +194,7 @@ class TaskProofService
                     'task_response_id' => $response->id,
                     'file_path' => $storedPath,
                     'original_filename' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType() ?? 'application/octet-stream',
+                    'mime_type' => $this->getCorrectMimeType($file),
                     'file_size' => $file->getSize(),
                 ]);
             }
@@ -423,6 +425,42 @@ class TaskProofService
         }
 
         return self::MAX_SIZE_DOCUMENT;
+    }
+
+    /**
+     * Определить правильный MIME тип на основе расширения файла.
+     *
+     * Office документы (.docx, .xlsx) являются ZIP-архивами, поэтому getMimeType()
+     * может вернуть application/zip. Эта функция исправляет MIME тип на основе расширения.
+     *
+     * @param UploadedFile $file Загружаемый файл
+     * @return string Правильный MIME тип
+     */
+    private function getCorrectMimeType(UploadedFile $file): string
+    {
+        $detectedMime = $file->getMimeType() ?? 'application/octet-stream';
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        // Карта расширений Office документов к их правильным MIME типам
+        $extensionToMime = [
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'doc' => 'application/msword',
+            'xls' => 'application/vnd.ms-excel',
+            'odt' => 'application/vnd.oasis.opendocument.text',
+        ];
+
+        // Если обнаружен ZIP, но расширение указывает на Office документ
+        if ($detectedMime === 'application/zip' && isset($extensionToMime[$extension])) {
+            return $extensionToMime[$extension];
+        }
+
+        // Если MIME тип не определён, но расширение известно
+        if ($detectedMime === 'application/octet-stream' && isset($extensionToMime[$extension])) {
+            return $extensionToMime[$extension];
+        }
+
+        return $detectedMime;
     }
 
     /**
