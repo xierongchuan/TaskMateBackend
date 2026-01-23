@@ -60,6 +60,10 @@ Route::prefix('v1')->group(function () {
         ->name('task-proofs.download')
         ->middleware('throttle:api');
 
+    Route::get('/task-shared-proofs/{id}/download', [TaskProofController::class, 'downloadShared'])
+        ->name('task-shared-proofs.download')
+        ->middleware('throttle:api');
+
     Route::middleware(['auth:sanctum', 'throttle:api'])
         ->group(function () {
             // Users - READ операции

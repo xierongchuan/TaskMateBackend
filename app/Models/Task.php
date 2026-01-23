@@ -330,6 +330,15 @@ class Task extends Model
             })->values()->toArray();
         }
 
+        // Общие файлы задачи (для групповых задач с complete_for_all)
+        if ($this->relationLoaded('sharedProofs')) {
+            $data['shared_proofs'] = $this->sharedProofs->map(function ($proof) {
+                return $proof->toApiArray();
+            })->values()->toArray();
+        } else {
+            $data['shared_proofs'] = [];
+        }
+
         // Add completion progress for group tasks
         if ($this->task_type === 'group') {
             $assignments = $this->relationLoaded('assignments') ? $this->assignments : collect();
@@ -376,6 +385,14 @@ class Task extends Model
     public function responses()
     {
         return $this->hasMany(TaskResponse::class, 'task_id');
+    }
+
+    /**
+     * Общие файлы задачи (для complete_for_all).
+     */
+    public function sharedProofs()
+    {
+        return $this->hasMany(TaskSharedProof::class, 'task_id');
     }
 
     public function assignedUsers()

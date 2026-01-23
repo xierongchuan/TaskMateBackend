@@ -240,6 +240,25 @@ class TaskProofService
     }
 
     /**
+     * Удалить все общие файлы задачи (shared_proofs).
+     *
+     * Используется при отклонении групповой задачи с complete_for_all.
+     *
+     * @param \App\Models\Task $task Задача
+     */
+    public function deleteSharedProofs(\App\Models\Task $task): void
+    {
+        foreach ($task->sharedProofs as $proof) {
+            // Удаление физического файла
+            if (Storage::disk('local')->exists($proof->file_path)) {
+                Storage::disk('local')->delete($proof->file_path);
+            }
+            // Удаление записи из БД
+            $proof->delete();
+        }
+    }
+
+    /**
      * Получить полный путь к файлу на диске.
      *
      * @param TaskProof $proof Доказательство
@@ -288,9 +307,10 @@ class TaskProofService
             );
         }
 
-        // Проверка MIME-типа
-        $mimeType = $file->getMimeType();
+        // СНАЧАЛА получить правильный MIME (с коррекцией для Office документов)
+        $mimeType = $this->getCorrectMimeType($file);
 
+        // ПОТОМ проверить MIME-тип
         if ($mimeType && !in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
             throw new InvalidArgumentException(
                 sprintf('Недопустимый тип файла: %s', $mimeType)

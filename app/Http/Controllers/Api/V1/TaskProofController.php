@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\TaskProof;
+use App\Models\TaskSharedProof;
 use App\Services\TaskProofService;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
@@ -97,6 +99,84 @@ class TaskProofController extends Controller
         $filePath = $this->taskProofService->getFilePath($proof);
 
         if (!$filePath || !file_exists($filePath)) {
+            return response()->json([
+                'message' => 'Файл не найден на сервере'
+            ], 404);
+        }
+
+        // Определяем Content-Type и Content-Disposition
+        $mimeType = $proof->mime_type ?: 'application/octet-stream';
+        $filename = $proof->original_filename;
+
+        // Для изображений и PDF отдаём inline, для остальных — attachment
+        $disposition = $this->getContentDisposition($mimeType);
+
+        return response()->streamDownload(
+            function () use ($filePath) {
+                $stream = fopen($filePath, 'rb');
+                if ($stream) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+            },
+            $filename,
+            [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => $disposition . '; filename="' . $this->sanitizeFilename($filename) . '"',
+                'Content-Length' => $proof->file_size,
+                'Cache-Control' => 'private, max-age=3600',
+            ]
+        );
+    }
+
+    /**
+     * Скачать общий файл задачи.
+     *
+     * @param Request $request
+     * @param int|string $id ID общего доказательства
+     * @return StreamedResponse|JsonResponse
+     */
+    public function downloadShared(Request $request, $id): StreamedResponse|JsonResponse
+    {
+        // Проверка подписи URL
+        if (!$request->hasValidSignature()) {
+            return response()->json([
+                'message' => 'Ссылка недействительна или истекла'
+            ], 403);
+        }
+
+        $proof = TaskSharedProof::with(['task'])->find($id);
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Доказательство не найдено'
+            ], 404);
+        }
+
+        $task = $proof->task;
+
+        // Проверка доступа (пользователь должен быть участником или иметь права)
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json([
+                'message' => 'Требуется авторизация'
+            ], 401);
+        }
+
+        $hasAccess = $task->dealership_id === $user->dealership_id &&
+                     ($task->assignments()->where('user_id', $user->id)->exists() ||
+                      in_array($user->role, [Role::MANAGER, Role::OWNER]));
+
+        if (!$hasAccess) {
+            return response()->json([
+                'message' => 'У вас нет доступа к этому файлу'
+            ], 403);
+        }
+
+        // Проверяем существование файла
+        $filePath = storage_path('app/' . $proof->file_path);
+
+        if (!file_exists($filePath)) {
             return response()->json([
                 'message' => 'Файл не найден на сервере'
             ], 404);

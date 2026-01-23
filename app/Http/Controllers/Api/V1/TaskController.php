@@ -17,6 +17,7 @@ use App\Services\TaskFilterService;
 use App\Services\TaskProofService;
 use App\Services\TaskService;
 use App\Services\TaskVerificationService;
+use App\Jobs\StoreTaskSharedProofsJob;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,6 +81,7 @@ class TaskController extends Controller
             'responses.user',
             'responses.proofs',
             'responses.verifier',
+            'sharedProofs',
         ])->find($id);
 
         if (! $task) {
@@ -331,10 +333,9 @@ class TaskController extends Controller
                 if ($completeForAll && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
                     // Create responses for ALL assigned users
                     $assignedUserIds = $task->assignments->pluck('user_id')->unique()->toArray();
-                    $firstResponse = null;
 
                     foreach ($assignedUserIds as $assignedUserId) {
-                        $response = $task->responses()->updateOrCreate(
+                        $task->responses()->updateOrCreate(
                             ['user_id' => $assignedUserId],
                             [
                                 'status' => $status,
@@ -343,26 +344,31 @@ class TaskController extends Controller
                                 'completed_during_shift' => false,
                             ]
                         );
-                        // Сохраняем первый ответ для привязки файлов
-                        if ($firstResponse === null) {
-                            $firstResponse = $response;
-                        }
                     }
 
-                    // Загрузка файлов доказательств к первому ответу
-                    if ($request->hasFile('proof_files') && $firstResponse) {
-                        try {
-                            $this->taskProofService->storeProofs(
-                                $firstResponse,
-                                $request->file('proof_files'),
-                                $task->dealership_id
-                            );
-                            $this->taskVerificationService->recordSubmission($firstResponse, $user);
-                        } catch (InvalidArgumentException $e) {
-                            return response()->json([
-                                'message' => $e->getMessage(),
-                            ], 422);
+                    // Загрузка файлов как ОБЩИХ файлов задачи (не привязаны к пользователю)
+                    if ($request->hasFile('proof_files')) {
+                        $files = $request->file('proof_files');
+                        $filesData = [];
+
+                        foreach ($files as $file) {
+                            // Сохраняем во временное хранилище
+                            $tempPath = $file->store('temp/task_proofs');
+
+                            $filesData[] = [
+                                'path' => $tempPath,
+                                'original_name' => $file->getClientOriginalName(),
+                                'mime' => $file->getMimeType(),
+                                'size' => $file->getSize(),
+                            ];
                         }
+
+                        // Запускаем Job для асинхронной обработки
+                        \App\Jobs\StoreTaskSharedProofsJob::dispatch(
+                            $task->id,
+                            $filesData,
+                            $task->dealership_id
+                        );
                     }
                 } else {
                     // Проверяем, это повторная отправка после отклонения
@@ -411,7 +417,7 @@ class TaskController extends Controller
 
         return response()->json(
             $task->refresh()
-                ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier'])
+                ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier', 'sharedProofs'])
                 ->toApiArray()
         );
     }
