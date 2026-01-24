@@ -174,6 +174,34 @@ class TaskVerificationService
     }
 
     /**
+     * Отклонить все pending_review ответы для задачи.
+     *
+     * Универсальный метод — работает для любых групповых задач,
+     * независимо от наличия shared_proofs.
+     *
+     * @param Task $task Задача
+     * @param User $verifier Верификатор (менеджер/владелец)
+     * @param string $reason Причина отклонения
+     */
+    public function rejectAllForTask(Task $task, User $verifier, string $reason): void
+    {
+        DB::transaction(function () use ($task, $verifier, $reason) {
+            $pendingResponses = $task->responses()
+                ->where('status', 'pending_review')
+                ->get();
+
+            foreach ($pendingResponses as $response) {
+                $this->rejectSingleResponse($response, $verifier, $reason);
+            }
+
+            // Удаляем shared_proofs если есть
+            if ($task->sharedProofs()->exists()) {
+                $this->taskProofService->deleteSharedProofs($task);
+            }
+        });
+    }
+
+    /**
      * Записать повторную отправку доказательства.
      *
      * @param TaskResponse $response Ответ на задачу

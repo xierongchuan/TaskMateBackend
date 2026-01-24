@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Task;
 use App\Models\TaskResponse;
 use App\Services\TaskVerificationService;
 use App\Traits\HasDealershipAccess;
@@ -130,6 +131,60 @@ class TaskVerificationController extends Controller
             'message' => 'Доказательство отклонено',
             'data' => $task->refresh()
                 ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier'])
+                ->toApiArray()
+        ]);
+    }
+
+    /**
+     * Отклонить все pending_review ответы для задачи.
+     *
+     * Используется для групповых задач — отклоняет все ожидающие
+     * проверки ответы одним действием с одной причиной.
+     *
+     * @param Request $request
+     * @param int|string $taskId ID задачи
+     * @return JsonResponse
+     */
+    public function rejectAll(Request $request, $taskId): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $task = Task::with(['responses.proofs', 'sharedProofs'])->find($taskId);
+
+        if (!$task) {
+            return response()->json([
+                'message' => 'Задача не найдена'
+            ], 404);
+        }
+
+        /** @var \App\Models\User $currentUser */
+        $currentUser = auth()->user();
+
+        // Проверка доступа к автосалону
+        if (!$this->isOwner($currentUser)) {
+            if (!$this->hasAccessToDealership($currentUser, $task->dealership_id)) {
+                return response()->json([
+                    'message' => 'У вас нет доступа к этой задаче'
+                ], 403);
+            }
+        }
+
+        // Проверяем наличие pending_review responses
+        $pendingCount = $task->responses->where('status', 'pending_review')->count();
+        if ($pendingCount === 0) {
+            return response()->json([
+                'message' => 'Нет ответов, ожидающих проверки'
+            ], 422);
+        }
+
+        $this->verificationService->rejectAllForTask($task, $currentUser, $validated['reason']);
+
+        return response()->json([
+            'message' => 'Все ответы отклонены',
+            'data' => $task->refresh()
+                ->load(['assignments.user', 'responses.user', 'responses.proofs', 'responses.verifier', 'sharedProofs'])
                 ->toApiArray()
         ]);
     }

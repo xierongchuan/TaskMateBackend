@@ -240,6 +240,19 @@ class TaskProofService
     }
 
     /**
+     * Удалить один общий файл задачи (shared_proof).
+     *
+     * @param \App\Models\TaskSharedProof $proof Общий файл задачи
+     */
+    public function deleteSharedProof(\App\Models\TaskSharedProof $proof): void
+    {
+        if (Storage::disk('local')->exists($proof->file_path)) {
+            Storage::disk('local')->delete($proof->file_path);
+        }
+        $proof->delete();
+    }
+
+    /**
      * Удалить все общие файлы задачи (shared_proofs).
      *
      * Используется при отклонении групповой задачи с complete_for_all.

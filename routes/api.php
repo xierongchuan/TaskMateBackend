@@ -129,11 +129,14 @@ Route::prefix('v1')->group(function () {
             // (download вынесен за пределы auth:sanctum - доступ по подписанному URL)
             Route::get('/task-proofs/{id}', [TaskProofController::class, 'show']);
             Route::delete('/task-proofs/{id}', [TaskProofController::class, 'destroy']);
+            Route::delete('/task-shared-proofs/{id}', [TaskProofController::class, 'destroyShared']);
 
             // Task Verification - верификация доказательств (только managers и owners)
             Route::post('/task-responses/{id}/approve', [TaskVerificationController::class, 'approve'])
                 ->middleware('role:manager,owner');
             Route::post('/task-responses/{id}/reject', [TaskVerificationController::class, 'reject'])
+                ->middleware('role:manager,owner');
+            Route::post('/tasks/{id}/reject-all-responses', [TaskVerificationController::class, 'rejectAll'])
                 ->middleware('role:manager,owner');
 
             // Task Generators - READ операции

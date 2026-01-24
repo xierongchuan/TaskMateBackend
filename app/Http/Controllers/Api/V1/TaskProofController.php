@@ -229,6 +229,45 @@ class TaskProofController extends Controller
     }
 
     /**
+     * Удалить общий файл задачи (shared proof).
+     *
+     * Доступно только менеджерам и владельцам.
+     *
+     * @param int|string $id ID общего файла
+     * @return JsonResponse
+     */
+    public function destroyShared($id): JsonResponse
+    {
+        $proof = TaskSharedProof::with(['task'])->find($id);
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Файл не найден'
+            ], 404);
+        }
+
+        /** @var \App\Models\User $currentUser */
+        $currentUser = auth()->user();
+        $task = $proof->task;
+
+        // Проверка доступа (только менеджер/владелец автосалона)
+        $hasManageAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id)
+            && in_array($currentUser->role->value, ['manager', 'owner']);
+
+        if (!$hasManageAccess && !$this->isOwner($currentUser)) {
+            return response()->json([
+                'message' => 'У вас нет прав для удаления этого файла'
+            ], 403);
+        }
+
+        $this->taskProofService->deleteSharedProof($proof);
+
+        return response()->json([
+            'message' => 'Файл успешно удалён'
+        ]);
+    }
+
+    /**
      * Определить Content-Disposition для типа файла.
      *
      * Изображения и PDF открываются в браузере (inline),
