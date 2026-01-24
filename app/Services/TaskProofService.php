@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Jobs\DeleteProofFileJob;
 use App\Models\TaskProof;
 use App\Models\TaskResponse;
 use Illuminate\Http\UploadedFile;
@@ -221,10 +222,9 @@ class TaskProofService
      */
     public function deleteProof(TaskProof $proof): void
     {
-        if (Storage::disk(self::STORAGE_DISK)->exists($proof->file_path)) {
-            Storage::disk(self::STORAGE_DISK)->delete($proof->file_path);
-        }
+        $filePath = $proof->file_path;
         $proof->delete();
+        DeleteProofFileJob::dispatch($filePath, self::STORAGE_DISK);
     }
 
     /**
@@ -246,10 +246,9 @@ class TaskProofService
      */
     public function deleteSharedProof(\App\Models\TaskSharedProof $proof): void
     {
-        if (Storage::disk('local')->exists($proof->file_path)) {
-            Storage::disk('local')->delete($proof->file_path);
-        }
+        $filePath = $proof->file_path;
         $proof->delete();
+        DeleteProofFileJob::dispatch($filePath, 'local');
     }
 
     /**
@@ -262,12 +261,7 @@ class TaskProofService
     public function deleteSharedProofs(\App\Models\Task $task): void
     {
         foreach ($task->sharedProofs as $proof) {
-            // Удаление физического файла
-            if (Storage::disk('local')->exists($proof->file_path)) {
-                Storage::disk('local')->delete($proof->file_path);
-            }
-            // Удаление записи из БД
-            $proof->delete();
+            $this->deleteSharedProof($proof);
         }
     }
 
