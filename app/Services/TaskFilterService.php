@@ -40,6 +40,7 @@ class TaskFilterService
             'responses.user',
             'responses.proofs',
             'responses.verifier',
+            'sharedProofs',
         ]);
 
         $this->applyDateRangeFilter($query, $request);

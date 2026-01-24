@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\TaskProof;
 use App\Models\TaskSharedProof;
@@ -12,6 +11,7 @@ use App\Services\TaskProofService;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -138,14 +138,15 @@ class TaskProofController extends Controller
      */
     public function downloadShared(Request $request, $id): StreamedResponse|JsonResponse
     {
-        // Проверка подписи URL
+        // Проверка подписи URL (единственная проверка безопасности)
+        // Доступ контролируется при генерации подписанного URL, а не при скачивании
         if (!$request->hasValidSignature()) {
             return response()->json([
                 'message' => 'Ссылка недействительна или истекла'
             ], 403);
         }
 
-        $proof = TaskSharedProof::with(['task'])->find($id);
+        $proof = TaskSharedProof::find($id);
 
         if (!$proof) {
             return response()->json([
@@ -153,28 +154,8 @@ class TaskProofController extends Controller
             ], 404);
         }
 
-        $task = $proof->task;
-
-        // Проверка доступа (пользователь должен быть участником или иметь права)
-        $user = auth()->user();
-        if (!$user) {
-            return response()->json([
-                'message' => 'Требуется авторизация'
-            ], 401);
-        }
-
-        $hasAccess = $task->dealership_id === $user->dealership_id &&
-                     ($task->assignments()->where('user_id', $user->id)->exists() ||
-                      in_array($user->role, [Role::MANAGER, Role::OWNER]));
-
-        if (!$hasAccess) {
-            return response()->json([
-                'message' => 'У вас нет доступа к этому файлу'
-            ], 403);
-        }
-
         // Проверяем существование файла
-        $filePath = storage_path('app/' . $proof->file_path);
+        $filePath = Storage::disk('local')->path($proof->file_path);
 
         if (!file_exists($filePath)) {
             return response()->json([

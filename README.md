@@ -1,4 +1,4 @@
-# TaskMateBackend
+# TaskMate Server
 
 Backend приложение для системы TaskMate, реализующее REST API (Laravel).
 

@@ -48,5 +48,10 @@ class AppServiceProvider extends ServiceProvider
                 ? Limit::perMinute(60)->by($request->user()->id)
                 : Limit::perMinute(10)->by($request->ip());
         });
+
+        // Downloads rate limiting - higher limit for file downloads (signed URLs)
+        RateLimiter::for('downloads', function (Request $request) {
+            return Limit::perMinute(120)->by($request->ip());
+        });
     }
 }

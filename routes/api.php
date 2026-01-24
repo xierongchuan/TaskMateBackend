@@ -58,11 +58,11 @@ Route::prefix('v1')->group(function () {
     // - Проверка прав происходит при генерации URL, а не при скачивании
     Route::get('/task-proofs/{id}/download', [TaskProofController::class, 'download'])
         ->name('task-proofs.download')
-        ->middleware('throttle:api');
+        ->middleware('throttle:downloads');
 
     Route::get('/task-shared-proofs/{id}/download', [TaskProofController::class, 'downloadShared'])
         ->name('task-shared-proofs.download')
-        ->middleware('throttle:api');
+        ->middleware('throttle:downloads');
 
     Route::middleware(['auth:sanctum', 'throttle:api'])
         ->group(function () {

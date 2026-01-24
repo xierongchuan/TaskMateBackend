@@ -61,8 +61,12 @@ class StoreTaskSharedProofsJob implements ShouldQueue
 
         if (!$task) {
             Log::warning('Task not found for shared proofs', ['task_id' => $this->taskId]);
+            $this->cleanupTempFiles();
             return;
         }
+
+        // Очистка ghost-записей (файлы не существуют на диске)
+        $this->cleanupGhostRecords($task);
 
         // Проверка лимитов
         $existingCount = $task->sharedProofs()->count();
@@ -75,6 +79,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
                 'new' => $newCount,
                 'max' => self::MAX_FILES,
             ]);
+            $this->cleanupTempFiles();
             return;
         }
 
@@ -91,6 +96,11 @@ class StoreTaskSharedProofsJob implements ShouldQueue
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        // Если ни один файл не сохранён, очищаем temp
+        if ($storedCount === 0) {
+            $this->cleanupTempFiles();
         }
 
         Log::info('StoreTaskSharedProofsJob completed', [
@@ -117,7 +127,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
             $extension
         );
 
-        $destinationPath = "private/task_proofs/{$this->dealershipId}/{$filename}";
+        $destinationPath = "task_proofs/{$this->dealershipId}/{$filename}";
 
         // Копируем из temp
         if (!Storage::move($fileData['path'], $destinationPath)) {
@@ -132,5 +142,36 @@ class StoreTaskSharedProofsJob implements ShouldQueue
             'mime_type' => $fileData['mime'],
             'file_size' => $fileData['size'],
         ]);
+    }
+
+    /**
+     * Удалить ghost-записи (DB-записи без файлов на диске).
+     */
+    private function cleanupGhostRecords(Task $task): void
+    {
+        $proofs = $task->sharedProofs()->get();
+
+        foreach ($proofs as $proof) {
+            if (!Storage::exists($proof->file_path)) {
+                Log::warning('Removing ghost shared proof record', [
+                    'proof_id' => $proof->id,
+                    'task_id' => $task->id,
+                    'file_path' => $proof->file_path,
+                ]);
+                $proof->delete();
+            }
+        }
+    }
+
+    /**
+     * Очистить temp-файлы при неуспешной обработке.
+     */
+    private function cleanupTempFiles(): void
+    {
+        foreach ($this->filesData as $fileData) {
+            if (Storage::exists($fileData['path'])) {
+                Storage::delete($fileData['path']);
+            }
+        }
     }
 }

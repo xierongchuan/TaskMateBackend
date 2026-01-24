@@ -21,6 +21,7 @@ use App\Jobs\StoreTaskSharedProofsJob;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class TaskController extends Controller
@@ -363,8 +364,14 @@ class TaskController extends Controller
                             ];
                         }
 
+                        // Обеспечиваем group-write на temp-каталог для queue worker (www-data)
+                        $tempDir = Storage::path('temp/task_proofs');
+                        if (is_dir($tempDir)) {
+                            chmod($tempDir, 0775);
+                        }
+
                         // Запускаем Job для асинхронной обработки
-                        \App\Jobs\StoreTaskSharedProofsJob::dispatch(
+                        StoreTaskSharedProofsJob::dispatch(
                             $task->id,
                             $filesData,
                             $task->dealership_id
