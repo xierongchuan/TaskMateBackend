@@ -1,5 +1,5 @@
 # ---------------- STAGE: build ----------------
-FROM dunglas/frankenphp:1-php8.4 AS build
+FROM docker.io/dunglas/frankenphp:1-php8.4 AS build
 
 # 1) Системные библиотеки для сборки расширений
 RUN apt-get update -y \
@@ -29,7 +29,7 @@ RUN set -eux; \
   docker-php-ext-enable redis || true
 
 # 4) Composer (официальный образ)
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=docker.io/library/composer:latest /usr/bin/composer /usr/bin/composer
 
 # 5) Копирование composer-файлов и установка зависимостей
 COPY composer.json composer.lock ./
@@ -43,7 +43,7 @@ RUN chown -R www-data:www-data storage storage/framework bootstrap/cache \
   && chmod -R 755 storage storage/framework bootstrap/cache || true
 
 # ---------------- STAGE: runner ----------------
-FROM dunglas/frankenphp:1-php8.4 AS runner
+FROM docker.io/dunglas/frankenphp:1-php8.4 AS runner
 
 WORKDIR /app
 
