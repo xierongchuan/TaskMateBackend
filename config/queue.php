@@ -17,6 +17,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | File Cleanup Queue Connection
+    |--------------------------------------------------------------------------
+    |
+    | Соединение для очереди удаления файлов (DeleteProofFileJob).
+    | В production используется RabbitMQ, в тестах — sync.
+    |
+    */
+    'file_cleanup_connection' => env('FILE_CLEANUP_QUEUE_CONNECTION', 'rabbitmq'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Queue Connections
     |--------------------------------------------------------------------------
     |
@@ -79,6 +90,23 @@ return [
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
             'block_for' => null,
             'after_commit' => false,
+        ],
+
+        'rabbitmq' => [
+            'driver' => 'rabbitmq',
+            'queue' => env('RABBITMQ_QUEUE', 'file_cleanup'),
+            'connection' => 'default',
+            'hosts' => [
+                [
+                    'host' => env('RABBITMQ_HOST', 'rabbitmq'),
+                    'port' => (int) env('RABBITMQ_PORT', 5672),
+                    'user' => env('RABBITMQ_USER', 'taskmate'),
+                    'password' => env('RABBITMQ_PASSWORD', 'taskmate_secret'),
+                    'vhost' => env('RABBITMQ_VHOST', '/'),
+                ],
+            ],
+            'options' => [],
+            'worker' => env('RABBITMQ_WORKER', 'default'),
         ],
 
     ],

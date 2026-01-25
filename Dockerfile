@@ -19,7 +19,7 @@ WORKDIR /app
 # 2) PHP-расширения: PostgreSQL, GD и т.д.
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j$(nproc) \
-  mbstring exif pcntl bcmath zip intl \
+  mbstring exif pcntl bcmath zip intl sockets \
   pdo pdo_pgsql gd \
   && docker-php-ext-install pgsql
 
@@ -62,7 +62,7 @@ RUN apt-get update -y \
 # Включаем необходимые расширения в runtime
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j$(nproc) \
-  mbstring exif pcntl bcmath zip intl \
+  mbstring exif pcntl bcmath zip intl sockets \
   pdo pdo_pgsql gd \
   && docker-php-ext-install pgsql
 
