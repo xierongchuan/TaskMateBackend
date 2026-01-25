@@ -17,9 +17,6 @@ Artisan::command('workers:test {type=all}', function ($type) {
     $this->info('Use "php artisan queue:work --queue=notifications" to process the jobs');
 })->purpose('Test notification workers manually');
 
-// Process recurring tasks - runs hourly
-Schedule::job(new \App\Jobs\ProcessRecurringTasksJob())->hourly();
-
 // Process task generators - runs every 5 minutes to ensure tasks are generated promptly
 Schedule::job(new \App\Jobs\ProcessTaskGeneratorsJob())->everyFiveMinutes();
 

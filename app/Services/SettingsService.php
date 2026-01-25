@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class SettingsService
 {
@@ -28,10 +29,22 @@ class SettingsService
             return Cache::get($cacheKey);
         }
 
-        // Query database
-        $setting = Setting::where('key', $key)
-            ->where('dealership_id', $dealershipId)
-            ->first();
+        // Query database with error handling
+        try {
+            $setting = Setting::where('key', $key)
+                ->where('dealership_id', $dealershipId)
+                ->first();
+        } catch (\Exception $e) {
+            // Логируем ошибку, но не раскрываем детали пользователю
+            Log::warning('SettingsService: ошибка при получении настройки', [
+                'key' => $key,
+                'dealership_id' => $dealershipId,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Возвращаем default-значение при ошибке БД
+            return $default;
+        }
 
         if ($setting) {
             $value = $setting->getTypedValue();

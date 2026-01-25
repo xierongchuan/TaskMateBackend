@@ -23,7 +23,6 @@ class TaskFactory extends Factory
             'dealership_id' => AutoDealership::factory(),
             'appear_date' => fake()->dateTimeBetween('-7 days', 'now'), // Задачи появляются от недели назад до сейчас
             'deadline' => fake()->dateTimeBetween('now', '+30 days'), // Дедлайн обязателен
-            'recurrence' => null,
             'task_type' => fake()->randomElement(['individual', 'group']),
             'response_type' => fake()->randomElement(['notification', 'completion', 'completion_with_proof']),
             'tags' => fake()->optional(0.6)->randomElements(['важное', 'срочное', 'рутина', 'продажа', 'клиент'], rand(1, 3)),
@@ -31,27 +30,6 @@ class TaskFactory extends Factory
             'postpone_count' => 0,
             'archived_at' => null,
         ];
-    }
-
-    public function daily(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'recurrence' => 'daily',
-        ]);
-    }
-
-    public function weekly(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'recurrence' => 'weekly',
-        ]);
-    }
-
-    public function monthly(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'recurrence' => 'monthly',
-        ]);
     }
 
     public function notification(): static

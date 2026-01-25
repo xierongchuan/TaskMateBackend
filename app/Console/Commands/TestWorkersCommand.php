@@ -17,7 +17,7 @@ class TestWorkersCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'workers:test {type=all : Type of worker to test (overdue|upcoming|unresponded|scheduled|recurring|all)}';
+    protected $signature = 'workers:test {type=all : Type of worker to test (overdue|upcoming|unresponded|scheduled|all)}';
 
     /**
      * The console command description.
@@ -57,17 +57,12 @@ class TestWorkersCommand extends Command
                 SendScheduledTasksJob::dispatch();
                 break;
 
-            case 'recurring':
-                $this->error('ProcessRecurringTasksJob has been removed - tasks should only be created via API');
-                break;
-
             case 'all':
                 $this->info('Dispatching all notification workers...');
                 CheckOverdueTasksJob::dispatch();
                 CheckUpcomingDeadlinesJob::dispatch();
                 CheckUnrespondedTasksJob::dispatch();
                 SendScheduledTasksJob::dispatch();
-                $this->info('ProcessRecurringTasksJob skipped - removed (tasks should only be created via API)');
                 break;
 
             default:
