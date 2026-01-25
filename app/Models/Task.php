@@ -293,6 +293,9 @@ class Task extends Model
                         : null,
                     'verified_by' => $response->verified_by,
                     'rejection_reason' => $response->rejection_reason,
+                    'rejection_count' => $response->rejection_count ?? 0,
+                    'submission_source' => $response->submission_source ?? 'individual',
+                    'uses_shared_proofs' => $response->uses_shared_proofs ?? false,
                 ];
 
                 // Include user info if loaded

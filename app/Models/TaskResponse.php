@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $verified_by
  * @property string|null $rejection_reason
  * @property int $rejection_count
+ * @property string $submission_source
+ * @property bool $uses_shared_proofs
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property-read Task $task
@@ -53,6 +55,8 @@ class TaskResponse extends Model
         'verified_by',
         'rejection_reason',
         'rejection_count',
+        'submission_source',
+        'uses_shared_proofs',
         'created_at',
     ];
 
@@ -63,6 +67,7 @@ class TaskResponse extends Model
         'updated_at' => 'datetime',
         'completed_during_shift' => 'boolean',
         'rejection_count' => 'integer',
+        'uses_shared_proofs' => 'boolean',
     ];
 
     public function task(): BelongsTo
@@ -127,5 +132,38 @@ class TaskResponse extends Model
     public function isCompleted(): bool
     {
         return $this->status === 'completed';
+    }
+
+    /**
+     * Проверить, был ли ответ создан через complete_for_all.
+     */
+    public function wasSharedSubmission(): bool
+    {
+        return $this->submission_source === 'shared';
+    }
+
+    /**
+     * Проверить, можно ли переотправить ответ.
+     */
+    public function canResubmit(): bool
+    {
+        return $this->status === 'rejected';
+    }
+
+    /**
+     * Получить эффективные доказательства.
+     *
+     * Если uses_shared_proofs = true, возвращает shared_proofs задачи.
+     * Иначе возвращает индивидуальные proofs этого response.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<TaskProof|\App\Models\TaskSharedProof>
+     */
+    public function getEffectiveProofsAttribute(): \Illuminate\Database\Eloquent\Collection
+    {
+        if ($this->uses_shared_proofs) {
+            return $this->task->sharedProofs ?? collect();
+        }
+
+        return $this->proofs ?? collect();
     }
 }

@@ -140,27 +140,8 @@ describe('Task Model', function () {
         expect($task->deadline)->toBeInstanceOf(Carbon::class);
     });
 
-    it('can handle recurring tasks', function () {
-        // Arrange
-        $dealership = AutoDealership::factory()->create();
-
-        // Act
-        $task = Task::create([
-            'title' => 'Recurring Task',
-            'creator_id' => User::factory()->create()->id,
-            'dealership_id' => $dealership->id,
-            'appear_date' => now(),
-            'deadline' => now()->addHours(8),
-            'task_type' => 'individual',
-            'response_type' => 'notification',
-            'recurrence' => 'daily',
-            'recurrence_time' => '09:00',
-        ]);
-
-        // Assert
-        expect($task->recurrence)->toBe('daily')
-            ->and($task->recurrence_time)->toBe('09:00');
-    });
+    // Примечание: тест 'it can handle recurring tasks' удален, так как
+    // повторяемость задач теперь реализована через TaskGenerator
 
     it('can query tasks by status', function () {
         // Arrange

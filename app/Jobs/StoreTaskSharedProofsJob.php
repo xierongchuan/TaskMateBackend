@@ -35,6 +35,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         'application/vnd.ms-excel', // .xls
         'text/csv', 'text/plain', 'application/json',
         'application/vnd.oasis.opendocument.text', // .odt
+        'text/rtf', // .rtf файлы (и .doc которые на самом деле RTF)
         // Архивы
         'application/zip', 'application/x-tar', 'application/x-7z-compressed',
         'application/x-compressed', 'application/octet-stream',

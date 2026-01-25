@@ -59,8 +59,8 @@ class TaskVerificationService
     /**
      * Отклонить доказательство выполнения задачи.
      *
-     * Для групповых задач с complete_for_all (shared_proofs) отклоняет всех исполнителей.
-     * Для остальных задач отклоняет только текущий response.
+     * ВАЖНО: Всегда отклоняет только один response, независимо от наличия shared_proofs.
+     * Для группового отклонения используйте rejectAllForTask().
      *
      * @param TaskResponse $response Ответ на задачу
      * @param User $verifier Верификатор (менеджер/владелец)
@@ -70,53 +70,25 @@ class TaskVerificationService
     public function reject(TaskResponse $response, User $verifier, string $reason): TaskResponse
     {
         return DB::transaction(function () use ($response, $verifier, $reason) {
-            $task = $response->task;
+            $previousStatus = $response->status;
 
-            // Проверяем, есть ли у задачи shared_proofs (complete_for_all)
-            $hasSharedProofs = $task->sharedProofs()->exists();
-
-            if ($hasSharedProofs) {
-                // Групповая задача с complete_for_all → отклонить всех
-                $this->rejectAllPendingResponses($task, $verifier, $reason);
+            // Удаляем только индивидуальные файлы (НЕ shared_proofs!)
+            if (! $response->uses_shared_proofs) {
+                $proofCount = $response->proofs()->count();
+                $this->taskProofService->deleteAllProofs($response);
             } else {
-                // Индивидуальная задача или отдельный response
-                $this->rejectSingleResponse($response, $verifier, $reason);
+                // Если использовал shared_proofs, у него нет индивидуальных файлов
+                $proofCount = 0;
             }
 
-            return $response->fresh();
-        });
-    }
-
-    /**
-     * Отклонить все pending_review responses для групповой задачи.
-     *
-     * Используется для complete_for_all задач с shared_proofs.
-     *
-     * @param \App\Models\Task $task Задача
-     * @param User $verifier Верификатор
-     * @param string $reason Причина отклонения
-     */
-    private function rejectAllPendingResponses(\App\Models\Task $task, User $verifier, string $reason): void
-    {
-        // Получаем все pending_review responses
-        $pendingResponses = $task->responses()
-            ->where('status', 'pending_review')
-            ->get();
-
-        foreach ($pendingResponses as $response) {
-            $previousStatus = $response->status;
-            $proofCount = $response->proofs()->count();
-
-            // Удаляем индивидуальные файлы каждого response
-            $this->taskProofService->deleteAllProofs($response);
-
-            // Отклоняем response
+            // Обновляем response - переключаем на индивидуальный режим
             $response->update([
                 'status' => 'rejected',
                 'verified_at' => null,
                 'verified_by' => null,
                 'rejection_reason' => $reason,
                 'rejection_count' => ($response->rejection_count ?? 0) + 1,
+                'uses_shared_proofs' => false, // Для переотправки нужны индивидуальные файлы
             ]);
 
             // Записываем в историю
@@ -129,18 +101,13 @@ class TaskVerificationService
                 $proofCount,
                 $reason
             );
-        }
 
-        // Удаляем shared_proofs ОДИН РАЗ для всей задачи
-        if ($task->sharedProofs()->exists()) {
-            $this->taskProofService->deleteSharedProofs($task);
-        }
+            return $response->fresh();
+        });
     }
 
     /**
-     * Отклонить один response.
-     *
-     * Используется для индивидуальных задач или когда нет shared_proofs.
+     * Отклонить один response (внутренний метод для bulk reject).
      *
      * @param TaskResponse $response Ответ на задачу
      * @param User $verifier Верификатор
@@ -149,10 +116,14 @@ class TaskVerificationService
     private function rejectSingleResponse(TaskResponse $response, User $verifier, string $reason): void
     {
         $previousStatus = $response->status;
-        $proofCount = $response->proofs()->count();
 
-        // Удаляем все файлы доказательств
-        $this->taskProofService->deleteAllProofs($response);
+        // Удаляем только индивидуальные файлы (НЕ shared_proofs!)
+        if (! $response->uses_shared_proofs) {
+            $proofCount = $response->proofs()->count();
+            $this->taskProofService->deleteAllProofs($response);
+        } else {
+            $proofCount = 0;
+        }
 
         $response->update([
             'status' => 'rejected',
@@ -160,6 +131,7 @@ class TaskVerificationService
             'verified_by' => null,
             'rejection_reason' => $reason,
             'rejection_count' => ($response->rejection_count ?? 0) + 1,
+            'uses_shared_proofs' => false, // Для переотправки нужны индивидуальные файлы
         ]);
 
         $this->recordHistory(

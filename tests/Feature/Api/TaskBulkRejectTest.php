@@ -11,6 +11,7 @@ use App\Models\TaskSharedProof;
 use App\Models\TaskVerificationHistory;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 describe('Task Bulk Reject', function () {
@@ -88,6 +89,8 @@ describe('Task Bulk Reject', function () {
     });
 
     it('rejects all responses and deletes shared_proofs for group task with shared_proofs', function () {
+        Queue::fake();
+
         $employees = User::factory()->count(3)->create([
             'role' => Role::EMPLOYEE->value,
             'dealership_id' => $this->dealership->id,
@@ -131,9 +134,11 @@ describe('Task Bulk Reject', function () {
         $task->refresh();
         expect($task->responses()->where('status', 'rejected')->count())->toBe(3);
 
-        // Shared proofs удалены
+        // Shared proofs удалены из БД
         expect($task->sharedProofs()->count())->toBe(0);
-        Storage::disk('local')->assertMissing($path);
+
+        // Job для удаления файла поставлен в очередь
+        Queue::assertPushed(\App\Jobs\DeleteProofFileJob::class);
     });
 
     it('returns 422 when no pending_review responses exist', function () {
@@ -368,6 +373,8 @@ describe('Task Bulk Reject', function () {
     });
 
     it('deletes individual proof files on bulk reject', function () {
+        Queue::fake();
+
         $employees = User::factory()->count(2)->create([
             'role' => Role::EMPLOYEE->value,
             'dealership_id' => $this->dealership->id,
@@ -402,11 +409,6 @@ describe('Task Bulk Reject', function () {
             ]);
         }
 
-        // Проверяем, что файлы существуют
-        foreach ($proofPaths as $path) {
-            Storage::disk('task_proofs')->assertExists($path);
-        }
-
         // Bulk reject
         $this->actingAs($this->manager, 'sanctum')
             ->postJson("/api/v1/tasks/{$task->id}/reject-all-responses", [
@@ -414,12 +416,10 @@ describe('Task Bulk Reject', function () {
             ])
             ->assertOk();
 
-        // Проверяем, что файлы удалены с диска
-        foreach ($proofPaths as $path) {
-            Storage::disk('task_proofs')->assertMissing($path);
-        }
-
         // Проверяем, что записи proofs удалены из БД
         expect(TaskProof::whereIn('task_response_id', $task->responses->pluck('id'))->count())->toBe(0);
+
+        // Проверяем, что Jobs для удаления файлов поставлены в очередь
+        Queue::assertPushed(\App\Jobs\DeleteProofFileJob::class, count($proofPaths));
     });
 });

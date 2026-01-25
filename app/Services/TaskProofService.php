@@ -59,6 +59,7 @@ class TaskProofService
         'text/plain',
         'application/json',
         'application/vnd.oasis.opendocument.text', // .odt файлы
+        'text/rtf', // .rtf файлы (и .doc которые на самом деле RTF)
         // Архивы
         'application/zip',
         'application/x-tar',

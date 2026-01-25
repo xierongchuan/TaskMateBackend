@@ -201,7 +201,7 @@ describe('Task Shared Proofs', function () {
         expect($task->sharedProofs)->toHaveCount(0);
     });
 
-    it('deletes shared proofs when manager rejects task', function () {
+    it('preserves shared proofs when manager rejects single response', function () {
         $task = Task::factory()->create([
             'dealership_id' => $this->dealership->id,
             'task_type' => TaskType::GROUP->value,
@@ -220,13 +220,15 @@ describe('Task Shared Proofs', function () {
             'user_id' => $employee->id,
             'status' => 'pending_review',
             'responded_at' => now(),
+            'submission_source' => 'shared',
+            'uses_shared_proofs' => true,
         ]);
 
         // Создаем общий файл
         $file = UploadedFile::fake()->image('shared.jpg');
         $path = $file->store("private/task_proofs/{$this->dealership->id}", 'local');
 
-        $sharedProof = TaskSharedProof::create([
+        TaskSharedProof::create([
             'task_id' => $task->id,
             'file_path' => $path,
             'original_filename' => 'shared.jpg',
@@ -244,13 +246,18 @@ describe('Task Shared Proofs', function () {
             ])
             ->assertOk();
 
-        // Проверяем, что файлы удалены
+        // Проверяем, что shared proofs СОХРАНЕНЫ (не удалены)
         $task->refresh();
-        expect($task->sharedProofs)->toHaveCount(0);
-        Storage::disk('local')->assertMissing($path);
+        expect($task->sharedProofs)->toHaveCount(1);
+        Storage::disk('local')->assertExists($path);
+
+        // Проверяем, что response переключен на индивидуальный режим
+        $response->refresh();
+        expect($response->status)->toBe('rejected');
+        expect($response->uses_shared_proofs)->toBeFalse();
     });
 
-    it('rejects all pending responses when rejecting group task with shared proofs', function () {
+    it('rejects only selected response when rejecting one from group task with shared proofs', function () {
         // Создаем групповую задачу с 3 исполнителями
         $employees = User::factory()->count(3)->create([
             'role' => Role::EMPLOYEE->value,
@@ -273,6 +280,8 @@ describe('Task Shared Proofs', function () {
                 'user_id' => $employee->id,
                 'status' => 'pending_review',
                 'responded_at' => now(),
+                'submission_source' => 'shared',
+                'uses_shared_proofs' => true,
             ]);
         }
 
@@ -301,19 +310,92 @@ describe('Task Shared Proofs', function () {
             ])
             ->assertOk();
 
+        // Проверяем, что отклонен ТОЛЬКО ОДИН response
+        $task->refresh();
+        expect($task->responses()->where('status', 'rejected')->count())->toBe(1);
+        expect($task->responses()->where('status', 'pending_review')->count())->toBe(2);
+
+        // Проверяем, что shared proofs СОХРАНЕНЫ (не удалены)
+        expect($task->sharedProofs)->toHaveCount(1);
+        Storage::disk('local')->assertExists($path);
+
+        // Проверяем состояние отклоненного response
+        $firstResponse->refresh();
+        expect($firstResponse->status)->toBe('rejected');
+        expect($firstResponse->rejection_reason)->toBe('Bad quality');
+        expect($firstResponse->uses_shared_proofs)->toBeFalse();
+    });
+
+    it('deletes shared proofs when bulk rejecting all responses', function () {
+        Queue::fake();
+
+        // Создаем групповую задачу с 3 исполнителями
+        $employees = User::factory()->count(3)->create([
+            'role' => Role::EMPLOYEE->value,
+            'dealership_id' => $this->dealership->id,
+        ]);
+
+        $task = Task::factory()->create([
+            'dealership_id' => $this->dealership->id,
+            'task_type' => TaskType::GROUP->value,
+            'response_type' => 'completion_with_proof',
+        ]);
+
+        foreach ($employees as $employee) {
+            $task->assignments()->create(['user_id' => $employee->id]);
+        }
+
+        // Создаем responses для всех (как при complete_for_all)
+        foreach ($employees as $employee) {
+            $task->responses()->create([
+                'user_id' => $employee->id,
+                'status' => 'pending_review',
+                'responded_at' => now(),
+                'submission_source' => 'shared',
+                'uses_shared_proofs' => true,
+            ]);
+        }
+
+        // Создаем shared proof
+        $file = UploadedFile::fake()->image('shared.jpg');
+        $path = $file->store("private/task_proofs/{$this->dealership->id}", 'local');
+
+        TaskSharedProof::create([
+            'task_id' => $task->id,
+            'file_path' => $path,
+            'original_filename' => 'shared.jpg',
+            'mime_type' => 'image/jpeg',
+            'file_size' => $file->getSize(),
+        ]);
+
+        // Проверяем начальное состояние
+        $task->refresh();
+        expect($task->responses()->where('status', 'pending_review')->count())->toBe(3);
+        expect($task->sharedProofs)->toHaveCount(1);
+
+        // Отклоняем ВСЕ responses через bulk reject
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/v1/tasks/{$task->id}/reject-all-responses", [
+                'reason' => 'Bad quality',
+            ])
+            ->assertOk();
+
         // Проверяем, что ВСЕ responses отклонены
         $task->refresh();
         expect($task->responses()->where('status', 'rejected')->count())->toBe(3);
         expect($task->responses()->where('status', 'pending_review')->count())->toBe(0);
 
-        // Проверяем, что shared proofs удалены
+        // Проверяем, что записи shared proofs удалены из БД
         expect($task->sharedProofs)->toHaveCount(0);
-        Storage::disk('local')->assertMissing($path);
+
+        // Проверяем, что Job для удаления файла был поставлен в очередь
+        Queue::assertPushed(\App\Jobs\DeleteProofFileJob::class);
 
         // Проверяем, что у всех responses одинаковая причина отклонения
         foreach ($task->responses as $response) {
             expect($response->status)->toBe('rejected');
             expect($response->rejection_reason)->toBe('Bad quality');
+            expect($response->uses_shared_proofs)->toBeFalse();
         }
     });
 });

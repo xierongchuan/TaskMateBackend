@@ -343,6 +343,8 @@ class TaskController extends Controller
                                 'responded_at' => TimeHelper::nowUtc(),
                                 'shift_id' => null, // Manager completes on behalf
                                 'completed_during_shift' => false,
+                                'submission_source' => 'shared',
+                                'uses_shared_proofs' => true,
                             ]
                         );
                     }
@@ -394,6 +396,8 @@ class TaskController extends Controller
                             'verified_at' => null,
                             'verified_by' => null,
                             'rejection_reason' => null,
+                            'submission_source' => $isResubmission ? 'resubmitted' : 'individual',
+                            'uses_shared_proofs' => false,
                         ]
                     );
 
