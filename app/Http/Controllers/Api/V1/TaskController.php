@@ -397,10 +397,10 @@ class TaskController extends Controller
                         ]
                     );
 
-                    // Загрузка файлов доказательств
+                    // Загрузка файлов доказательств (асинхронно через очередь)
                     if ($request->hasFile('proof_files')) {
                         try {
-                            $this->taskProofService->storeProofs(
+                            $this->taskProofService->storeProofsAsync(
                                 $taskResponse,
                                 $request->file('proof_files'),
                                 $task->dealership_id

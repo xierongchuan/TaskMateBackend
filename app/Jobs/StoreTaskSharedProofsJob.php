@@ -52,7 +52,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         public readonly array $filesData,
         public readonly int $dealershipId
     ) {
-        $this->onQueue('default');
+        $this->onQueue('shared_proof_upload');
     }
 
     public function handle(): void

@@ -30,7 +30,7 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
 
     public function __construct()
     {
-        $this->onQueue('default');
+        $this->onQueue('task_generators');
     }
 
     public function handle(): void

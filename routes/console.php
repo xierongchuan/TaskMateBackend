@@ -28,3 +28,6 @@ Schedule::command('tasks:archive-completed --type=completed')->everyTenMinutes()
 
 // Archive overdue tasks N hours after shift closes - runs hourly
 Schedule::command('tasks:archive-overdue-after-shift')->hourly();
+
+// Cleanup orphaned temp proof files - runs hourly
+Schedule::command('proofs:cleanup-temp')->hourly();

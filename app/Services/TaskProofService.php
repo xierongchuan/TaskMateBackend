@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Jobs\DeleteProofFileJob;
+use App\Jobs\StoreTaskProofsJob;
 use App\Models\TaskProof;
 use App\Models\TaskResponse;
 use Illuminate\Http\UploadedFile;
@@ -213,6 +214,86 @@ class TaskProofService
 
             throw $e;
         }
+    }
+
+    /**
+     * Сохранить файлы доказательств асинхронно (через очередь).
+     *
+     * Валидация выполняется синхронно — ошибки возвращаются сразу.
+     * Файлы сохраняются во временное хранилище и передаются в Job.
+     *
+     * @param TaskResponse $response Ответ на задачу
+     * @param array<UploadedFile> $files Массив загружаемых файлов
+     * @param int $dealershipId ID автосалона
+     * @throws InvalidArgumentException
+     */
+    public function storeProofsAsync(
+        TaskResponse $response,
+        array $files,
+        int $dealershipId
+    ): void {
+        // Проверяем количество файлов
+        $existingCount = $response->proofs()->count();
+        $newCount = count($files);
+
+        if ($existingCount + $newCount > self::MAX_FILES_PER_RESPONSE) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Превышено максимальное количество файлов. Максимум: %d, уже загружено: %d, новых: %d',
+                    self::MAX_FILES_PER_RESPONSE,
+                    $existingCount,
+                    $newCount
+                )
+            );
+        }
+
+        // Проверяем общий размер
+        $existingSize = $response->proofs()->sum('file_size');
+        $newSize = array_reduce($files, fn ($carry, $file) => $carry + $file->getSize(), 0);
+
+        if ($existingSize + $newSize > self::MAX_TOTAL_SIZE) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Превышен максимальный общий размер файлов. Максимум: %d MB',
+                    self::MAX_TOTAL_SIZE / 1024 / 1024
+                )
+            );
+        }
+
+        // Валидация всех файлов (синхронно — пользователь получает ошибку сразу)
+        foreach ($files as $file) {
+            $this->validateFile($file);
+        }
+
+        // Сохранение во временное хранилище
+        $filesData = [];
+        foreach ($files as $file) {
+            $tempPath = $file->store('temp/proof_uploads');
+
+            if ($tempPath === false) {
+                // Очищаем уже сохранённые temp файлы
+                foreach ($filesData as $data) {
+                    Storage::delete($data['path']);
+                }
+                throw new InvalidArgumentException('Не удалось сохранить файл во временное хранилище');
+            }
+
+            $filesData[] = [
+                'path' => $tempPath,
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $this->getCorrectMimeType($file),
+                'size' => $file->getSize(),
+                'user_id' => $response->user_id,
+            ];
+        }
+
+        // Dispatch job
+        StoreTaskProofsJob::dispatch(
+            $response->id,
+            $filesData,
+            $dealershipId,
+            $response->task_id
+        );
     }
 
     /**

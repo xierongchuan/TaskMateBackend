@@ -33,7 +33,6 @@ class DeleteProofFileJob implements ShouldQueue
         private readonly string $filePath,
         private readonly string $disk,
     ) {
-        $this->onConnection(config('queue.file_cleanup_connection', 'rabbitmq'));
         $this->onQueue('file_cleanup');
     }
 

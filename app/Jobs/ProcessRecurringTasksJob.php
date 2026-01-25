@@ -21,7 +21,7 @@ class ProcessRecurringTasksJob implements ShouldQueue
 
     public function __construct()
     {
-        $this->onQueue('default');
+        $this->onQueue('recurring_tasks');
     }
 
     public function handle(): void

@@ -13,18 +13,7 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | File Cleanup Queue Connection
-    |--------------------------------------------------------------------------
-    |
-    | Соединение для очереди удаления файлов (DeleteProofFileJob).
-    | В production используется RabbitMQ, в тестах — sync.
-    |
-    */
-    'file_cleanup_connection' => env('FILE_CLEANUP_QUEUE_CONNECTION', 'rabbitmq'),
+    'default' => env('QUEUE_CONNECTION', 'rabbitmq'),
 
     /*
     |--------------------------------------------------------------------------
