@@ -21,10 +21,11 @@ class TaskFactory extends Factory
             'comment' => fake()->optional()->sentence(),
             'creator_id' => User::factory(),
             'dealership_id' => AutoDealership::factory(),
-            'appear_date' => fake()->dateTimeBetween('-7 days', 'now'), // Задачи появляются от недели назад до сейчас
-            'deadline' => fake()->dateTimeBetween('now', '+30 days'), // Дедлайн обязателен
+            'appear_date' => fake()->dateTimeBetween('-7 days', 'now'),
+            'deadline' => fake()->dateTimeBetween('now', '+30 days'),
             'task_type' => fake()->randomElement(['individual', 'group']),
             'response_type' => fake()->randomElement(['notification', 'completion', 'completion_with_proof']),
+            'priority' => fake()->randomElement(['low', 'medium', 'high']),
             'tags' => fake()->optional(0.6)->randomElements(['важное', 'срочное', 'рутина', 'продажа', 'клиент'], rand(1, 3)),
             'is_active' => true,
             'postpone_count' => 0,
@@ -32,6 +33,9 @@ class TaskFactory extends Factory
         ];
     }
 
+    /**
+     * Задача с типом notification (уведомление).
+     */
     public function notification(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -39,6 +43,9 @@ class TaskFactory extends Factory
         ]);
     }
 
+    /**
+     * Задача с типом completion (выполнение).
+     */
     public function completion(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -46,6 +53,9 @@ class TaskFactory extends Factory
         ]);
     }
 
+    /**
+     * Задача с типом completion_with_proof, требующая доказательства.
+     */
     public function completionWithProof(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -53,11 +63,57 @@ class TaskFactory extends Factory
         ]);
     }
 
-    public function archived(): static
+    /**
+     * Архивированная задача.
+     */
+    public function archived(?string $reason = 'completed'): static
     {
         return $this->state(fn (array $attributes) => [
             'archived_at' => now(),
+            'archive_reason' => $reason,
             'is_active' => false,
+        ]);
+    }
+
+    /**
+     * Индивидуальная задача.
+     */
+    public function individual(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'task_type' => 'individual',
+        ]);
+    }
+
+    /**
+     * Групповая задача.
+     */
+    public function group(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'task_type' => 'group',
+        ]);
+    }
+
+    /**
+     * Высокий приоритет.
+     */
+    public function highPriority(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'priority' => 'high',
+        ]);
+    }
+
+    /**
+     * Просроченная задача.
+     */
+    public function overdue(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'appear_date' => fake()->dateTimeBetween('-14 days', '-7 days'),
+            'deadline' => fake()->dateTimeBetween('-3 days', '-1 day'),
+            'is_active' => true,
         ]);
     }
 }

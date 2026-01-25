@@ -7,20 +7,23 @@ namespace App\Enums;
 /**
  * Типы ответов на задачу.
  *
- * - acknowledge: достаточно подтвердить принятие задачи
- * - complete: требуется выполнить и отметить как завершённую
+ * - notification: достаточно подтвердить принятие задачи (уведомление)
+ * - completion: требуется выполнить и отметить как завершённую
+ * - completion_with_proof: требуется выполнить с загрузкой доказательств
  */
 enum ResponseType: string
 {
-    case ACKNOWLEDGE = 'acknowledge';
-    case COMPLETE = 'complete';
+    case NOTIFICATION = 'notification';
+    case COMPLETION = 'completion';
+    case COMPLETION_WITH_PROOF = 'completion_with_proof';
 
     /** Читабельная метка (Ru) */
     public function label(): string
     {
         return match ($this) {
-            self::ACKNOWLEDGE => 'Подтверждение',
-            self::COMPLETE => 'Выполнение',
+            self::NOTIFICATION => 'Уведомление',
+            self::COMPLETION => 'На выполнение',
+            self::COMPLETION_WITH_PROOF => 'С доказательством',
         };
     }
 

@@ -10,10 +10,14 @@ use App\Models\Task;
 use App\Models\TaskAssignment;
 use App\Models\TaskGenerator;
 use App\Models\TaskGeneratorAssignment;
+use App\Models\TaskProof;
 use App\Models\TaskResponse;
+use App\Models\TaskSharedProof;
+use App\Models\TaskVerificationHistory;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class TaskSeeder extends Seeder
 {
@@ -22,6 +26,30 @@ class TaskSeeder extends Seeder
      * Can be overridden by setting this static property before running the seeder.
      */
     public static int $historyDays = 30;
+
+    /**
+     * Причины отклонения для задач с доказательствами.
+     */
+    private const REJECTION_REASONS = [
+        'Нечёткое изображение, пожалуйста переснимите',
+        'На фото не видно выполненной работы',
+        'Требуется фото с другого ракурса',
+        'Файл повреждён, загрузите заново',
+        'Недостаточно доказательств выполнения',
+        'Необходимо показать результат работы',
+    ];
+
+    /**
+     * Названия задач с доказательствами.
+     */
+    private const PROOF_TASK_TITLES = [
+        'Фото отчёт по уборке территории',
+        'Фото готового автомобиля после мойки',
+        'Фото выкладки в шоуруме',
+        'Фото результата ремонта',
+        'Фото клиента с автомобилем (с согласия)',
+        'Фото чека/документов',
+    ];
 
     /**
      * Run the database seeds.
@@ -61,6 +89,7 @@ class TaskSeeder extends Seeder
 
             $this->createTaskGeneratorsWithHistory($dealership, $manager, $employees);
             $this->createOneTimeTasks($dealership, $manager, $employees);
+            $this->createTasksWithProofs($dealership, $manager, $employees);
         }
     }
 
@@ -74,7 +103,7 @@ class TaskSeeder extends Seeder
                 'recurrence_time' => '09:00',
                 'deadline_time' => '12:00',
                 'task_type' => 'group',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'priority' => 'high',
                 'tags' => ['проверка', 'автомобили'],
                 'history_days' => self::$historyDays,
@@ -87,7 +116,7 @@ class TaskSeeder extends Seeder
                 'deadline_time' => '18:00',
                 'recurrence_days_of_week' => [5], // Friday
                 'task_type' => 'individual',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'priority' => 'medium',
                 'tags' => ['отчет', 'продажи'],
                 'history_days' => self::$historyDays,
@@ -100,7 +129,7 @@ class TaskSeeder extends Seeder
                 'deadline_time' => '18:00',
                 'recurrence_days_of_month' => [-1], // Last day of month
                 'task_type' => 'group',
-                'response_type' => 'complete',
+                'response_type' => 'completion',
                 'priority' => 'high',
                 'tags' => ['инвентаризация', 'склад'],
                 'history_days' => self::$historyDays,
@@ -112,7 +141,7 @@ class TaskSeeder extends Seeder
                 'recurrence_time' => '08:00',
                 'deadline_time' => '09:30',
                 'task_type' => 'individual',
-                'response_type' => 'acknowledge',
+                'response_type' => 'notification',
                 'priority' => 'medium',
                 'tags' => ['уборка', 'шоурум'],
                 'history_days' => min(90, self::$historyDays), // Cap at historyDays
@@ -125,7 +154,7 @@ class TaskSeeder extends Seeder
                 'deadline_time' => '15:00',
                 'recurrence_days_of_week' => [1], // Monday
                 'task_type' => 'group',
-                'response_type' => 'acknowledge',
+                'response_type' => 'notification',
                 'priority' => 'low',
                 'tags' => ['совещание', 'команда'],
                 'history_days' => min(180, self::$historyDays),
@@ -338,7 +367,6 @@ class TaskSeeder extends Seeder
                 'creator_id' => $manager->id,
                 'task_type' => 'individual',
                 'title' => 'Активная задача для ' . $emp->full_name,
-                'recurrence' => null,
                 'appear_date' => Carbon::now()->subHours(rand(1, 24)),
                 'deadline' => Carbon::now()->addDays(rand(1, 7)),
             ]);
@@ -356,7 +384,6 @@ class TaskSeeder extends Seeder
                 'creator_id' => $manager->id,
                 'task_type' => 'individual',
                 'title' => 'Выполненная задача для ' . $emp->full_name,
-                'recurrence' => null,
                 'appear_date' => Carbon::now()->subDays(rand(5, 30)),
                 'deadline' => Carbon::now()->subDays(rand(1, 4)),
                 'archived_at' => Carbon::now()->subDays(rand(1, 4)),
@@ -385,7 +412,6 @@ class TaskSeeder extends Seeder
             'creator_id' => $manager->id,
             'task_type' => 'group',
             'title' => 'Групповое совещание',
-            'recurrence' => null,
             'appear_date' => Carbon::now()->subHours(2),
             'deadline' => Carbon::now()->addDays(1),
         ]);
@@ -400,5 +426,422 @@ class TaskSeeder extends Seeder
             }
         }
         $this->command->info(" - Created One-time Tasks for {$dealership->name}");
+    }
+
+    /**
+     * Создать задачи с доказательствами и верификацией.
+     */
+    private function createTasksWithProofs($dealership, $manager, array $employees): void
+    {
+        $proofsCreated = 0;
+        $verificationHistoryCreated = 0;
+
+        // 1. Задачи pending_review (на проверке)
+        $pendingReviewCount = $this->createPendingReviewTasks($dealership, $manager, $employees);
+
+        // 2. Задачи rejected (отклонённые)
+        $rejectedCount = $this->createRejectedTasks($dealership, $manager, $employees);
+
+        // 3. Задачи completed с доказательствами
+        $completedWithProofCount = $this->createCompletedWithProofTasks($dealership, $manager, $employees);
+
+        // 4. Групповые задачи с shared proofs
+        $groupWithProofCount = $this->createGroupTasksWithSharedProofs($dealership, $manager, $employees);
+
+        // 5. Просроченные задачи (overdue)
+        $overdueCount = $this->createOverdueTasks($dealership, $manager, $employees);
+
+        $this->command->info(" - Задачи с доказательствами для {$dealership->name}:");
+        $this->command->info("   - pending_review: {$pendingReviewCount}");
+        $this->command->info("   - rejected: {$rejectedCount}");
+        $this->command->info("   - completed с proof: {$completedWithProofCount}");
+        $this->command->info("   - group с shared proof: {$groupWithProofCount}");
+        $this->command->info("   - overdue: {$overdueCount}");
+    }
+
+    /**
+     * Создать задачи в статусе pending_review.
+     */
+    private function createPendingReviewTasks($dealership, $manager, array $employees): int
+    {
+        $count = 0;
+
+        foreach (array_slice($employees, 0, 3) as $employee) {
+            $task = Task::create([
+                'title' => fake()->randomElement(self::PROOF_TASK_TITLES),
+                'description' => 'Загрузите фото как подтверждение выполнения задачи',
+                'creator_id' => $manager->id,
+                'dealership_id' => $dealership->id,
+                'appear_date' => Carbon::now()->subHours(rand(4, 24)),
+                'deadline' => Carbon::now()->addHours(rand(2, 48)),
+                'task_type' => 'individual',
+                'response_type' => 'completion_with_proof',
+                'priority' => fake()->randomElement(['medium', 'high']),
+                'tags' => ['требует_фото', 'на_проверке'],
+                'is_active' => true,
+            ]);
+
+            TaskAssignment::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'assigned_at' => $task->appear_date,
+            ]);
+
+            // Создаём response в статусе pending_review
+            $response = TaskResponse::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'status' => 'pending_review',
+                'comment' => 'Задача выполнена, прошу проверить',
+                'responded_at' => Carbon::now()->subHours(rand(1, 3)),
+            ]);
+
+            // Добавляем proofs
+            $proofCount = rand(1, 3);
+            for ($i = 0; $i < $proofCount; $i++) {
+                $this->createStubProof($response);
+            }
+
+            // Добавляем verification history
+            TaskVerificationHistory::create([
+                'task_response_id' => $response->id,
+                'action' => TaskVerificationHistory::ACTION_SUBMITTED,
+                'performed_by' => $employee->id,
+                'previous_status' => 'pending',
+                'new_status' => 'pending_review',
+                'proof_count' => $proofCount,
+                'created_at' => $response->responded_at,
+            ]);
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Создать задачи в статусе rejected.
+     */
+    private function createRejectedTasks($dealership, $manager, array $employees): int
+    {
+        $count = 0;
+
+        foreach (array_slice($employees, 0, 2) as $employee) {
+            $task = Task::create([
+                'title' => fake()->randomElement(self::PROOF_TASK_TITLES),
+                'description' => 'Задача была отклонена менеджером, требуется повторная загрузка',
+                'creator_id' => $manager->id,
+                'dealership_id' => $dealership->id,
+                'appear_date' => Carbon::now()->subDays(rand(1, 3)),
+                'deadline' => Carbon::now()->addDays(rand(1, 2)),
+                'task_type' => 'individual',
+                'response_type' => 'completion_with_proof',
+                'priority' => 'high',
+                'tags' => ['требует_фото', 'отклонено'],
+                'is_active' => true,
+            ]);
+
+            TaskAssignment::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'assigned_at' => $task->appear_date,
+            ]);
+
+            $submittedAt = Carbon::now()->subDays(rand(1, 2));
+            $rejectedAt = $submittedAt->copy()->addHours(rand(2, 8));
+
+            $response = TaskResponse::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'status' => 'rejected',
+                'comment' => 'Попробую переснять',
+                'responded_at' => $submittedAt,
+                'rejection_reason' => fake()->randomElement(self::REJECTION_REASONS),
+                'rejection_count' => 1,
+            ]);
+
+            // Добавляем proofs
+            $proofCount = rand(1, 2);
+            for ($i = 0; $i < $proofCount; $i++) {
+                $this->createStubProof($response);
+            }
+
+            // История: submitted
+            TaskVerificationHistory::create([
+                'task_response_id' => $response->id,
+                'action' => TaskVerificationHistory::ACTION_SUBMITTED,
+                'performed_by' => $employee->id,
+                'previous_status' => 'pending',
+                'new_status' => 'pending_review',
+                'proof_count' => $proofCount,
+                'created_at' => $submittedAt,
+            ]);
+
+            // История: rejected
+            TaskVerificationHistory::create([
+                'task_response_id' => $response->id,
+                'action' => TaskVerificationHistory::ACTION_REJECTED,
+                'performed_by' => $manager->id,
+                'reason' => $response->rejection_reason,
+                'previous_status' => 'pending_review',
+                'new_status' => 'rejected',
+                'proof_count' => $proofCount,
+                'created_at' => $rejectedAt,
+            ]);
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Создать завершённые задачи с доказательствами.
+     */
+    private function createCompletedWithProofTasks($dealership, $manager, array $employees): int
+    {
+        $count = 0;
+
+        foreach (array_slice($employees, 0, 3) as $employee) {
+            $task = Task::create([
+                'title' => fake()->randomElement(self::PROOF_TASK_TITLES),
+                'description' => 'Задача выполнена и подтверждена менеджером',
+                'creator_id' => $manager->id,
+                'dealership_id' => $dealership->id,
+                'appear_date' => Carbon::now()->subDays(rand(3, 7)),
+                'deadline' => Carbon::now()->subDays(rand(1, 2)),
+                'task_type' => 'individual',
+                'response_type' => 'completion_with_proof',
+                'priority' => fake()->randomElement(['low', 'medium', 'high']),
+                'tags' => ['требует_фото'],
+                'is_active' => false,
+                'archived_at' => Carbon::now()->subDays(rand(1, 2)),
+                'archive_reason' => 'completed',
+            ]);
+
+            TaskAssignment::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'assigned_at' => $task->appear_date,
+            ]);
+
+            $submittedAt = $task->appear_date->copy()->addHours(rand(2, 24));
+            $approvedAt = $submittedAt->copy()->addHours(rand(1, 4));
+
+            $response = TaskResponse::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'status' => 'completed',
+                'comment' => 'Готово!',
+                'responded_at' => $submittedAt,
+                'verified_at' => $approvedAt,
+                'verified_by' => $manager->id,
+            ]);
+
+            // Добавляем proofs
+            $proofCount = rand(1, 3);
+            for ($i = 0; $i < $proofCount; $i++) {
+                $this->createStubProof($response);
+            }
+
+            // История: submitted
+            TaskVerificationHistory::create([
+                'task_response_id' => $response->id,
+                'action' => TaskVerificationHistory::ACTION_SUBMITTED,
+                'performed_by' => $employee->id,
+                'previous_status' => 'pending',
+                'new_status' => 'pending_review',
+                'proof_count' => $proofCount,
+                'created_at' => $submittedAt,
+            ]);
+
+            // История: approved
+            TaskVerificationHistory::create([
+                'task_response_id' => $response->id,
+                'action' => TaskVerificationHistory::ACTION_APPROVED,
+                'performed_by' => $manager->id,
+                'previous_status' => 'pending_review',
+                'new_status' => 'completed',
+                'proof_count' => $proofCount,
+                'created_at' => $approvedAt,
+            ]);
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Создать групповые задачи с shared proofs.
+     */
+    private function createGroupTasksWithSharedProofs($dealership, $manager, array $employees): int
+    {
+        if (count($employees) < 2) {
+            return 0;
+        }
+
+        $count = 0;
+
+        for ($i = 0; $i < 2; $i++) {
+            $task = Task::create([
+                'title' => 'Групповая задача: ' . fake()->randomElement(['Уборка территории', 'Подготовка к открытию', 'Инвентаризация']),
+                'description' => 'Групповая задача с общими доказательствами',
+                'creator_id' => $manager->id,
+                'dealership_id' => $dealership->id,
+                'appear_date' => Carbon::now()->subDays(rand(2, 5)),
+                'deadline' => Carbon::now()->subDays(rand(0, 1)),
+                'task_type' => 'group',
+                'response_type' => 'completion_with_proof',
+                'priority' => 'medium',
+                'tags' => ['групповая', 'требует_фото'],
+                'is_active' => false,
+                'archived_at' => Carbon::now()->subHours(rand(12, 48)),
+                'archive_reason' => 'completed',
+            ]);
+
+            // Назначаем всех сотрудников
+            foreach ($employees as $emp) {
+                TaskAssignment::create([
+                    'task_id' => $task->id,
+                    'user_id' => $emp->id,
+                    'assigned_at' => $task->appear_date,
+                ]);
+            }
+
+            // Создаём shared proofs (загружены менеджером)
+            $sharedProofCount = rand(1, 2);
+            for ($j = 0; $j < $sharedProofCount; $j++) {
+                $this->createSharedProof($task);
+            }
+
+            // Создаём responses для всех сотрудников
+            $completedAt = $task->archived_at;
+            foreach ($employees as $emp) {
+                TaskResponse::create([
+                    'task_id' => $task->id,
+                    'user_id' => $emp->id,
+                    'status' => 'completed',
+                    'responded_at' => $completedAt,
+                    'verified_at' => $completedAt,
+                    'verified_by' => $manager->id,
+                ]);
+            }
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Создать просроченные задачи.
+     */
+    private function createOverdueTasks($dealership, $manager, array $employees): int
+    {
+        $count = 0;
+
+        foreach (array_slice($employees, 0, 2) as $employee) {
+            $task = Task::create([
+                'title' => 'Просроченная задача: ' . fake()->sentence(3),
+                'description' => 'Эта задача не была выполнена в срок',
+                'creator_id' => $manager->id,
+                'dealership_id' => $dealership->id,
+                'appear_date' => Carbon::now()->subDays(rand(3, 7)),
+                'deadline' => Carbon::now()->subDays(rand(1, 2)),
+                'task_type' => 'individual',
+                'response_type' => 'completion',
+                'priority' => 'high',
+                'tags' => ['просрочено'],
+                'is_active' => true, // Активна, но просрочена
+            ]);
+
+            TaskAssignment::create([
+                'task_id' => $task->id,
+                'user_id' => $employee->id,
+                'assigned_at' => $task->appear_date,
+            ]);
+
+            // Без response - задача просрочена и не выполнена
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Создать stub файл доказательства.
+     */
+    private function createStubProof(TaskResponse $response): TaskProof
+    {
+        $mimeTypes = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'video/mp4' => 'mp4',
+            'application/pdf' => 'pdf',
+        ];
+
+        $mimeType = fake()->randomElement(array_keys($mimeTypes));
+        $extension = $mimeTypes[$mimeType];
+
+        $fileSizes = [
+            'image/jpeg' => [100000, 5000000],
+            'image/png' => [50000, 3000000],
+            'video/mp4' => [1000000, 50000000],
+            'application/pdf' => [50000, 5000000],
+        ];
+
+        [$minSize, $maxSize] = $fileSizes[$mimeType];
+
+        $prefixes = match ($mimeType) {
+            'image/jpeg', 'image/png' => ['фото', 'снимок', 'IMG'],
+            'video/mp4' => ['видео', 'VID'],
+            'application/pdf' => ['документ', 'отчёт'],
+            default => ['файл'],
+        };
+
+        return TaskProof::create([
+            'task_response_id' => $response->id,
+            'file_path' => 'task_proofs/demo/stub_' . Str::uuid() . '.' . $extension,
+            'original_filename' => fake()->randomElement($prefixes) . '_' . fake()->dateTimeBetween('-7 days', 'now')->format('Ymd_His') . '.' . $extension,
+            'mime_type' => $mimeType,
+            'file_size' => fake()->numberBetween($minSize, $maxSize),
+        ]);
+    }
+
+    /**
+     * Создать shared proof для групповой задачи.
+     */
+    private function createSharedProof(Task $task): TaskSharedProof
+    {
+        $mimeTypes = [
+            'image/jpeg' => 'jpg',
+            'application/pdf' => 'pdf',
+        ];
+
+        $mimeType = fake()->randomElement(array_keys($mimeTypes));
+        $extension = $mimeTypes[$mimeType];
+
+        $fileSizes = [
+            'image/jpeg' => [100000, 5000000],
+            'application/pdf' => [100000, 10000000],
+        ];
+
+        [$minSize, $maxSize] = $fileSizes[$mimeType];
+
+        $prefixes = match ($mimeType) {
+            'image/jpeg' => ['групповое_фото', 'общий_снимок'],
+            'application/pdf' => ['отчёт_группы', 'акт'],
+            default => ['файл'],
+        };
+
+        return TaskSharedProof::create([
+            'task_id' => $task->id,
+            'file_path' => 'task_shared_proofs/demo/group_' . Str::uuid() . '.' . $extension,
+            'original_filename' => fake()->randomElement($prefixes) . '_' . fake()->dateTimeBetween('-7 days', 'now')->format('Ymd') . '.' . $extension,
+            'mime_type' => $mimeType,
+            'file_size' => fake()->numberBetween($minSize, $maxSize),
+        ]);
     }
 }
