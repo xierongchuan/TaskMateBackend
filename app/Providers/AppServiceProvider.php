@@ -42,11 +42,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip());
         });
 
-        // General API rate limiting - 60 requests per minute per user/IP
+        // General API rate limiting - 180 requests per minute per user/IP
         RateLimiter::for('api', function (Request $request) {
             return $request->user()
-                ? Limit::perMinute(60)->by($request->user()->id)
-                : Limit::perMinute(10)->by($request->ip());
+                ? Limit::perMinute(180)->by($request->user()->id)
+                : Limit::perMinute(30)->by($request->ip());
         });
 
         // Downloads rate limiting - higher limit for file downloads (signed URLs)
