@@ -35,7 +35,7 @@ class TaskVerificationController extends Controller
      */
     public function approve($id): JsonResponse
     {
-        $taskResponse = TaskResponse::with(['task', 'proofs'])->find($id);
+        $taskResponse = TaskResponse::with(['task.sharedProofs', 'proofs'])->find($id);
 
         if (!$taskResponse) {
             return response()->json([
@@ -64,7 +64,8 @@ class TaskVerificationController extends Controller
         }
 
         // Проверка наличия доказательств (только для задач с типом completion_with_proof)
-        if ($task->response_type === 'completion_with_proof' && $taskResponse->proofs->isEmpty()) {
+        // Используем effectiveProofs — учитывает как индивидуальные proofs, так и shared_proofs задачи
+        if ($task->response_type === 'completion_with_proof' && $taskResponse->effectiveProofs->isEmpty()) {
             return response()->json([
                 'message' => 'Нет доказательств для верификации'
             ], 422);

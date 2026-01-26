@@ -210,6 +210,13 @@ class TaskProofController extends Controller
         $currentUser = auth()->user();
         $task = $proof->taskResponse->task;
 
+        // Запрет удаления файлов выполненных задач
+        if (in_array($task->status, ['completed', 'completed_late'])) {
+            return response()->json([
+                'message' => 'Нельзя удалять файлы выполненной задачи'
+            ], 422);
+        }
+
         // Проверка доступа (только владелец proof или менеджер/владелец автосалона)
         $isProofOwner = $proof->taskResponse->user_id === $currentUser->id;
         $hasManageAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id)
@@ -249,6 +256,13 @@ class TaskProofController extends Controller
         /** @var \App\Models\User $currentUser */
         $currentUser = auth()->user();
         $task = $proof->task;
+
+        // Запрет удаления файлов выполненных задач
+        if (in_array($task->status, ['completed', 'completed_late'])) {
+            return response()->json([
+                'message' => 'Нельзя удалять файлы выполненной задачи'
+            ], 422);
+        }
 
         // Проверка доступа (только менеджер/владелец автосалона)
         $hasManageAccess = $this->hasAccessToDealership($currentUser, $task->dealership_id)

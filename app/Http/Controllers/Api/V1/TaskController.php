@@ -164,6 +164,13 @@ class TaskController extends Controller
             ], 403);
         }
 
+        // Запрет редактирования выполненных задач
+        if (in_array($task->status, ['completed', 'completed_late'])) {
+            return response()->json([
+                'message' => 'Нельзя редактировать выполненную задачу',
+            ], 422);
+        }
+
         $validated = $request->validated();
 
         // Security check: Ensure new dealership is accessible
