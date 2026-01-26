@@ -201,18 +201,6 @@ class TaskFilterService
                 // Некорректная дата - игнорируем фильтр
             }
         }
-
-        // Фильтр по наличию дедлайна
-        if ($request->has('has_deadline')) {
-            $hasDeadline = filter_var($request->query('has_deadline'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if ($hasDeadline !== null) {
-                if ($hasDeadline) {
-                    $query->whereNotNull('deadline');
-                } else {
-                    $query->whereNull('deadline');
-                }
-            }
-        }
     }
 
     /**
