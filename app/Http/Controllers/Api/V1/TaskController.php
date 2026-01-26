@@ -263,14 +263,26 @@ class TaskController extends Controller
         if ($task->response_type === 'completion_with_proof') {
             // При попытке завершить задачу (не pending) требуется минимум 1 файл
             if (in_array($status, ['pending_review', 'completed']) && ! $request->hasFile('proof_files')) {
-                // Проверяем, есть ли уже загруженные файлы
-                $existingResponse = $task->responses()->where('user_id', $user->id)->first();
-                $hasExistingProofs = $existingResponse && $existingResponse->proofs()->exists();
+                // Для менеджеров/owners: проверяем ВСЕ proofs задачи (не только свои)
+                if (in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+                    $hasAnyProofs = $task->responses()->whereHas('proofs')->exists()
+                        || $task->sharedProofs()->exists();
 
-                if (! $hasExistingProofs) {
-                    return response()->json([
-                        'message' => 'Для выполнения этой задачи необходимо загрузить доказательство',
-                    ], 422);
+                    if (! $hasAnyProofs) {
+                        return response()->json([
+                            'message' => 'Для выполнения этой задачи необходимо загрузить доказательство',
+                        ], 422);
+                    }
+                } else {
+                    // Для обычных пользователей: проверяем только свои proofs
+                    $existingResponse = $task->responses()->where('user_id', $user->id)->first();
+                    $hasExistingProofs = $existingResponse && $existingResponse->proofs()->exists();
+
+                    if (! $hasExistingProofs) {
+                        return response()->json([
+                            'message' => 'Для выполнения этой задачи необходимо загрузить доказательство',
+                        ], 422);
+                    }
                 }
             }
 
@@ -315,11 +327,28 @@ class TaskController extends Controller
 
         switch ($status) {
             case 'pending':
-                // Reset task: remove all responses and their proofs
-                foreach ($task->responses as $response) {
-                    $this->taskProofService->deleteAllProofs($response);
+                $preserveProofs = $request->boolean('preserve_proofs', false);
+
+                if ($preserveProofs) {
+                    // Мягкий сброс: только обновляем статус responses, файлы сохраняются
+                    $task->responses()->update([
+                        'status' => 'pending',
+                        'verified_at' => null,
+                        'verified_by' => null,
+                        'rejection_reason' => null,
+                    ]);
+                } else {
+                    // Полный сброс: удаляем responses и все файлы
+                    foreach ($task->responses as $response) {
+                        $this->taskProofService->deleteAllProofs($response);
+                    }
+                    $task->responses()->delete();
+
+                    // Удаляем shared proofs тоже
+                    if ($task->sharedProofs()->exists()) {
+                        $this->taskProofService->deleteSharedProofs($task);
+                    }
                 }
-                $task->responses()->delete();
                 break;
 
             case 'acknowledged':
