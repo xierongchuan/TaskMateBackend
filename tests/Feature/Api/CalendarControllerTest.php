@@ -53,7 +53,7 @@ describe('Calendar API', function () {
                 ->assertJsonPath('data.holidays_count', 2);
         });
 
-        it('returns calendar filtered by dealership', function () {
+        it('returns only dealership calendar when dealership has own calendar', function () {
             // Arrange
             $year = 2025;
             // Global holiday
@@ -62,7 +62,7 @@ describe('Calendar API', function () {
                 'type' => 'holiday',
                 'dealership_id' => null,
             ]);
-            // Dealership specific holiday
+            // Dealership specific holiday - создаёт собственный календарь
             CalendarDay::create([
                 'date' => Carbon::create($year, 3, 8),
                 'type' => 'holiday',
@@ -73,10 +73,37 @@ describe('Calendar API', function () {
             $response = $this->actingAs($this->manager, 'sanctum')
                 ->getJson("/api/v1/calendar/{$year}?dealership_id={$this->dealership->id}");
 
-            // Assert
+            // Assert - возвращается ТОЛЬКО запись dealership, без глобальных
             $response->assertStatus(200)
                 ->assertJsonPath('success', true)
                 ->assertJsonPath('data.dealership_id', $this->dealership->id)
+                ->assertJsonPath('data.uses_global', false)
+                ->assertJsonPath('data.holidays_count', 1);
+        });
+
+        it('returns global calendar when dealership has no own calendar', function () {
+            // Arrange
+            $year = 2025;
+            // Только глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create($year, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create($year, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->getJson("/api/v1/calendar/{$year}?dealership_id={$this->dealership->id}");
+
+            // Assert - возвращаются глобальные записи (fallback)
+            $response->assertStatus(200)
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.uses_global', true)
                 ->assertJsonPath('data.holidays_count', 2);
         });
     });
@@ -479,6 +506,227 @@ describe('Calendar API', function () {
                 'date' => '2025-06-01',
                 'dealership_id' => $this->dealership->id,
             ]);
+        });
+    });
+
+    describe('DELETE /api/v1/calendar/{year}/reset', function () {
+        it('resets dealership calendar to global', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->deleteJson("/api/v1/calendar/2025/reset?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertStatus(200)
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.deleted_count', 2);
+
+            $this->assertDatabaseMissing('calendar_days', [
+                'dealership_id' => $this->dealership->id,
+            ]);
+        });
+
+        it('returns success when already using global', function () {
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->deleteJson("/api/v1/calendar/2025/reset?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertStatus(200)
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.deleted_count', 0);
+        });
+
+        it('requires dealership_id', function () {
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->deleteJson('/api/v1/calendar/2025/reset');
+
+            // Assert
+            $response->assertStatus(422);
+        });
+
+        it('denies employee to reset calendar', function () {
+            // Act
+            $response = $this->actingAs($this->employee, 'sanctum')
+                ->deleteJson("/api/v1/calendar/2025/reset?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertStatus(403);
+        });
+    });
+
+    describe('uses_global flag', function () {
+        it('returns uses_global=true when no dealership records in index', function () {
+            // Arrange - только глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->employee, 'sanctum')
+                ->getJson("/api/v1/calendar/2025?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertJsonPath('data.uses_global', true);
+        });
+
+        it('returns uses_global=false when dealership has own records in index', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->employee, 'sanctum')
+                ->getJson("/api/v1/calendar/2025?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertJsonPath('data.uses_global', false);
+        });
+
+        it('returns uses_global in holidays endpoint', function () {
+            // Act
+            $response = $this->actingAs($this->employee, 'sanctum')
+                ->getJson("/api/v1/calendar/2025/holidays?dealership_id={$this->dealership->id}");
+
+            // Assert
+            $response->assertJsonPath('data.uses_global', true);
+        });
+
+        it('returns uses_global in bulk response', function () {
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->postJson('/api/v1/calendar/bulk', [
+                    'operation' => 'set_dates',
+                    'year' => 2025,
+                    'dates' => ['2025-06-01'],
+                    'type' => 'holiday',
+                    'dealership_id' => $this->dealership->id,
+                ]);
+
+            // Assert - after adding record, uses_global should be false
+            $response->assertJsonPath('data.uses_global', false);
+        });
+    });
+
+    describe('auto-copy global on first change', function () {
+        it('copies global records when first modifying dealership calendar via update', function () {
+            // Arrange - глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act - первое изменение для dealership
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->putJson('/api/v1/calendar/2025-03-08', [
+                    'type' => 'holiday',
+                    'dealership_id' => $this->dealership->id,
+                ]);
+
+            // Assert
+            $response->assertStatus(200)
+                ->assertJsonPath('meta.copied_from_global', true);
+
+            // Должны быть скопированы глобальные + новая запись
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(3);
+        });
+
+        it('does not copy when dealership already has own calendar', function () {
+            // Arrange - у dealership уже есть своя запись
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->putJson('/api/v1/calendar/2025-03-08', [
+                    'type' => 'holiday',
+                    'dealership_id' => $this->dealership->id,
+                ]);
+
+            // Assert
+            $response->assertStatus(200)
+                ->assertJsonPath('meta.copied_from_global', false);
+
+            // Только старая + новая запись, без копирования глобальных
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(2);
+        });
+
+        it('copies global records when first bulk update for dealership', function () {
+            // Arrange - глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->postJson('/api/v1/calendar/bulk', [
+                    'operation' => 'set_dates',
+                    'year' => 2025,
+                    'dates' => ['2025-06-01'],
+                    'type' => 'holiday',
+                    'dealership_id' => $this->dealership->id,
+                ]);
+
+            // Assert
+            $response->assertStatus(200)
+                ->assertJsonPath('meta.copied_from_global', true);
+
+            // Глобальная скопирована + новая запись
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(2);
+        });
+
+        it('does not copy on clear_year operation', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $response = $this->actingAs($this->manager, 'sanctum')
+                ->postJson('/api/v1/calendar/bulk', [
+                    'operation' => 'clear_year',
+                    'year' => 2025,
+                    'dealership_id' => $this->dealership->id,
+                ]);
+
+            // Assert - clear_year не должен копировать
+            $response->assertStatus(200)
+                ->assertJsonPath('meta.copied_from_global', false);
         });
     });
 });

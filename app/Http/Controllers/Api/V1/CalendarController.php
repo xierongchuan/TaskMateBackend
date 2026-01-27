@@ -29,6 +29,9 @@ class CalendarController extends Controller
             ? (int) $request->query('dealership_id')
             : null;
 
+        $usesGlobal = $dealershipId === null
+            || ! CalendarDay::hasOwnCalendarForYear($year, $dealershipId);
+
         $calendar = CalendarDay::getYearCalendar($year, $dealershipId);
 
         // Группируем по месяцам для удобства
@@ -43,6 +46,7 @@ class CalendarController extends Controller
             'data' => [
                 'year' => $year,
                 'dealership_id' => $dealershipId,
+                'uses_global' => $usesGlobal,
                 'months' => $grouped,
                 'holidays_count' => $calendar->where('type', 'holiday')->count(),
             ],
@@ -60,6 +64,9 @@ class CalendarController extends Controller
             ? (int) $request->query('dealership_id')
             : null;
 
+        $usesGlobal = $dealershipId === null
+            || ! CalendarDay::hasOwnCalendarForYear($year, $dealershipId);
+
         $holidays = CalendarDay::getHolidaysForYear($year, $dealershipId);
 
         return response()->json([
@@ -67,7 +74,8 @@ class CalendarController extends Controller
             'data' => [
                 'year' => $year,
                 'dealership_id' => $dealershipId,
-                'dates' => $holidays->pluck('date')->map(fn($d) => $d->toDateString())->values(),
+                'uses_global' => $usesGlobal,
+                'dates' => $holidays->pluck('date')->map(fn ($d) => $d->toDateString())->values(),
                 'count' => $holidays->count(),
             ],
         ]);
@@ -77,6 +85,9 @@ class CalendarController extends Controller
      * Установить/обновить конкретный день.
      *
      * PUT /api/v1/calendar/{date}
+     *
+     * При первом изменении для автосалона автоматически копируются
+     * все глобальные записи за год.
      */
     public function update(Request $request, string $date): JsonResponse
     {
@@ -104,12 +115,21 @@ class CalendarController extends Controller
         $data = $validator->validated();
         $carbonDate = Carbon::parse($data['date']);
         $dealershipId = $data['dealership_id'] ?? null;
+        $year = (int) $carbonDate->format('Y');
 
         // Проверка доступа к дилерству, если указан
         if ($dealershipId !== null) {
             if ($accessError = $this->validateDealershipAccess($currentUser, $dealershipId)) {
                 return $accessError;
             }
+        }
+
+        $copiedFromGlobal = false;
+
+        // При первом изменении для автосалона — копируем глобальные записи
+        if ($dealershipId !== null && ! CalendarDay::hasOwnCalendarForYear($year, $dealershipId)) {
+            CalendarDay::copyGlobalToDealer($year, $dealershipId);
+            $copiedFromGlobal = true;
         }
 
         $calendarDay = CalendarDay::setDay(
@@ -123,6 +143,9 @@ class CalendarController extends Controller
             'success' => true,
             'message' => 'Calendar day updated',
             'data' => $calendarDay->toApiArray(),
+            'meta' => [
+                'copied_from_global' => $copiedFromGlobal,
+            ],
         ]);
     }
 
@@ -173,6 +196,9 @@ class CalendarController extends Controller
      * - set_weekdays: установить все указанные дни недели как выходные/рабочие
      * - set_dates: установить конкретные даты
      * - clear_year: очистить все записи за год
+     *
+     * При первом изменении для автосалона автоматически копируются
+     * все глобальные записи за год (кроме операции clear_year).
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
@@ -215,6 +241,17 @@ class CalendarController extends Controller
             }
         }
 
+        $copiedFromGlobal = false;
+
+        // При первом изменении для автосалона — копируем глобальные записи
+        // (кроме операции clear_year, которая по сути и есть "сброс")
+        if ($dealershipId !== null
+            && $data['operation'] !== 'clear_year'
+            && ! CalendarDay::hasOwnCalendarForYear($year, $dealershipId)) {
+            CalendarDay::copyGlobalToDealer($year, $dealershipId);
+            $copiedFromGlobal = true;
+        }
+
         $affectedCount = 0;
 
         switch ($data['operation']) {
@@ -251,6 +288,11 @@ class CalendarController extends Controller
                 'year' => $year,
                 'dealership_id' => $dealershipId,
                 'affected_count' => $affectedCount,
+                'uses_global' => $dealershipId === null
+                    || ! CalendarDay::hasOwnCalendarForYear($year, $dealershipId),
+            ],
+            'meta' => [
+                'copied_from_global' => $copiedFromGlobal,
             ],
         ]);
     }
@@ -282,9 +324,61 @@ class CalendarController extends Controller
             'data' => [
                 'date' => $carbonDate->toDateString(),
                 'is_holiday' => $isHoliday,
-                'is_workday' => !$isHoliday,
+                'is_workday' => ! $isHoliday,
                 'day_of_week' => $carbonDate->dayOfWeekIso,
                 'dealership_id' => $dealershipId,
+            ],
+        ]);
+    }
+
+    /**
+     * Сбросить кастомный календарь автосалона к глобальному.
+     *
+     * DELETE /api/v1/calendar/{year}/reset
+     */
+    public function resetToGlobal(Request $request, int $year): JsonResponse
+    {
+        /** @var \App\Models\User $currentUser */
+        $currentUser = $request->user();
+
+        $dealershipId = $request->query('dealership_id') !== null
+            ? (int) $request->query('dealership_id')
+            : null;
+
+        if ($dealershipId === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'dealership_id обязателен для операции сброса',
+            ], 422);
+        }
+
+        // Проверка доступа к дилерству
+        if ($accessError = $this->validateDealershipAccess($currentUser, $dealershipId)) {
+            return $accessError;
+        }
+
+        // Проверка наличия кастомного календаря
+        if (! CalendarDay::hasOwnCalendarForYear($year, $dealershipId)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Автосалон уже использует глобальный календарь',
+                'data' => [
+                    'year' => $year,
+                    'dealership_id' => $dealershipId,
+                    'deleted_count' => 0,
+                ],
+            ]);
+        }
+
+        $deletedCount = CalendarDay::resetToGlobal($year, $dealershipId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Календарь сброшен к глобальному',
+            'data' => [
+                'year' => $year,
+                'dealership_id' => $dealershipId,
+                'deleted_count' => $deletedCount,
             ],
         ]);
     }

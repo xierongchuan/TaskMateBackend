@@ -58,16 +58,39 @@ describe('CalendarDay Model', function () {
             expect(CalendarDay::isHoliday(Carbon::create(2025, 3, 8), $this->dealership->id))->toBeTrue();
         });
 
-        it('falls back to global setting if dealership specific not found', function () {
-            // Arrange
+        it('falls back to global setting if dealership has NO own calendar for year', function () {
+            // Arrange - только глобальная запись, у автосалона нет своего календаря
             CalendarDay::create([
                 'date' => Carbon::create(2025, 5, 1),
                 'type' => 'holiday',
                 'dealership_id' => null,
             ]);
 
-            // Act & Assert
+            // Act & Assert - fallback работает
             expect(CalendarDay::isHoliday(Carbon::create(2025, 5, 1), $this->dealership->id))->toBeTrue();
+        });
+
+        it('does NOT fallback to global when dealership has own calendar for year', function () {
+            // Arrange - глобальный выходной
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            // Создаём собственный календарь автосалона (только 1 января)
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act & Assert
+            // 1 января - выходной (есть запись у dealership)
+            expect(CalendarDay::isHoliday(Carbon::create(2025, 1, 1), $this->dealership->id))->toBeTrue();
+            // 1 мая - НЕ выходной (нет записи у dealership, fallback НЕ работает!)
+            expect(CalendarDay::isHoliday(Carbon::create(2025, 5, 1), $this->dealership->id))->toBeFalse();
+            // Но глобально 1 мая — выходной
+            expect(CalendarDay::isHoliday(Carbon::create(2025, 5, 1)))->toBeTrue();
         });
     });
 
@@ -139,13 +162,40 @@ describe('CalendarDay Model', function () {
             expect($calendar)->toHaveCount(2);
         });
 
-        it('includes both global and dealership specific entries', function () {
-            // Arrange
+        it('returns global calendar when dealership has no own calendar', function () {
+            // Arrange - только глобальные записи
             CalendarDay::create([
                 'date' => Carbon::create(2025, 1, 1),
                 'type' => 'holiday',
                 'dealership_id' => null,
             ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $calendar = CalendarDay::getYearCalendar(2025, $this->dealership->id);
+
+            // Assert - возвращаются глобальные записи (fallback)
+            expect($calendar)->toHaveCount(2);
+            expect($calendar->every(fn ($day) => $day->dealership_id === null))->toBeTrue();
+        });
+
+        it('returns ONLY dealership calendar when dealership has own calendar', function () {
+            // Arrange - глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            // Записи автосалона
             CalendarDay::create([
                 'date' => Carbon::create(2025, 3, 8),
                 'type' => 'holiday',
@@ -155,8 +205,9 @@ describe('CalendarDay Model', function () {
             // Act
             $calendar = CalendarDay::getYearCalendar(2025, $this->dealership->id);
 
-            // Assert
-            expect($calendar)->toHaveCount(2);
+            // Assert - возвращается ТОЛЬКО запись автосалона, без глобальных
+            expect($calendar)->toHaveCount(1);
+            expect($calendar->first()->dealership_id)->toBe($this->dealership->id);
         });
     });
 
@@ -314,6 +365,162 @@ describe('CalendarDay Model', function () {
             // Act & Assert
             expect($day->dealership)->toBeInstanceOf(AutoDealership::class);
             expect($day->dealership->id)->toBe($this->dealership->id);
+        });
+    });
+
+    describe('hasOwnCalendarForYear', function () {
+        it('returns false when dealership has no records for year', function () {
+            // Arrange - только глобальные записи
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act & Assert
+            expect(CalendarDay::hasOwnCalendarForYear(2025, $this->dealership->id))->toBeFalse();
+        });
+
+        it('returns true when dealership has at least one record for year', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act & Assert
+            expect(CalendarDay::hasOwnCalendarForYear(2025, $this->dealership->id))->toBeTrue();
+        });
+
+        it('returns false for different year', function () {
+            // Arrange - запись за 2024 год
+            CalendarDay::create([
+                'date' => Carbon::create(2024, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act & Assert
+            expect(CalendarDay::hasOwnCalendarForYear(2025, $this->dealership->id))->toBeFalse();
+        });
+    });
+
+    describe('copyGlobalToDealer', function () {
+        it('copies all global records for year to dealership', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $count = CalendarDay::copyGlobalToDealer(2025, $this->dealership->id);
+
+            // Assert
+            expect($count)->toBe(2);
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(2);
+            expect(CalendarDay::isHoliday(Carbon::create(2025, 1, 1), $this->dealership->id))->toBeTrue();
+            expect(CalendarDay::isHoliday(Carbon::create(2025, 5, 1), $this->dealership->id))->toBeTrue();
+        });
+
+        it('does not copy records from other years', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2024, 12, 31),
+                'type' => 'holiday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $count = CalendarDay::copyGlobalToDealer(2025, $this->dealership->id);
+
+            // Assert
+            expect($count)->toBe(0);
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(0);
+        });
+
+        it('preserves description when copying', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'description' => 'Новый год',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            CalendarDay::copyGlobalToDealer(2025, $this->dealership->id);
+
+            // Assert
+            $copied = CalendarDay::where('dealership_id', $this->dealership->id)->first();
+            expect($copied->description)->toBe('Новый год');
+        });
+    });
+
+    describe('resetToGlobal', function () {
+        it('deletes all dealership records for year', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 5, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+            // Глобальная запись
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'workday',
+                'dealership_id' => null,
+            ]);
+
+            // Act
+            $deleted = CalendarDay::resetToGlobal(2025, $this->dealership->id);
+
+            // Assert
+            expect($deleted)->toBe(2);
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(0);
+            // Глобальные записи остались
+            expect(CalendarDay::whereNull('dealership_id')->count())->toBe(1);
+        });
+
+        it('does not delete records from other years', function () {
+            // Arrange
+            CalendarDay::create([
+                'date' => Carbon::create(2024, 12, 31),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+            CalendarDay::create([
+                'date' => Carbon::create(2025, 1, 1),
+                'type' => 'holiday',
+                'dealership_id' => $this->dealership->id,
+            ]);
+
+            // Act
+            CalendarDay::resetToGlobal(2025, $this->dealership->id);
+
+            // Assert
+            expect(CalendarDay::where('dealership_id', $this->dealership->id)->count())->toBe(1);
+            expect(CalendarDay::where('date', '2024-12-31')->exists())->toBeTrue();
+        });
+
+        it('returns 0 when no records to delete', function () {
+            // Act
+            $deleted = CalendarDay::resetToGlobal(2025, $this->dealership->id);
+
+            // Assert
+            expect($deleted)->toBe(0);
         });
     });
 });

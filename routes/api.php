@@ -228,6 +228,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:manager,owner');
             Route::post('/calendar/bulk', [CalendarController::class, 'bulkUpdate'])
                 ->middleware('role:manager,owner');
+            Route::delete('/calendar/{year}/reset', [CalendarController::class, 'resetToGlobal'])
+                ->middleware('role:manager,owner');
 
             // Audit Logs - только owner
             Route::get('/audit-logs', [AuditLogController::class, 'index'])

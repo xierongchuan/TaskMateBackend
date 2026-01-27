@@ -15,8 +15,12 @@ use Illuminate\Support\Facades\DB;
  * Модель для хранения выходных и рабочих дней.
  *
  * Позволяет настраивать календарь как глобально (dealership_id = null),
- * так и для конкретного автосалона. При проверке используется fallback:
- * сначала проверяются настройки салона, затем глобальные.
+ * так и для конкретного автосалона.
+ *
+ * Логика работы:
+ * - Если у автосалона НЕТ собственного календаря за год — используется глобальный (fallback)
+ * - Если у автосалона ЕСТЬ собственный календарь за год — используется ТОЛЬКО он (без fallback)
+ * - При первом изменении календаря автосалона — копируются все глобальные записи за год
  */
 class CalendarDay extends Model
 {
@@ -46,10 +50,87 @@ class CalendarDay extends Model
     }
 
     /**
+     * Проверяет, есть ли у автосалона собственный календарь за указанный год.
+     *
+     * @param int $year Год для проверки
+     * @param int $dealershipId ID автосалона
+     * @return bool true если есть хотя бы одна запись с этим dealership_id за год
+     */
+    public static function hasOwnCalendarForYear(int $year, int $dealershipId): bool
+    {
+        $startDate = Carbon::createFromDate($year, 1, 1)->toDateString();
+        $endDate = Carbon::createFromDate($year, 12, 31)->toDateString();
+
+        return self::whereBetween('date', [$startDate, $endDate])
+            ->where('dealership_id', $dealershipId)
+            ->exists();
+    }
+
+    /**
+     * Копирует все глобальные записи за год для указанного автосалона.
+     * Используется при первом изменении календаря автосалоном.
+     *
+     * @param int $year Год для копирования
+     * @param int $dealershipId ID автосалона
+     * @return int Количество скопированных записей
+     */
+    public static function copyGlobalToDealer(int $year, int $dealershipId): int
+    {
+        $startDate = Carbon::createFromDate($year, 1, 1)->toDateString();
+        $endDate = Carbon::createFromDate($year, 12, 31)->toDateString();
+
+        $globalRecords = self::whereBetween('date', [$startDate, $endDate])
+            ->whereNull('dealership_id')
+            ->get();
+
+        $count = 0;
+        $now = Carbon::now();
+        $records = [];
+
+        foreach ($globalRecords as $record) {
+            $records[] = [
+                'dealership_id' => $dealershipId,
+                'date' => $record->date->toDateString(),
+                'type' => $record->type,
+                'description' => $record->description,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+            $count++;
+        }
+
+        if (! empty($records)) {
+            foreach (array_chunk($records, 100) as $chunk) {
+                DB::table('calendar_days')->insert($chunk);
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Удаляет кастомный календарь автосалона за год (возврат к глобальному).
+     *
+     * @param int $year Год
+     * @param int $dealershipId ID автосалона
+     * @return int Количество удалённых записей
+     */
+    public static function resetToGlobal(int $year, int $dealershipId): int
+    {
+        $startDate = Carbon::createFromDate($year, 1, 1)->toDateString();
+        $endDate = Carbon::createFromDate($year, 12, 31)->toDateString();
+
+        return self::whereBetween('date', [$startDate, $endDate])
+            ->where('dealership_id', $dealershipId)
+            ->delete();
+    }
+
+    /**
      * Проверяет, является ли указанная дата выходным днём.
      *
-     * Логика: сначала проверяем настройки для конкретного dealership,
-     * если не найдено — проверяем глобальные настройки (dealership_id = null).
+     * Логика:
+     * - Если у автосалона ЕСТЬ собственный календарь за год — используется ТОЛЬКО он
+     * - Если у автосалона НЕТ собственного календаря — fallback на глобальные настройки
      *
      * ВАЖНО: Дата конвертируется в timezone автосалона перед сравнением.
      * Приоритет timezone: автосалон -> глобальная настройка -> дефолт.
@@ -63,29 +144,25 @@ class CalendarDay extends Model
         // Конвертируем UTC в локальный timezone для определения календарной даты
         $localDate = $date->copy()->setTimezone($timezone);
         $dateStr = $localDate->toDateString();
+        $year = (int) $localDate->format('Y');
 
-        // Ищем настройку для конкретного dealership
-        if ($dealershipId !== null) {
+        // Если указан dealership и у него ЕСТЬ собственный календарь за этот год
+        if ($dealershipId !== null && self::hasOwnCalendarForYear($year, $dealershipId)) {
+            // Используем ТОЛЬКО записи автосалона, без fallback
             $record = self::where('date', $dateStr)
                 ->where('dealership_id', $dealershipId)
                 ->first();
 
-            if ($record !== null) {
-                return $record->type === 'holiday';
-            }
+            // Если записи нет — это рабочий день (нет fallback!)
+            return $record !== null && $record->type === 'holiday';
         }
 
-        // Fallback на глобальные настройки
+        // Fallback на глобальные настройки (для dealership без своего календаря или dealershipId = null)
         $globalRecord = self::where('date', $dateStr)
             ->whereNull('dealership_id')
             ->first();
 
-        if ($globalRecord !== null) {
-            return $globalRecord->type === 'holiday';
-        }
-
-        // По умолчанию всё рабочие дни
-        return false;
+        return $globalRecord !== null && $globalRecord->type === 'holiday';
     }
 
     /**
@@ -148,6 +225,10 @@ class CalendarDay extends Model
     /**
      * Получить календарь на год.
      *
+     * Логика:
+     * - Если у автосалона ЕСТЬ собственный календарь — возвращаем ТОЛЬКО его записи
+     * - Если у автосалона НЕТ собственного календаря — возвращаем глобальные записи
+     *
      * @param int $year Год
      * @param int|null $dealershipId ID автосалона или null для глобальных
      * @return Collection Коллекция записей CalendarDay
@@ -157,19 +238,20 @@ class CalendarDay extends Model
         $startDate = Carbon::createFromDate($year, 1, 1)->toDateString();
         $endDate = Carbon::createFromDate($year, 12, 31)->toDateString();
 
-        $query = self::whereBetween('date', [$startDate, $endDate]);
-
-        if ($dealershipId !== null) {
-            // Получаем и глобальные, и специфичные для салона
-            $query->where(function ($q) use ($dealershipId) {
-                $q->where('dealership_id', $dealershipId)
-                    ->orWhereNull('dealership_id');
-            });
-        } else {
-            $query->whereNull('dealership_id');
+        // Если указан dealership и у него есть собственный календарь
+        if ($dealershipId !== null && self::hasOwnCalendarForYear($year, $dealershipId)) {
+            // Возвращаем ТОЛЬКО записи автосалона
+            return self::whereBetween('date', [$startDate, $endDate])
+                ->where('dealership_id', $dealershipId)
+                ->orderBy('date')
+                ->get();
         }
 
-        return $query->orderBy('date')->get();
+        // Иначе возвращаем глобальные записи
+        return self::whereBetween('date', [$startDate, $endDate])
+            ->whereNull('dealership_id')
+            ->orderBy('date')
+            ->get();
     }
 
     /**
