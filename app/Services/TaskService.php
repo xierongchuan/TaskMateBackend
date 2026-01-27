@@ -91,14 +91,23 @@ class TaskService
      */
     public function isDuplicate(array $data): bool
     {
+        $dealershipId = $data['dealership_id'] ?? null;
+
         $query = Task::where('title', $data['title'])
             ->where('task_type', $data['task_type'])
-            ->where('dealership_id', $data['dealership_id'] ?? null)
             ->where('is_active', true);
+
+        // Корректная обработка null для dealership_id (WHERE = NULL не работает в SQL)
+        if ($dealershipId !== null) {
+            $query->where('dealership_id', $dealershipId);
+        } else {
+            $query->whereNull('dealership_id');
+        }
 
         // Проверка дедлайна с допуском (игнорируя несоответствие секунд)
         if (!empty($data['deadline'])) {
-            $deadlineDate = Carbon::parse($data['deadline'], 'Asia/Yekaterinburg')->setTimezone('UTC');
+            // deadline приходит как ISO 8601 (с Z или offset), парсим и конвертируем в UTC
+            $deadlineDate = Carbon::parse($data['deadline'])->setTimezone('UTC');
             $start = $deadlineDate->copy()->startOfMinute();
             $end = $deadlineDate->copy()->endOfMinute();
 
@@ -123,12 +132,16 @@ class TaskService
      * Использует SoftDeletes для сохранения истории назначений.
      * При повторном назначении восстанавливает ранее удалённые записи.
      *
+     * ВАЖНО: Метод должен вызываться внутри транзакции для предотвращения race conditions.
+     *
      * @param Task $task Задача
      * @param array<int> $userIds Массив ID пользователей
      */
     protected function syncAssignments(Task $task, array $userIds): void
     {
+        // lockForUpdate предотвращает race condition при параллельных запросах
         $existingAssignments = TaskAssignment::where('task_id', $task->id)
+            ->lockForUpdate()
             ->pluck('user_id')
             ->toArray();
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Helpers\TimeHelper;
 use App\Models\Shift;
 use App\Models\Task;
 use App\Services\SettingsService;
@@ -29,9 +30,9 @@ class ArchiveOverdueAfterShift extends Command
     {
         $force = $this->option('force');
         $dryRun = $this->option('dry-run');
-        $now = Carbon::now('Asia/Yekaterinburg');
+        $now = TimeHelper::nowUtc();
 
-        $this->info("Current time: {$now->format('Y-m-d H:i:s')}");
+        $this->info("Current time UTC: {$now->toIso8601ZuluString()}");
 
         if ($dryRun) {
             $this->warn("DRY RUN MODE - no changes will be made");
@@ -57,16 +58,17 @@ class ArchiveOverdueAfterShift extends Command
                 2
             );
 
-            $shiftEndTime = Carbon::parse($shift->shift_end, 'Asia/Yekaterinburg');
+            // shift_end is stored in UTC
+            $shiftEndTime = $shift->shift_end->copy()->setTimezone('UTC');
             $archiveAfter = $shiftEndTime->copy()->addHours($hoursAfter);
 
             // Check if enough time has passed since shift closed
             if (!$force && $now->lt($archiveAfter)) {
-                $this->line("  Shift #{$shift->id} closed at {$shiftEndTime->format('H:i')} - waiting until {$archiveAfter->format('H:i')} to archive");
+                $this->line("  Shift #{$shift->id} closed at {$shiftEndTime->format('H:i')} UTC - waiting until {$archiveAfter->format('H:i')} UTC to archive");
                 continue;
             }
 
-            $this->info("  Processing shift #{$shift->id} (closed: {$shiftEndTime->format('Y-m-d H:i')})");
+            $this->info("  Processing shift #{$shift->id} (closed: {$shiftEndTime->toIso8601ZuluString()})");
 
             // Find overdue tasks for this dealership that had deadline during/before this shift
             $overdueTasks = Task::where('dealership_id', $shift->dealership_id)
@@ -85,7 +87,7 @@ class ArchiveOverdueAfterShift extends Command
                 if (!$dryRun) {
                     $task->update([
                         'is_active' => false,
-                        'archived_at' => Carbon::now(),
+                        'archived_at' => TimeHelper::nowUtc(),
                         'archive_reason' => 'expired_after_shift',
                     ]);
                 }
@@ -93,10 +95,9 @@ class ArchiveOverdueAfterShift extends Command
                 $archivedCount++;
             }
 
-            // Mark shift as processed
-            if (!$dryRun && $overdueTasks->count() >= 0) {
-                // We need to add this column or use a different tracking mechanism
-                // For now, we'll just log it
+            // Отметить смену как обработанную после проверки (независимо от наличия задач)
+            // Это предотвращает повторную проверку смены при следующих запусках команды
+            if (!$dryRun) {
                 $shift->timestamps = false;
                 $shift->archived_tasks_processed = true;
                 $shift->save();

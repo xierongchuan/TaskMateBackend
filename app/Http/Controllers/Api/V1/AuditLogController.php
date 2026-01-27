@@ -193,10 +193,9 @@ class AuditLogController extends Controller
     {
         $data = $log->toArray();
 
-        // Дата уже в локальном времени (app.timezone = Asia/Yekaterinburg)
-        // Форматируем с offset для корректного парсинга на фронтенде
+        // Format datetime in UTC with Z suffix (ISO 8601 Zulu)
         if ($log->created_at) {
-            $data['created_at'] = $log->created_at->format('Y-m-d\TH:i:s') . '+05:00';
+            $data['created_at'] = $log->created_at->copy()->setTimezone('UTC')->toIso8601ZuluString();
         }
 
         // Добавляем информацию об actor

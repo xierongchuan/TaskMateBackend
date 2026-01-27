@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Enums\Role;
+use App\Enums\ShiftStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\URL;
@@ -42,7 +43,7 @@ class ShiftResource extends JsonResource
             'status' => $this->status,
             'shift_type' => $this->shift_type,
             'late_minutes' => $this->late_minutes,
-            'is_late' => ($this->status === 'late' || $this->late_minutes > 0),
+            'is_late' => ($this->status === ShiftStatus::LATE->value || $this->late_minutes > 0),
             'archived_tasks_processed' => $this->archived_tasks_processed,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

@@ -7,22 +7,20 @@ namespace App\Helpers;
 use Carbon\Carbon;
 
 /**
- * Централизованный helper для работы с временем и timezone.
+ * Централизованный helper для работы с временем.
  *
- * Система использует:
- * - UTC для хранения в БД
- * - Asia/Yekaterinburg (UTC+5) для пользовательского интерфейса
+ * Вся система работает только с UTC:
+ * - API принимает и отдаёт время в UTC (ISO 8601 с Z suffix)
+ * - БД хранит время в UTC
+ * - Frontend отвечает за конвертацию UTC ↔ локальное время клиента
  */
 class TimeHelper
 {
-    /** Timezone пользователей (Екатеринбург, UTC+5) */
-    public const USER_TIMEZONE = 'Asia/Yekaterinburg';
-
-    /** Timezone хранения в БД */
+    /** Timezone для всех операций */
     public const DB_TIMEZONE = 'UTC';
 
     /**
-     * Текущее время в UTC для сравнения с данными БД
+     * Текущее время в UTC
      */
     public static function nowUtc(): Carbon
     {
@@ -30,47 +28,85 @@ class TimeHelper
     }
 
     /**
-     * Сегодняшняя дата в пользовательском timezone
+     * Сегодняшняя дата в UTC
      */
-    public static function todayUserTz(): Carbon
+    public static function todayUtc(): Carbon
     {
-        return Carbon::today(self::USER_TIMEZONE);
+        return Carbon::today(self::DB_TIMEZONE);
     }
 
     /**
-     * Начало дня в UTC (для запросов к БД)
+     * Парсинг ISO 8601 строки (с Z или offset) в UTC Carbon
      *
-     * @param Carbon|string|null $date Дата в формате Y-m-d или Carbon объект
+     * @param string|null $datetime ISO 8601 строка (например, "2025-01-27T10:30:00Z")
+     */
+    public static function parseIso(?string $datetime): ?Carbon
+    {
+        if ($datetime === null || $datetime === '') {
+            return null;
+        }
+
+        return Carbon::parse($datetime)->setTimezone(self::DB_TIMEZONE);
+    }
+
+    /**
+     * Форматирование Carbon в ISO 8601 UTC с Z suffix
+     */
+    public static function toIsoZulu(?Carbon $datetime): ?string
+    {
+        if ($datetime === null) {
+            return null;
+        }
+
+        return $datetime->copy()->setTimezone(self::DB_TIMEZONE)->toIso8601ZuluString();
+    }
+
+    /**
+     * Начало дня в UTC
+     *
+     * @param Carbon|string|null $date ISO 8601 строка, Y-m-d строка, или Carbon объект
      */
     public static function startOfDayUtc(Carbon|string|null $date = null): Carbon
     {
-        if ($date instanceof Carbon) {
-            $carbon = $date->copy()->setTimezone(self::USER_TIMEZONE);
-        } else {
-            $carbon = $date
-                ? Carbon::parse($date, self::USER_TIMEZONE)
-                : Carbon::now(self::USER_TIMEZONE);
+        if ($date === null) {
+            return Carbon::now(self::DB_TIMEZONE)->startOfDay();
         }
 
-        return $carbon->startOfDay()->setTimezone(self::DB_TIMEZONE);
+        if ($date instanceof Carbon) {
+            return $date->copy()->setTimezone(self::DB_TIMEZONE)->startOfDay();
+        }
+
+        // Простая дата (Y-m-d) - интерпретируем напрямую в UTC
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return Carbon::createFromFormat('Y-m-d', $date, self::DB_TIMEZONE)->startOfDay();
+        }
+
+        // ISO 8601 с временем/offset - парсим и конвертируем в UTC
+        return Carbon::parse($date)->setTimezone(self::DB_TIMEZONE)->startOfDay();
     }
 
     /**
-     * Конец дня в UTC (для запросов к БД)
+     * Конец дня в UTC
      *
-     * @param Carbon|string|null $date Дата в формате Y-m-d или Carbon объект
+     * @param Carbon|string|null $date ISO 8601 строка, Y-m-d строка, или Carbon объект
      */
     public static function endOfDayUtc(Carbon|string|null $date = null): Carbon
     {
-        if ($date instanceof Carbon) {
-            $carbon = $date->copy()->setTimezone(self::USER_TIMEZONE);
-        } else {
-            $carbon = $date
-                ? Carbon::parse($date, self::USER_TIMEZONE)
-                : Carbon::now(self::USER_TIMEZONE);
+        if ($date === null) {
+            return Carbon::now(self::DB_TIMEZONE)->endOfDay();
         }
 
-        return $carbon->endOfDay()->setTimezone(self::DB_TIMEZONE);
+        if ($date instanceof Carbon) {
+            return $date->copy()->setTimezone(self::DB_TIMEZONE)->endOfDay();
+        }
+
+        // Простая дата (Y-m-d) - интерпретируем напрямую в UTC
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return Carbon::createFromFormat('Y-m-d', $date, self::DB_TIMEZONE)->endOfDay();
+        }
+
+        // ISO 8601 с временем/offset - парсим и конвертируем в UTC
+        return Carbon::parse($date)->setTimezone(self::DB_TIMEZONE)->endOfDay();
     }
 
     /**
@@ -86,23 +122,19 @@ class TimeHelper
     }
 
     /**
-     * Начало недели в UTC
+     * Начало недели в UTC (понедельник)
      */
     public static function startOfWeekUtc(): Carbon
     {
-        return Carbon::now(self::USER_TIMEZONE)
-            ->startOfWeek()
-            ->setTimezone(self::DB_TIMEZONE);
+        return Carbon::now(self::DB_TIMEZONE)->startOfWeek();
     }
 
     /**
-     * Конец недели в UTC
+     * Конец недели в UTC (воскресенье)
      */
     public static function endOfWeekUtc(): Carbon
     {
-        return Carbon::now(self::USER_TIMEZONE)
-            ->endOfWeek()
-            ->setTimezone(self::DB_TIMEZONE);
+        return Carbon::now(self::DB_TIMEZONE)->endOfWeek();
     }
 
     /**
@@ -110,9 +142,7 @@ class TimeHelper
      */
     public static function startOfMonthUtc(): Carbon
     {
-        return Carbon::now(self::USER_TIMEZONE)
-            ->startOfMonth()
-            ->setTimezone(self::DB_TIMEZONE);
+        return Carbon::now(self::DB_TIMEZONE)->startOfMonth();
     }
 
     /**
@@ -120,16 +150,6 @@ class TimeHelper
      */
     public static function endOfMonthUtc(): Carbon
     {
-        return Carbon::now(self::USER_TIMEZONE)
-            ->endOfMonth()
-            ->setTimezone(self::DB_TIMEZONE);
-    }
-
-    /**
-     * Получить offset для пользовательского timezone (например, +05:00)
-     */
-    public static function getUserTimezoneOffset(): string
-    {
-        return Carbon::now(self::USER_TIMEZONE)->format('P');
+        return Carbon::now(self::DB_TIMEZONE)->endOfMonth();
     }
 }

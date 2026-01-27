@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\ShiftStatus;
 use App\Models\Shift;
 use App\Models\ShiftReplacement;
 use App\Models\User;
@@ -42,15 +43,9 @@ class ShiftService
             throw new \InvalidArgumentException('User must belong to a dealership to open a shift');
         }
 
-        // Check for existing open shift in this dealership
-        $existingShift = $this->getUserOpenShift($user, $dealershipId);
-        if ($existingShift) {
-            throw new \InvalidArgumentException('User already has an open shift in this dealership');
-        }
-
         $now = Carbon::now();
 
-        // Get dealership-specific settings
+        // Get dealership-specific settings (before transaction for performance)
         $scheduledStart = $this->getScheduledStartTime($now, $dealershipId);
         $scheduledEnd = $this->getScheduledEndTime($now, $dealershipId);
         $lateTolerance = $this->settingsService->getLateTolerance($dealershipId);
@@ -60,7 +55,7 @@ class ShiftService
         $isLate = $lateMinutes > $lateTolerance;
 
         // Determine shift status
-        $status = $isLate ? 'late' : 'open';
+        $status = $isLate ? ShiftStatus::LATE->value : ShiftStatus::OPEN->value;
 
         // Determine shift type based on day of week
         $dayOfWeek = $now->dayOfWeek; // 0 = Sunday, 6 = Saturday
@@ -71,6 +66,22 @@ class ShiftService
 
         try {
             DB::beginTransaction();
+
+            // Проверка существующей открытой смены с блокировкой для предотвращения race condition
+            $existingShift = Shift::where('user_id', $user->id)
+                ->where('dealership_id', $dealershipId)
+                ->whereIn('status', ShiftStatus::activeStatusValues())
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingShift) {
+                DB::rollBack();
+                // Clean up photo
+                if ($photoPath && Storage::exists($photoPath)) {
+                    Storage::delete($photoPath);
+                }
+                throw new \InvalidArgumentException('User already has an open shift in this dealership');
+            }
 
             // Create shift record
             $shift = Shift::create([
@@ -92,7 +103,7 @@ class ShiftService
                 // Close the replaced user's shift
                 $replacedShift = $this->getUserOpenShift($replacingUser);
                 if ($replacedShift) {
-                    $this->closeShiftWithoutPhoto($replacedShift, 'replaced');
+                    $this->closeShiftWithoutPhoto($replacedShift, ShiftStatus::REPLACED->value);
                 }
             }
 
@@ -133,7 +144,7 @@ class ShiftService
      */
     public function closeShift(Shift $shift, UploadedFile $photo): Shift
     {
-        if ($shift->status === 'closed') {
+        if ($shift->status === ShiftStatus::CLOSED->value) {
             throw new \InvalidArgumentException('Shift is already closed');
         }
 
@@ -149,7 +160,7 @@ class ShiftService
             $shift->update([
                 'shift_end' => $now,
                 'closing_photo_path' => $photoPath,
-                'status' => 'closed',
+                'status' => ShiftStatus::CLOSED->value,
             ]);
 
             // Log incomplete tasks
@@ -190,7 +201,7 @@ class ShiftService
     public function getUserOpenShift(User $user, ?int $dealershipId = null): ?Shift
     {
         $query = Shift::where('user_id', $user->id)
-            ->whereIn('status', ['open', 'late']);
+            ->whereIn('status', ShiftStatus::activeStatusValues());
 
         if ($dealershipId) {
             $query->where('dealership_id', $dealershipId);
@@ -208,7 +219,7 @@ class ShiftService
     public function getCurrentShifts(?int $dealershipId = null)
     {
         $query = Shift::with(['user', 'dealership', 'replacement'])
-            ->whereIn('status', ['open', 'late'])
+            ->whereIn('status', ShiftStatus::activeStatusValues())
             ->orderBy('shift_start', 'desc');
 
         if ($dealershipId) {
@@ -243,7 +254,7 @@ class ShiftService
         }
 
         $totalShifts = $query->count();
-        $lateShifts = $query->where('status', 'late')->count();
+        $lateShifts = $query->where('status', ShiftStatus::LATE->value)->count();
         $avgLateMinutes = $query->whereNotNull('late_minutes')->avg('late_minutes') ?? 0;
         $replacements = ShiftReplacement::whereHas('shift', function ($q) use ($dealershipId, $startDate, $endDate) {
             if ($dealershipId) {

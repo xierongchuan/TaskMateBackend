@@ -50,10 +50,19 @@ class CalendarDay extends Model
      *
      * Логика: сначала проверяем настройки для конкретного dealership,
      * если не найдено — проверяем глобальные настройки (dealership_id = null).
+     *
+     * ВАЖНО: Дата конвертируется в timezone автосалона перед сравнением.
+     * Приоритет timezone: автосалон -> глобальная настройка -> дефолт.
      */
     public static function isHoliday(Carbon $date, ?int $dealershipId = null): bool
     {
-        $dateStr = $date->toDateString();
+        // Получаем timezone через SettingsService (с fallback на глобальный)
+        $settingsService = app(\App\Services\SettingsService::class);
+        $timezone = $settingsService->getTimezone($dealershipId);
+
+        // Конвертируем UTC в локальный timezone для определения календарной даты
+        $localDate = $date->copy()->setTimezone($timezone);
+        $dateStr = $localDate->toDateString();
 
         // Ищем настройку для конкретного dealership
         if ($dealershipId !== null) {

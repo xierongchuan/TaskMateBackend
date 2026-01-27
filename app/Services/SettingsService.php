@@ -245,6 +245,33 @@ class SettingsService
     }
 
     /**
+     * Get timezone for a dealership with fallback to global setting.
+     *
+     * Priority:
+     * 1. Dealership's own timezone (from auto_dealerships.timezone)
+     * 2. Global timezone setting (from settings table)
+     * 3. Default '+05:00'
+     *
+     * @param int|null $dealershipId
+     * @return string Timezone in UTC offset format (e.g., '+05:00')
+     */
+    public function getTimezone(?int $dealershipId = null): string
+    {
+        $default = '+05:00';
+
+        // If dealership is specified, check its timezone first
+        if ($dealershipId !== null) {
+            $dealership = \App\Models\AutoDealership::find($dealershipId);
+            if ($dealership && !empty($dealership->timezone)) {
+                return $dealership->timezone;
+            }
+        }
+
+        // Fallback to global timezone setting
+        return $this->get('global_timezone', null, $default);
+    }
+
+    /**
      * Get shift start time for a dealership.
      *
      * @param int|null $dealershipId

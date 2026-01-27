@@ -48,15 +48,15 @@ class ArchivedTaskController extends Controller
             $query->where('generator_id', $request->generator_id);
         }
 
-        // Filter by date range
+        // Filter by date range (dates come as ISO 8601 strings)
         if ($request->has('date_from')) {
-            $dateFrom = Carbon::parse($request->date_from, 'Asia/Yekaterinburg')->startOfDay();
-            $query->where('archived_at', '>=', $dateFrom->setTimezone('UTC'));
+            $dateFrom = Carbon::parse($request->date_from)->setTimezone('UTC')->startOfDay();
+            $query->where('archived_at', '>=', $dateFrom);
         }
 
         if ($request->has('date_to')) {
-            $dateTo = Carbon::parse($request->date_to, 'Asia/Yekaterinburg')->endOfDay();
-            $query->where('archived_at', '<=', $dateTo->setTimezone('UTC'));
+            $dateTo = Carbon::parse($request->date_to)->setTimezone('UTC')->endOfDay();
+            $query->where('archived_at', '<=', $dateTo);
         }
 
         // Filter by assignee
@@ -156,24 +156,24 @@ class ArchivedTaskController extends Controller
         }
 
         if ($request->has('date_from')) {
-            $dateFrom = Carbon::parse($request->date_from, 'Asia/Yekaterinburg')->startOfDay();
-            $query->where('archived_at', '>=', $dateFrom->setTimezone('UTC'));
+            $dateFrom = Carbon::parse($request->date_from)->setTimezone('UTC')->startOfDay();
+            $query->where('archived_at', '>=', $dateFrom);
         }
 
         if ($request->has('date_to')) {
-            $dateTo = Carbon::parse($request->date_to, 'Asia/Yekaterinburg')->endOfDay();
-            $query->where('archived_at', '<=', $dateTo->setTimezone('UTC'));
+            $dateTo = Carbon::parse($request->date_to)->setTimezone('UTC')->endOfDay();
+            $query->where('archived_at', '<=', $dateTo);
         }
 
         $tasks = $query->orderBy('archived_at', 'desc')->get();
 
-        // Generate CSV
+        // Generate CSV - dates in UTC ISO format
         $csvContent = "ID,Title,Status,Archive Reason,Archived At,Dealership,Creator,Assignees\n";
 
         foreach ($tasks as $task) {
             $assignees = $task->assignments->pluck('user.full_name')->implode('; ');
             $archivedAt = $task->archived_at
-                ? $task->archived_at->setTimezone('Asia/Yekaterinburg')->format('Y-m-d H:i')
+                ? $task->archived_at->toIso8601ZuluString()
                 : '';
 
             $csvContent .= sprintf(

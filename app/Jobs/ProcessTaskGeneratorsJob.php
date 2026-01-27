@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Helpers\TimeHelper;
 use App\Models\Task;
 use App\Models\TaskAssignment;
 use App\Models\TaskGenerator;
@@ -35,8 +36,8 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
 
     public function handle(): void
     {
-        $now = Carbon::now('Asia/Yekaterinburg');
-        Log::info('ProcessTaskGeneratorsJob started', ['time' => $now->format('Y-m-d H:i:s')]);
+        $now = TimeHelper::nowUtc();
+        Log::info('ProcessTaskGeneratorsJob started', ['time_utc' => $now->toIso8601ZuluString()]);
 
         $generators = TaskGenerator::where('is_active', true)
             ->whereDate('start_date', '<=', $now->toDateString())
@@ -51,8 +52,23 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
 
         foreach ($generators as $generator) {
             try {
-                if ($generator->shouldGenerateToday($now)) {
-                    $this->createTaskFromGenerator($generator, $now);
+                // Используем транзакцию с блокировкой для предотвращения race condition
+                // между несколькими воркерами
+                $created = DB::transaction(function () use ($generator, $now) {
+                    // Перезагружаем генератор с блокировкой
+                    $lockedGenerator = TaskGenerator::where('id', $generator->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$lockedGenerator || !$lockedGenerator->shouldGenerateToday($now)) {
+                        return false;
+                    }
+
+                    $this->createTaskFromGenerator($lockedGenerator, $now);
+                    return true;
+                });
+
+                if ($created) {
                     $createdCount++;
                 } else {
                     $skippedCount++;
@@ -75,56 +91,56 @@ class ProcessTaskGeneratorsJob implements ShouldQueue
 
     /**
      * Create a task instance from a generator.
+     * All times are in UTC.
+     *
+     * ВАЖНО: Этот метод должен вызываться внутри транзакции с lockForUpdate на генератор.
      */
     private function createTaskFromGenerator(TaskGenerator $generator, Carbon $now): void
     {
-        DB::transaction(function () use ($generator, $now) {
-            // Calculate appear time and deadline for today
-            $appearTime = $generator->getAppearTimeForDate($now);
-            $deadlineTime = $generator->getDeadlineTimeForDate($now);
+        // Calculate appear time and deadline for today (all in UTC)
+        $appearTime = $generator->getAppearTimeForDate($now);
+        $deadlineTime = $generator->getDeadlineTimeForDate($now);
 
-            // Create the task
-            // Note: Task model mutators expect time in Asia/Yekaterinburg and convert to UTC.
-            // So we pass the local time directly without manual UTC conversion.
-            $task = Task::create([
-                'generator_id' => $generator->id,
-                'title' => $generator->title,
-                'description' => $generator->description,
-                'comment' => $generator->comment,
-                'creator_id' => $generator->creator_id,
-                'dealership_id' => $generator->dealership_id,
-                'appear_date' => $appearTime->copy()->format('Y-m-d H:i:s'),  // Pass as local time string
-                'deadline' => $deadlineTime->copy()->format('Y-m-d H:i:s'),   // Mutator converts to UTC
-                'scheduled_date' => $now->copy()->startOfDay()->setTimezone('UTC'),
-                'task_type' => $generator->task_type,
-                'response_type' => $generator->response_type,
-                'priority' => $generator->priority,
-                'tags' => $generator->tags,
-                'notification_settings' => $generator->notification_settings,
-                'is_active' => true,
-                'recurrence' => 'none', // Individual task instances are not recurring
-            ]);
+        // Create the task with UTC times
+        // Task model mutators parse ISO 8601 and store in UTC
+        $task = Task::create([
+            'generator_id' => $generator->id,
+            'title' => $generator->title,
+            'description' => $generator->description,
+            'comment' => $generator->comment,
+            'creator_id' => $generator->creator_id,
+            'dealership_id' => $generator->dealership_id,
+            'appear_date' => $appearTime->toIso8601ZuluString(),
+            'deadline' => $deadlineTime->toIso8601ZuluString(),
+            'scheduled_date' => $now->copy()->startOfDay(),
+            'task_type' => $generator->task_type,
+            'response_type' => $generator->response_type,
+            'priority' => $generator->priority,
+            'tags' => $generator->tags,
+            'notification_settings' => $generator->notification_settings,
+            'is_active' => true,
+            'recurrence' => 'none', // Individual task instances are not recurring
+        ]);
 
-            // Copy assignments from generator
-            $assignments = $generator->assignments;
-            foreach ($assignments as $assignment) {
-                TaskAssignment::create([
-                    'task_id' => $task->id,
-                    'user_id' => $assignment->user_id,
-                ]);
-            }
-
-            // Update generator's last_generated_at
-            $generator->update([
-                'last_generated_at' => $now->copy()->setTimezone('UTC'),
-            ]);
-
-            Log::info('Created task from generator', [
-                'generator_id' => $generator->id,
+        // Copy assignments from generator
+        $assignments = $generator->assignments;
+        foreach ($assignments as $assignment) {
+            TaskAssignment::create([
                 'task_id' => $task->id,
-                'title' => $task->title,
-                'scheduled_date' => $now->toDateString(),
+                'user_id' => $assignment->user_id,
             ]);
-        });
+        }
+
+        // Update generator's last_generated_at (in UTC)
+        $generator->update([
+            'last_generated_at' => $now,
+        ]);
+
+        Log::info('Created task from generator', [
+            'generator_id' => $generator->id,
+            'task_id' => $task->id,
+            'title' => $task->title,
+            'scheduled_date_utc' => $now->toDateString(),
+        ]);
     }
 }

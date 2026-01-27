@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\V1;
 
 use App\Enums\Role;
-use Illuminate\Foundation\Http\FormRequest;
+use Carbon\Carbon;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 /**
@@ -100,6 +101,26 @@ class StoreTaskRequest extends FormRequest
                     'task_type',
                     'Индивидуальная задача не может иметь более одного исполнителя. Используйте групповую задачу для нескольких исполнителей.'
                 );
+            }
+
+            // Валидация: дата появления должна быть раньше или равна дедлайну
+            $appearDate = $this->input('appear_date');
+            $deadline = $this->input('deadline');
+
+            if ($appearDate && $deadline) {
+                try {
+                    $appearDateTime = Carbon::parse($appearDate);
+                    $deadlineDateTime = Carbon::parse($deadline);
+
+                    if ($appearDateTime->gt($deadlineDateTime)) {
+                        $validator->errors()->add(
+                            'deadline',
+                            'Дедлайн не может быть раньше даты появления задачи'
+                        );
+                    }
+                } catch (\Exception $e) {
+                    // Некорректный формат даты - будет обработан базовой валидацией
+                }
             }
         });
     }

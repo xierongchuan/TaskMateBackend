@@ -33,17 +33,20 @@ describe('ProcessTaskGeneratorsJob', function () {
     });
 
     it('processes active generators', function () {
-        // Arrange
+        // Arrange - use a time that has already passed in UTC
+        $nowUtc = Carbon::now('UTC');
+        $pastTime = $nowUtc->copy()->subHours(2)->format('H:i');
+
         $generator = TaskGenerator::factory()->create([
             'dealership_id' => $this->dealership->id,
             'creator_id' => $this->manager->id,
             'title' => 'Ежедневная задача',
             'is_active' => true,
             'recurrence' => 'daily',
-            'start_date' => Carbon::yesterday(),
-            'recurrence_time' => '09:00',
-            'deadline_time' => '18:00',
-            'last_generated_at' => Carbon::yesterday()->subDay(), // Not generated today
+            'start_date' => Carbon::yesterday('UTC'),
+            'recurrence_time' => $pastTime . ':00', // Time that has already passed in UTC
+            'deadline_time' => '23:59:00',
+            'last_generated_at' => Carbon::yesterday('UTC')->subDay(), // Not generated today
         ]);
 
         TaskGeneratorAssignment::create([

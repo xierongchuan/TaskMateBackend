@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Helpers\TimeHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
@@ -68,27 +69,26 @@ class TaskGenerator extends Model
      * 5. Current time must be >= recurrence_time (scheduled appear time)
      * 6. Today must match the recurrence pattern (daily/weekly/monthly)
      *
-     * This approach allows "catching up" on missed tasks if the scheduler
-     * was down - as long as the time has passed today, the task will generate.
+     * All time operations are in UTC.
      */
     public function shouldGenerateToday(?Carbon $now = null): bool
     {
-        $now = $now ?? Carbon::now('Asia/Yekaterinburg');
+        $now = $now ?? TimeHelper::nowUtc();
 
         // Check if generator is active
         if (!$this->is_active) {
             return false;
         }
 
-        // Check if start_date has passed
-        $startDate = $this->start_date->copy()->setTimezone('Asia/Yekaterinburg');
+        // Check if start_date has passed (all dates in UTC)
+        $startDate = $this->start_date->copy()->setTimezone('UTC');
         if ($now->lessThan($startDate->startOfDay())) {
             return false;
         }
 
         // Check if end_date has passed (if set)
         if ($this->end_date) {
-            $endDate = $this->end_date->copy()->setTimezone('Asia/Yekaterinburg');
+            $endDate = $this->end_date->copy()->setTimezone('UTC');
             if ($now->greaterThan($endDate->endOfDay())) {
                 return false;
             }
@@ -101,15 +101,13 @@ class TaskGenerator extends Model
 
         // Check if already generated today (prevents duplicate generation)
         if ($this->last_generated_at) {
-            $lastRun = $this->last_generated_at->copy()->setTimezone('Asia/Yekaterinburg');
+            $lastRun = $this->last_generated_at->copy()->setTimezone('UTC');
             if ($lastRun->isSameDay($now)) {
                 return false;
             }
         }
 
-        // Check if scheduled time has arrived
-        // This allows "catching up" if scheduler was down - task will generate
-        // once the time has passed today (but only once due to last_generated_at check)
+        // Check if scheduled time has arrived (in UTC)
         $scheduledTime = $this->getAppearTimeForDate($now);
         if ($now->lessThan($scheduledTime)) {
             return false;
@@ -178,25 +176,27 @@ class TaskGenerator extends Model
     }
 
     /**
-     * Get the appear time for today.
+     * Get the appear time for a date (in UTC).
+     * recurrence_time is stored as HH:mm:ss in UTC.
      */
     public function getAppearTimeForDate(Carbon $date): Carbon
     {
-        $time = Carbon::createFromFormat('H:i:s', $this->recurrence_time, 'Asia/Yekaterinburg');
-        return $date->copy()->setTime($time->hour, $time->minute, 0);
+        $time = Carbon::createFromFormat('H:i:s', $this->recurrence_time, 'UTC');
+        return $date->copy()->setTimezone('UTC')->setTime($time->hour, $time->minute, 0);
     }
 
     /**
-     * Get the deadline time for today.
+     * Get the deadline time for a date (in UTC).
+     * deadline_time is stored as HH:mm:ss in UTC.
      */
     public function getDeadlineTimeForDate(Carbon $date): Carbon
     {
-        $time = Carbon::createFromFormat('H:i:s', $this->deadline_time, 'Asia/Yekaterinburg');
-        return $date->copy()->setTime($time->hour, $time->minute, 0);
+        $time = Carbon::createFromFormat('H:i:s', $this->deadline_time, 'UTC');
+        return $date->copy()->setTimezone('UTC')->setTime($time->hour, $time->minute, 0);
     }
 
     /**
-     * Convert generator to API array.
+     * Convert generator to API array with UTC times.
      */
     public function toApiArray(): array
     {
@@ -225,30 +225,12 @@ class TaskGenerator extends Model
             return $task->status === 'overdue';
         })->count();
 
-        // Convert dates to UTC+5
-        if ($this->start_date) {
-            $data['start_date'] = $this->start_date->copy()
-                ->setTimezone('Asia/Yekaterinburg')
-                ->format('Y-m-d\TH:i:sP');
-        }
-
-        if ($this->end_date) {
-            $data['end_date'] = $this->end_date->copy()
-                ->setTimezone('Asia/Yekaterinburg')
-                ->format('Y-m-d\TH:i:sP');
-        }
-
-        if ($this->created_at) {
-            $data['created_at'] = $this->created_at->copy()
-                ->setTimezone('Asia/Yekaterinburg')
-                ->format('Y-m-d\TH:i:sP');
-        }
-
-        if ($this->updated_at) {
-            $data['updated_at'] = $this->updated_at->copy()
-                ->setTimezone('Asia/Yekaterinburg')
-                ->format('Y-m-d\TH:i:sP');
-        }
+        // All datetime fields in UTC with Z suffix
+        $data['start_date'] = TimeHelper::toIsoZulu($this->start_date);
+        $data['end_date'] = TimeHelper::toIsoZulu($this->end_date);
+        $data['last_generated_at'] = TimeHelper::toIsoZulu($this->last_generated_at);
+        $data['created_at'] = TimeHelper::toIsoZulu($this->created_at);
+        $data['updated_at'] = TimeHelper::toIsoZulu($this->updated_at);
 
         return $data;
     }

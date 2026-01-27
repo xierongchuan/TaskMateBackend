@@ -213,7 +213,7 @@ class ReportController extends Controller
             $dayLateShifts = $dayLateShiftsQuery->count();
 
             $dailyStats[] = [
-                'date' => $current->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d'),
+                'date' => $current->format('Y-m-d'),
                 'completed' => $dayCompleted,
                 'overdue' => $dayOverdue,
                 'late_shifts' => $dayLateShifts,
@@ -297,7 +297,7 @@ class ReportController extends Controller
         usort($topIssues, fn ($a, $b) => $b['count'] <=> $a['count']);
 
         return response()->json([
-            'period' => $from->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d') . ' - ' . $to->setTimezone(TimeHelper::USER_TIMEZONE)->format('Y-m-d'),
+            'period' => $from->format('Y-m-d') . ' - ' . $to->format('Y-m-d'),
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'summary' => [
@@ -446,7 +446,7 @@ class ReportController extends Controller
                     'id' => $task->id,
                     'title' => $task->title,
                     'subtitle' => $task->dealership?->name,
-                    'date' => $task->deadline?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'date' => $task->deadline?->toIso8601ZuluString(),
                     'type' => 'task',
                     'dealership_id' => $task->dealership_id,
                 ]);
@@ -461,7 +461,7 @@ class ReportController extends Controller
                     'id' => $shift->id,
                     'title' => $shift->user?->full_name ?? 'Неизвестный',
                     'subtitle' => "Опоздание: {$shift->late_minutes} мин",
-                    'date' => $shift->shift_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'date' => $shift->shift_start?->toIso8601ZuluString(),
                     'type' => 'shift',
                     'user_id' => $shift->user_id,
                     'dealership_id' => $shift->dealership_id,
@@ -477,7 +477,7 @@ class ReportController extends Controller
                     'id' => $task->id,
                     'title' => $task->title,
                     'subtitle' => "Переносов: {$task->postpone_count}",
-                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'date' => $task->created_at?->toIso8601ZuluString(),
                     'type' => 'task',
                     'dealership_id' => $task->dealership_id,
                 ]);
@@ -492,7 +492,7 @@ class ReportController extends Controller
                     'id' => $task->id,
                     'title' => $task->title,
                     'subtitle' => $task->dealership?->name,
-                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'date' => $task->created_at?->toIso8601ZuluString(),
                     'type' => 'task',
                     'dealership_id' => $task->dealership_id,
                 ]);
@@ -552,7 +552,7 @@ class ReportController extends Controller
                     'id' => $task->id,
                     'title' => $task->title,
                     'subtitle' => $task->dealership?->name,
-                    'date' => $task->created_at?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y'),
+                    'date' => $task->created_at?->toIso8601ZuluString(),
                     'type' => 'task',
                     'dealership_id' => $task->dealership_id,
                 ]);
@@ -568,7 +568,7 @@ class ReportController extends Controller
                     'id' => $shift->id,
                     'title' => $shift->user?->full_name ?? 'Неизвестный',
                     'subtitle' => $shift->dealership?->name,
-                    'date' => $shift->scheduled_start?->setTimezone(TimeHelper::USER_TIMEZONE)->format('d.m.Y H:i'),
+                    'date' => $shift->scheduled_start?->toIso8601ZuluString(),
                     'type' => 'shift',
                     'user_id' => $shift->user_id,
                     'dealership_id' => $shift->dealership_id,

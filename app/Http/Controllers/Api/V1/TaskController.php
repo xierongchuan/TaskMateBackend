@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\Role;
+use App\Enums\ShiftStatus;
 use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreTaskRequest;
@@ -307,7 +308,7 @@ class TaskController extends Controller
             // Find user's open shift
             $openShift = Shift::where('user_id', $user->id)
                 ->whereNull('shift_end')
-                ->where('status', 'open')
+                ->where('status', ShiftStatus::OPEN->value)
                 ->first();
 
             if ($requiresShift && ! $openShift) {

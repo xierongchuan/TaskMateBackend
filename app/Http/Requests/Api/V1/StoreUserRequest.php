@@ -17,10 +17,17 @@ class StoreUserRequest extends FormRequest
 {
     /**
      * Определяет, авторизован ли пользователь для этого запроса.
+     * Только manager и owner могут создавать пользователей.
      */
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        return in_array($user->role, [Role::MANAGER, Role::OWNER]);
     }
 
     /**

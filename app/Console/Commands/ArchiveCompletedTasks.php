@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Helpers\TimeHelper;
 use App\Models\Task;
 use App\Services\SettingsService;
 use Carbon\Carbon;
@@ -23,11 +24,11 @@ class ArchiveCompletedTasks extends Command
     {
         $type = $this->option('type');
         $force = $this->option('force');
-        $now = Carbon::now('Asia/Yekaterinburg');
+        $now = TimeHelper::nowUtc();
         $todayDayOfWeek = $now->dayOfWeek === 0 ? 7 : $now->dayOfWeek; // 1-7 (Mon-Sun)
         $currentTime = $now->format('H:i');
 
-        $this->info("Current time: {$now->format('Y-m-d H:i:s')} (Day: $todayDayOfWeek)");
+        $this->info("Current time UTC: {$now->toIso8601ZuluString()} (Day: $todayDayOfWeek)");
         $this->info("Archive type: $type");
 
         $archivedCompleted = 0;
@@ -132,12 +133,13 @@ class ArchiveCompletedTasks extends Command
     }
 
     /**
-     * Check if current time matches configured time (with 5 minute tolerance)
+     * Check if current time matches configured time (with 5 minute tolerance).
+     * All times are in UTC.
      */
     private function isTimeMatch(string $currentTime, string $configuredTime): bool
     {
-        $current = Carbon::createFromFormat('H:i', $currentTime, 'Asia/Yekaterinburg');
-        $configured = Carbon::createFromFormat('H:i', $configuredTime, 'Asia/Yekaterinburg');
+        $current = Carbon::createFromFormat('H:i', $currentTime, 'UTC');
+        $configured = Carbon::createFromFormat('H:i', $configuredTime, 'UTC');
 
         return abs($current->diffInMinutes($configured)) <= 5;
     }
@@ -147,7 +149,7 @@ class ArchiveCompletedTasks extends Command
      */
     private function archiveCompletedTasks(?int $dealershipId): int
     {
-        $cutoffDate = Carbon::now('Asia/Yekaterinburg')->subDay();
+        $cutoffDate = TimeHelper::nowUtc()->subDay();
 
         $query = Task::query()
             ->where('is_active', true)
@@ -162,25 +164,28 @@ class ArchiveCompletedTasks extends Command
             $query->whereNull('dealership_id');
         }
 
-        $tasks = $query->with('responses')->get();
         $archivedCount = 0;
 
-        foreach ($tasks as $task) {
-            $lastResponse = $task->responses()
-                ->where('status', 'completed')
-                ->orderBy('created_at', 'desc')
-                ->first();
+        // Используем chunk() для предотвращения memory leak при большом количестве задач
+        $query->with('responses')->chunk(500, function ($tasks) use (&$archivedCount, $cutoffDate) {
+            foreach ($tasks as $task) {
+                // Используем загруженную коллекцию вместо нового запроса (исправление N+1)
+                $lastResponse = $task->responses
+                    ->where('status', 'completed')
+                    ->sortByDesc('created_at')
+                    ->first();
 
-            // Only archive if completed more than 1 day ago
-            if ($lastResponse && Carbon::parse($lastResponse->created_at)->lt($cutoffDate)) {
-                $task->update([
-                    'is_active' => false,
-                    'archived_at' => Carbon::now(),
-                    'archive_reason' => 'completed',
-                ]);
-                $archivedCount++;
+                // Only archive if completed more than 1 day ago
+                if ($lastResponse && Carbon::parse($lastResponse->created_at)->lt($cutoffDate)) {
+                    $task->update([
+                        'is_active' => false,
+                        'archived_at' => TimeHelper::nowUtc(),
+                        'archive_reason' => 'completed',
+                    ]);
+                    $archivedCount++;
+                }
             }
-        }
+        });
 
         return $archivedCount;
     }
@@ -190,7 +195,7 @@ class ArchiveCompletedTasks extends Command
      */
     private function archiveOverdueTasks(?int $dealershipId): int
     {
-        $cutoffDate = Carbon::now('Asia/Yekaterinburg')->subDay();
+        $cutoffDate = TimeHelper::nowUtc()->subDay();
 
         $query = Task::query()
             ->where('is_active', true)
@@ -209,14 +214,17 @@ class ArchiveCompletedTasks extends Command
 
         $archivedCount = 0;
 
-        foreach ($query->get() as $task) {
-            $task->update([
-                'is_active' => false,
-                'archived_at' => Carbon::now(),
-                'archive_reason' => 'expired',
-            ]);
-            $archivedCount++;
-        }
+        // Используем chunk() для предотвращения memory leak при большом количестве задач
+        $query->chunk(500, function ($tasks) use (&$archivedCount) {
+            foreach ($tasks as $task) {
+                $task->update([
+                    'is_active' => false,
+                    'archived_at' => TimeHelper::nowUtc(),
+                    'archive_reason' => 'expired',
+                ]);
+                $archivedCount++;
+            }
+        });
 
         return $archivedCount;
     }

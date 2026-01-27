@@ -197,9 +197,9 @@ class TaskGeneratorController extends Controller
             'deadline_time' => $validated['deadline_time'] . ':00',
             'recurrence_days_of_week' => $daysOfWeek,
             'recurrence_days_of_month' => $daysOfMonth,
-            'start_date' => Carbon::parse($validated['start_date'], 'Asia/Yekaterinburg')->setTimezone('UTC'),
+            'start_date' => Carbon::parse($validated['start_date'])->setTimezone('UTC'),
             'end_date' => isset($validated['end_date'])
-                ? Carbon::parse($validated['end_date'], 'Asia/Yekaterinburg')->setTimezone('UTC')
+                ? Carbon::parse($validated['end_date'])->setTimezone('UTC')
                 : null,
             'task_type' => $validated['task_type'] ?? 'individual',
             'response_type' => $validated['response_type'] ?? 'notification',
@@ -330,11 +330,11 @@ class TaskGeneratorController extends Controller
         }
 
         if (isset($validated['start_date'])) {
-            $updateData['start_date'] = Carbon::parse($validated['start_date'], 'Asia/Yekaterinburg')->setTimezone('UTC');
+            $updateData['start_date'] = Carbon::parse($validated['start_date'])->setTimezone('UTC');
         }
         if (array_key_exists('end_date', $validated)) {
             $updateData['end_date'] = $validated['end_date']
-                ? Carbon::parse($validated['end_date'], 'Asia/Yekaterinburg')->setTimezone('UTC')
+                ? Carbon::parse($validated['end_date'])->setTimezone('UTC')
                 : null;
         }
         if (isset($validated['task_type'])) {

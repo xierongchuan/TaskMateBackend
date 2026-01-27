@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\Role;
+use App\Enums\ShiftStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ShiftResource;
 use App\Models\Shift;
 use App\Models\User;
 use App\Services\ShiftService;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Auth\Access\AuthorizationException;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use App\Enums\Role;
+use Illuminate\Support\Facades\Validator;
 
 class ShiftController extends Controller
 {
@@ -63,12 +63,12 @@ class ShiftController extends Controller
                 if ($isLateValue) {
                     // Опоздание: статус 'late' ИЛИ late_minutes > 0
                     $query->where(function ($q) {
-                        $q->where('status', 'late')
+                        $q->where('status', ShiftStatus::LATE->value)
                           ->orWhere('late_minutes', '>', 0);
                     });
                 } else {
                     // Без опоздания: статус НЕ 'late' И late_minutes <= 0
-                    $query->where('status', '!=', 'late')
+                    $query->where('status', '!=', ShiftStatus::LATE->value)
                           ->where(function ($q) {
                               $q->where('late_minutes', '<=', 0)
                                 ->orWhereNull('late_minutes');
@@ -290,8 +290,8 @@ class ShiftController extends Controller
 
             // If only status is being updated
             if (isset($data['status'])) {
-                if ($data['status'] === 'closed') {
-                    $this->shiftService->closeShiftWithoutPhoto($shift, 'closed');
+                if ($data['status'] === ShiftStatus::CLOSED->value) {
+                    $this->shiftService->closeShiftWithoutPhoto($shift, ShiftStatus::CLOSED->value);
                 } else {
                     $shift->update(['status' => $data['status']]);
                 }
@@ -333,7 +333,7 @@ class ShiftController extends Controller
 
         try {
             // Only allow deletion of shifts that are not in progress
-            if ($shift->status === 'open' && !$shift->shift_end) {
+            if ($shift->status === ShiftStatus::OPEN->value && !$shift->shift_end) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot delete an active shift'

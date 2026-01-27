@@ -19,6 +19,7 @@ class AutoDealership extends Model
         'name',
         'address',
         'phone',
+        'timezone',
         'description',
         'is_active',
     ];
