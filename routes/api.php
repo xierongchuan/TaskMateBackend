@@ -170,6 +170,7 @@ Route::prefix('v1')->group(function () {
 
             // Archived Tasks
             Route::get('/archived-tasks', [ArchivedTaskController::class, 'index']);
+            Route::get('/archived-tasks/statistics', [ArchivedTaskController::class, 'statistics']);
             Route::get('/archived-tasks/export', [ArchivedTaskController::class, 'export']);
             Route::post('/archived-tasks/{id}/restore', [ArchivedTaskController::class, 'restore'])
                 ->middleware('role:manager,owner');

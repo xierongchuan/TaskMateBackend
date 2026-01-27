@@ -23,7 +23,15 @@ class ArchivedTaskController extends Controller
         /** @var \App\Models\User $user */
         $user = $request->user();
 
-        $query = Task::with(['creator', 'dealership', 'assignments.user', 'generator'])
+        $query = Task::with([
+            'creator',
+            'dealership',
+            'assignments.user',
+            'generator',
+            'responses.user',
+            'responses.proofs',
+            'sharedProofs',
+        ])
             ->whereNotNull('archived_at');
 
         // Filter by dealership with access validation
@@ -41,6 +49,21 @@ class ArchivedTaskController extends Controller
         // Filter by archive reason (completed, expired)
         if ($request->has('archive_reason')) {
             $query->where('archive_reason', $request->archive_reason);
+        }
+
+        // Filter by priority
+        if ($request->has('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        // Filter by task type
+        if ($request->has('task_type')) {
+            $query->where('task_type', $request->task_type);
+        }
+
+        // Filter by response type
+        if ($request->has('response_type')) {
+            $query->where('response_type', $request->response_type);
         }
 
         // Filter by generator
@@ -192,6 +215,41 @@ class ArchivedTaskController extends Controller
         return response($csvContent, 200, [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="archived_tasks_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    /**
+     * Get archive statistics.
+     */
+    public function statistics(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+
+        $query = Task::whereNotNull('archived_at');
+
+        // Filter by dealership with access validation
+        if ($request->has('dealership_id')) {
+            $dealershipId = (int) $request->dealership_id;
+            if ($accessError = $this->validateDealershipAccess($user, $dealershipId)) {
+                return $accessError;
+            }
+            $query->where('dealership_id', $dealershipId);
+        } else {
+            // Scope by accessible dealerships
+            $this->scopeByAccessibleDealerships($query, $user);
+        }
+
+        $total = $query->count();
+        $completed = (clone $query)->where('archive_reason', 'completed')->count();
+        $completedLate = (clone $query)->where('archive_reason', 'completed_late')->count();
+        $expired = (clone $query)->whereIn('archive_reason', ['expired', 'expired_after_shift'])->count();
+
+        return response()->json([
+            'total' => $total,
+            'completed' => $completed,
+            'completed_late' => $completedLate,
+            'expired' => $expired,
         ]);
     }
 }
