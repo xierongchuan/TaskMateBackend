@@ -15,11 +15,18 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Contracts\FileValidatorInterface;
 
 class ShiftService
 {
+    /**
+     * Пресет валидации для фото смен.
+     */
+    private const VALIDATION_PRESET = 'shift_photo';
+
     public function __construct(
-        private readonly SettingsService $settingsService
+        private readonly SettingsService $settingsService,
+        private readonly FileValidatorInterface $fileValidator
     ) {
     }
 
@@ -321,21 +328,6 @@ class ShiftService
     }
 
     /**
-     * Allowed image extensions for shift photos
-     */
-    private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
-    /**
-     * Allowed MIME types for shift photos
-     */
-    private const ALLOWED_MIME_TYPES = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-    ];
-
-    /**
      * Store shift photo with proper path structure
      *
      * @param UploadedFile $photo
@@ -347,22 +339,10 @@ class ShiftService
      */
     private function storeShiftPhoto(UploadedFile $photo, string $type, int $userId, int $dealershipId): string
     {
-        // Validate extension from whitelist (not from user input)
+        // Валидация через FileValidator с пресетом для фото смен
+        $this->fileValidator->validate($photo, self::VALIDATION_PRESET);
+
         $extension = strtolower($photo->getClientOriginalExtension());
-        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
-            throw new \InvalidArgumentException(
-                'Недопустимое расширение файла. Разрешены: ' . implode(', ', self::ALLOWED_EXTENSIONS)
-            );
-        }
-
-        // Additional MIME type verification for security
-        $mimeType = $photo->getMimeType();
-        if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
-            throw new \InvalidArgumentException(
-                'Недопустимый тип файла. Разрешены только изображения.'
-            );
-        }
-
         $filename = $type . '_' . time() . '_' . $userId . '.' . $extension;
         $path = "dealerships/{$dealershipId}/shifts/{$userId}/" . date('Y/m/d');
 

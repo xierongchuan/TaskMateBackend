@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Contracts\FileValidatorInterface;
+use App\Services\FileValidation\FileValidationConfig;
+use App\Services\FileValidation\FileValidator;
+use App\Services\FileValidation\MimeTypeResolver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,7 +20,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Регистрация FileValidationConfig как singleton
+        $this->app->singleton(FileValidationConfig::class, function ($app) {
+            return new FileValidationConfig($app['config']);
+        });
+
+        // Регистрация MimeTypeResolver
+        $this->app->singleton(MimeTypeResolver::class, function ($app) {
+            return new MimeTypeResolver($app->make(FileValidationConfig::class));
+        });
+
+        // Регистрация FileValidator и привязка к интерфейсу
+        $this->app->singleton(FileValidatorInterface::class, function ($app) {
+            return new FileValidator(
+                $app->make(FileValidationConfig::class),
+                $app->make(MimeTypeResolver::class)
+            );
+        });
+
+        // Alias для конкретного класса
+        $this->app->alias(FileValidatorInterface::class, FileValidator::class);
     }
 
     /**

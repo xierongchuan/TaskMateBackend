@@ -85,7 +85,8 @@ describe('Task Shared Proofs', function () {
             $filesData,
             $task->dealership_id
         );
-        $job->handle();
+        // Вызов handle() через контейнер для внедрения зависимостей
+        app()->call([$job, 'handle']);
 
         // Проверяем результат
         $task->refresh();
@@ -165,7 +166,8 @@ describe('Task Shared Proofs', function () {
             $filesData,
             $task->dealership_id
         );
-        $job->handle();
+        // Вызов handle() через контейнер для внедрения зависимостей
+        app()->call([$job, 'handle']);
 
         // Проверяем, что файл не был добавлен
         $task->refresh();
@@ -194,7 +196,8 @@ describe('Task Shared Proofs', function () {
             $filesData,
             $task->dealership_id
         );
-        $job->handle();
+        // Вызов handle() через контейнер для внедрения зависимостей
+        app()->call([$job, 'handle']);
 
         // Проверяем, что файл не был добавлен
         $task->refresh();

@@ -26,7 +26,8 @@ describe('TaskProofService', function () {
             'role' => Role::EMPLOYEE->value,
             'dealership_id' => $this->dealership->id
         ]);
-        $this->proofService = new TaskProofService();
+        // Получаем сервис из контейнера с внедрёнными зависимостями
+        $this->proofService = app(TaskProofService::class);
     });
 
     describe('storeProof', function () {
@@ -320,8 +321,8 @@ describe('TaskProofService', function () {
 
     describe('getAllowedExtensions', function () {
         it('returns array of allowed extensions', function () {
-            // Act
-            $extensions = TaskProofService::getAllowedExtensions();
+            // Act - теперь это instance метод
+            $extensions = $this->proofService->getAllowedExtensions();
 
             // Assert
             expect($extensions)->toBeArray();
@@ -331,8 +332,8 @@ describe('TaskProofService', function () {
 
     describe('getAllowedMimeTypes', function () {
         it('returns array of allowed mime types', function () {
-            // Act
-            $mimeTypes = TaskProofService::getAllowedMimeTypes();
+            // Act - теперь это instance метод
+            $mimeTypes = $this->proofService->getAllowedMimeTypes();
 
             // Assert
             expect($mimeTypes)->toBeArray();
@@ -342,7 +343,7 @@ describe('TaskProofService', function () {
 
     describe('getStorageDisk', function () {
         it('returns storage disk name', function () {
-            // Act
+            // Act - статический метод остался
             $disk = TaskProofService::getStorageDisk();
 
             // Assert

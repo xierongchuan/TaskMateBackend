@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Contracts\FileValidatorInterface;
 use App\Models\Task;
 use App\Models\TaskSharedProof;
+use App\Services\FileValidation\FileValidationConfig;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,32 +18,17 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Job для асинхронной загрузки общих файлов задачи.
+ *
+ * Использует FileValidator для валидации MIME-типов.
  */
 class StoreTaskSharedProofsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    private const MAX_FILES = 5;
-    private const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200 MB
-
-    private const ALLOWED_MIME_TYPES = [
-        // Изображения
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-        // Документы
-        'application/pdf',
-        'application/msword', // .doc
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-        'application/vnd.ms-excel', // .xls
-        'text/csv', 'text/plain', 'application/json',
-        'application/vnd.oasis.opendocument.text', // .odt
-        'text/rtf', // .rtf файлы (и .doc которые на самом деле RTF)
-        // Архивы
-        'application/zip', 'application/x-tar', 'application/x-7z-compressed',
-        'application/x-compressed', 'application/octet-stream',
-        // Видео
-        'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo',
-    ];
+    /**
+     * Пресет валидации для доказательств задач.
+     */
+    private const VALIDATION_PRESET = 'task_proof';
 
     /**
      * @param int $taskId ID задачи
@@ -56,7 +43,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         $this->onQueue('shared_proof_upload');
     }
 
-    public function handle(): void
+    public function handle(FileValidatorInterface $fileValidator, FileValidationConfig $config): void
     {
         $task = Task::find($this->taskId);
 
@@ -70,15 +57,16 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         $this->cleanupGhostRecords($task);
 
         // Проверка лимитов
+        $limits = $config->getLimits();
         $existingCount = $task->sharedProofs()->count();
         $newCount = count($this->filesData);
 
-        if ($existingCount + $newCount > self::MAX_FILES) {
+        if ($existingCount + $newCount > $limits['max_files_per_response']) {
             Log::error('Too many shared proof files', [
                 'task_id' => $this->taskId,
                 'existing' => $existingCount,
                 'new' => $newCount,
-                'max' => self::MAX_FILES,
+                'max' => $limits['max_files_per_response'],
             ]);
             $this->cleanupTempFiles();
             return;
@@ -88,7 +76,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
 
         foreach ($this->filesData as $fileData) {
             try {
-                $this->storeFile($task, $fileData);
+                $this->storeFile($task, $fileData, $fileValidator);
                 $storedCount++;
             } catch (\Throwable $e) {
                 Log::error('Failed to store shared proof', [
@@ -111,12 +99,10 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         ]);
     }
 
-    private function storeFile(Task $task, array $fileData): void
+    private function storeFile(Task $task, array $fileData, FileValidatorInterface $fileValidator): void
     {
-        // Валидация MIME типа
-        if (!in_array($fileData['mime'], self::ALLOWED_MIME_TYPES, true)) {
-            throw new \InvalidArgumentException("Недопустимый тип файла: {$fileData['mime']}");
-        }
+        // Валидация MIME типа через FileValidator
+        $fileValidator->validateMimeType($fileData['mime'], self::VALIDATION_PRESET);
 
         // Перемещаем файл из temp в постоянное хранилище
         $extension = pathinfo($fileData['original_name'], PATHINFO_EXTENSION);
