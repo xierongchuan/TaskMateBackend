@@ -97,13 +97,15 @@ describe('ProcessTaskGeneratorsJob', function () {
     });
 
     it('skips generators past end date', function () {
-        // Arrange
+        // Arrange - используем UTC даты для корректной работы с Job
+        $nowUtc = Carbon::now('UTC');
         $generator = TaskGenerator::factory()->create([
             'dealership_id' => $this->dealership->id,
             'is_active' => true,
             'recurrence' => 'daily',
-            'start_date' => Carbon::now()->subMonth(),
-            'end_date' => Carbon::yesterday(), // Ended yesterday
+            'start_date' => $nowUtc->copy()->subMonth(),
+            'end_date' => $nowUtc->copy()->subDay(), // Ended yesterday in UTC
+            'recurrence_time' => $nowUtc->copy()->subHours(2)->format('H:i:s'), // Time already passed
         ]);
 
         // Act

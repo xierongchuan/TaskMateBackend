@@ -248,6 +248,17 @@ class TaskController extends Controller
             ], 404);
         }
 
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        // Проверка доступа к dealership задачи
+        if ($task->dealership_id !== null) {
+            $accessError = $this->validateDealershipAccess($user, $task->dealership_id);
+            if ($accessError) {
+                return $accessError;
+            }
+        }
+
         $validated = $request->validate([
             'status' => 'required|string|in:pending,acknowledged,pending_review,completed',
             'complete_for_all' => 'sometimes|boolean',
@@ -257,8 +268,6 @@ class TaskController extends Controller
 
         $status = $validated['status'];
         $completeForAll = $validated['complete_for_all'] ?? false;
-        /** @var \App\Models\User $user */
-        $user = auth()->user();
 
         // Для задач с доказательством: проверяем наличие файлов
         if ($task->response_type === 'completion_with_proof') {

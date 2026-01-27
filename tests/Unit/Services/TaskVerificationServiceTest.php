@@ -28,8 +28,8 @@ describe('TaskVerificationService', function () {
             'dealership_id' => $this->dealership->id
         ]);
 
-        $this->proofService = new TaskProofService();
-        $this->verificationService = new TaskVerificationService($this->proofService);
+        $this->proofService = app(TaskProofService::class);
+        $this->verificationService = app(TaskVerificationService::class);
     });
 
     describe('approve', function () {

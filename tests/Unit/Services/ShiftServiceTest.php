@@ -9,11 +9,14 @@ use App\Models\Shift;
 use App\Models\AutoDealership;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 describe('ShiftService', function () {
     beforeEach(function () {
         $this->settingsService = Mockery::mock(SettingsService::class);
-        $this->service = new ShiftService($this->settingsService);
+        // Bind the mock to the container so ShiftService can be resolved
+        app()->instance(SettingsService::class, $this->settingsService);
+        $this->service = app(ShiftService::class);
         Storage::fake('public');
     });
 
@@ -21,6 +24,9 @@ describe('ShiftService', function () {
         $dealership = AutoDealership::factory()->create();
         $user = User::factory()->create(['dealership_id' => $dealership->id]);
         $photo = UploadedFile::fake()->image('photo.jpg');
+
+        // Устанавливаем время внутри допустимого окна смены (09:00 + 15 мин tolerance)
+        Carbon::setTestNow(Carbon::today()->setHour(9)->setMinute(10));
 
         $this->settingsService->shouldReceive('getShiftStartTime')->andReturn('09:00');
         $this->settingsService->shouldReceive('getShiftEndTime')->andReturn('18:00');
@@ -30,6 +36,8 @@ describe('ShiftService', function () {
 
         expect($shift)->toBeInstanceOf(Shift::class)
             ->and($shift->status)->toBe('open');
+
+        Carbon::setTestNow(); // Reset
     });
 
     it('closes a shift', function () {

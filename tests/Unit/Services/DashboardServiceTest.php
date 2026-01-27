@@ -186,16 +186,19 @@ describe('DashboardService', function () {
                 'dealership_id' => $this->dealership->id
             ]);
 
+            // Используем UTC время, чтобы попасть в границы "сегодня"
+            $nowUtc = Carbon::now('UTC');
+
             Shift::factory()->create([
                 'user_id' => $this->employee->id,
                 'dealership_id' => $this->dealership->id,
-                'shift_start' => Carbon::now(),
+                'shift_start' => $nowUtc,
                 'late_minutes' => 15,
             ]);
             Shift::factory()->create([
                 'user_id' => $employee2->id,
                 'dealership_id' => $this->dealership->id,
-                'shift_start' => Carbon::now(),
+                'shift_start' => $nowUtc,
                 'late_minutes' => 0,
             ]);
 
@@ -228,10 +231,13 @@ describe('DashboardService', function () {
                 'is_active' => false,
             ]);
 
+            // Используем UTC время, чтобы попасть в границы "сегодня"
+            $nowUtc = Carbon::now('UTC');
+
             Task::factory()->create([
                 'dealership_id' => $this->dealership->id,
                 'generator_id' => $generator->id,
-                'created_at' => Carbon::now(),
+                'created_at' => $nowUtc,
             ]);
 
             // Act
