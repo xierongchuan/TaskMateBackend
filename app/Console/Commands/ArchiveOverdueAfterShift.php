@@ -77,7 +77,9 @@ class ArchiveOverdueAfterShift extends Command
                 ->whereNotNull('deadline')
                 ->where('deadline', '<=', $shift->shift_end)
                 ->whereDoesntHave('responses', function ($q) {
-                    $q->whereIn('status', ['completed', 'completed_late']);
+                    // Note: completed_late is a computed Task.status, not TaskResponse.status
+                    // TaskResponse only has: pending, acknowledged, pending_review, completed, rejected
+                    $q->where('status', 'completed');
                 })
                 ->get();
 

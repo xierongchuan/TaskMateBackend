@@ -73,6 +73,8 @@ class TaskVerificationService
             $previousStatus = $response->status;
 
             // Удаляем только индивидуальные файлы (НЕ shared_proofs!)
+            // Shared proofs сохраняются чтобы сотрудник мог видеть что было отклонено.
+            // Удаление shared_proofs происходит только в rejectAllForTask().
             if (! $response->uses_shared_proofs) {
                 $proofCount = $response->proofs()->count();
                 $this->taskProofService->deleteAllProofs($response);

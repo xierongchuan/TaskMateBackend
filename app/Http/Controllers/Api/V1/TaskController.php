@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\Role;
 use App\Enums\ShiftStatus;
+use App\Enums\TaskResponseStatus;
 use App\Helpers\TimeHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreTaskRequest;
@@ -22,6 +23,7 @@ use App\Jobs\StoreTaskSharedProofsJob;
 use App\Traits\HasDealershipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -260,7 +262,7 @@ class TaskController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,acknowledged,pending_review,completed',
+            'status' => 'required|string|in:'.implode(',', TaskResponseStatus::allowedForUpdateStatus()),
             'complete_for_all' => 'sometimes|boolean',
             'proof_files' => 'sometimes|array|max:'.TaskProofService::MAX_FILES_PER_RESPONSE,
             'proof_files.*' => 'file|max:102400', // 100 MB max per file
@@ -268,6 +270,16 @@ class TaskController extends Controller
 
         $status = $validated['status'];
         $completeForAll = $validated['complete_for_all'] ?? false;
+
+        // State Machine: проверка допустимых переходов статусов
+        $existingResponse = $task->responses()->where('user_id', $user->id)->first();
+        $currentStatus = $existingResponse?->status;
+
+        if ($currentStatus !== null && !$this->isValidStatusTransition($currentStatus, $status, $user)) {
+            return response()->json([
+                'message' => "Недопустимый переход статуса: {$currentStatus} -> {$status}",
+            ], 422);
+        }
 
         // Для задач с доказательством: проверяем наличие файлов
         if ($task->response_type === 'completion_with_proof') {
@@ -335,141 +347,162 @@ class TaskController extends Controller
             }
         }
 
-        switch ($status) {
-            case 'pending':
-                $preserveProofs = $request->boolean('preserve_proofs', false);
+        // Используем транзакцию с блокировкой для предотвращения race conditions
+        // при одновременном обновлении статусов (особенно в групповых задачах)
+        $taskResponse = null;
+        $filesData = null;
+        $isResubmission = false;
 
-                if ($preserveProofs) {
-                    // Мягкий сброс: только обновляем статус responses, файлы сохраняются
-                    $task->responses()->update([
-                        'status' => 'pending',
-                        'verified_at' => null,
-                        'verified_by' => null,
-                        'rejection_reason' => null,
-                    ]);
-                } else {
-                    // Полный сброс: удаляем responses и все файлы
-                    foreach ($task->responses as $response) {
-                        $this->taskProofService->deleteAllProofs($response);
-                    }
-                    $task->responses()->delete();
+        try {
+            DB::transaction(function () use ($task, $user, $status, $request, $shiftId, $completedDuringShift, $completeForAll, &$taskResponse, &$filesData, &$isResubmission) {
+                // Блокируем задачу для предотвращения параллельных обновлений
+                $task->lockForUpdate()->first();
 
-                    // Удаляем shared proofs тоже
-                    if ($task->sharedProofs()->exists()) {
-                        $this->taskProofService->deleteSharedProofs($task);
-                    }
-                }
-                break;
+                switch ($status) {
+                    case 'pending':
+                        $preserveProofs = $request->boolean('preserve_proofs', false);
 
-            case 'acknowledged':
-                // Подтверждение для notification типа задач
-                $task->responses()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'status' => 'acknowledged',
-                        'responded_at' => TimeHelper::nowUtc(),
-                        'shift_id' => $shiftId,
-                        'completed_during_shift' => $completedDuringShift,
-                    ]
-                );
-                break;
+                        if ($preserveProofs) {
+                            // Мягкий сброс: только обновляем статус responses, файлы сохраняются
+                            $task->responses()->update([
+                                'status' => 'pending',
+                                'verified_at' => null,
+                                'verified_by' => null,
+                                'rejection_reason' => null,
+                            ]);
+                        } else {
+                            // Полный сброс: удаляем responses и все файлы
+                            foreach ($task->responses as $response) {
+                                $this->taskProofService->deleteAllProofs($response);
+                            }
+                            $task->responses()->delete();
 
-            case 'pending_review':
-            case 'completed':
-                // If manager/owner wants to complete for all assignees
-                if ($completeForAll && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
-                    // Create responses for ALL assigned users
-                    $assignedUserIds = $task->assignments->pluck('user_id')->unique()->toArray();
+                            // Удаляем shared proofs тоже
+                            if ($task->sharedProofs()->exists()) {
+                                $this->taskProofService->deleteSharedProofs($task);
+                            }
+                        }
+                        break;
 
-                    foreach ($assignedUserIds as $assignedUserId) {
+                    case 'acknowledged':
+                        // Подтверждение для notification типа задач
                         $task->responses()->updateOrCreate(
-                            ['user_id' => $assignedUserId],
+                            ['user_id' => $user->id],
                             [
-                                'status' => $status,
+                                'status' => 'acknowledged',
                                 'responded_at' => TimeHelper::nowUtc(),
-                                'shift_id' => null, // Manager completes on behalf
-                                'completed_during_shift' => false,
-                                'submission_source' => 'shared',
-                                'uses_shared_proofs' => true,
+                                'shift_id' => $shiftId,
+                                'completed_during_shift' => $completedDuringShift,
                             ]
                         );
-                    }
+                        break;
 
-                    // Загрузка файлов как ОБЩИХ файлов задачи (не привязаны к пользователю)
-                    if ($request->hasFile('proof_files')) {
-                        $files = $request->file('proof_files');
-                        $filesData = [];
+                    case 'pending_review':
+                    case 'completed':
+                        // If manager/owner wants to complete for all assignees
+                        if ($completeForAll && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+                            // Create responses for ALL assigned users
+                            $assignedUserIds = $task->assignments->pluck('user_id')->unique()->toArray();
 
-                        foreach ($files as $file) {
-                            // Сохраняем во временное хранилище
-                            $tempPath = $file->store('temp/task_proofs');
-
-                            $filesData[] = [
-                                'path' => $tempPath,
-                                'original_name' => $file->getClientOriginalName(),
-                                'mime' => $file->getMimeType(),
-                                'size' => $file->getSize(),
-                            ];
-                        }
-
-                        // Обеспечиваем group-write на temp-каталог для queue worker (www-data)
-                        $tempDir = Storage::path('temp/task_proofs');
-                        if (is_dir($tempDir)) {
-                            chmod($tempDir, 0775);
-                        }
-
-                        // Запускаем Job для асинхронной обработки
-                        StoreTaskSharedProofsJob::dispatch(
-                            $task->id,
-                            $filesData,
-                            $task->dealership_id
-                        );
-                    }
-                } else {
-                    // Проверяем, это повторная отправка после отклонения
-                    $existingResponse = $task->responses()->where('user_id', $user->id)->first();
-                    $isResubmission = $existingResponse && $existingResponse->status === 'rejected';
-
-                    // Update or create response for current user only
-                    // При любом update очищаем поля верификации
-                    $taskResponse = $task->responses()->updateOrCreate(
-                        ['user_id' => $user->id],
-                        [
-                            'status' => $status,
-                            'responded_at' => TimeHelper::nowUtc(),
-                            'shift_id' => $shiftId,
-                            'completed_during_shift' => $completedDuringShift,
-                            'verified_at' => null,
-                            'verified_by' => null,
-                            'rejection_reason' => null,
-                            'submission_source' => $isResubmission ? 'resubmitted' : 'individual',
-                            'uses_shared_proofs' => false,
-                        ]
-                    );
-
-                    // Загрузка файлов доказательств (асинхронно через очередь)
-                    if ($request->hasFile('proof_files')) {
-                        try {
-                            $this->taskProofService->storeProofsAsync(
-                                $taskResponse,
-                                $request->file('proof_files'),
-                                $task->dealership_id
-                            );
-
-                            // Записываем в историю верификации
-                            if ($isResubmission) {
-                                $this->taskVerificationService->recordResubmission($taskResponse, $user);
-                            } else {
-                                $this->taskVerificationService->recordSubmission($taskResponse, $user);
+                            foreach ($assignedUserIds as $assignedUserId) {
+                                $task->responses()->updateOrCreate(
+                                    ['user_id' => $assignedUserId],
+                                    [
+                                        'status' => $status,
+                                        'responded_at' => TimeHelper::nowUtc(),
+                                        'shift_id' => null, // Manager completes on behalf
+                                        'completed_during_shift' => false,
+                                        'submission_source' => 'shared',
+                                        'uses_shared_proofs' => true,
+                                    ]
+                                );
                             }
-                        } catch (InvalidArgumentException $e) {
-                            return response()->json([
-                                'message' => $e->getMessage(),
-                            ], 422);
+
+                            // Подготовка файлов для асинхронной загрузки (выполняется после транзакции)
+                            if ($request->hasFile('proof_files')) {
+                                $files = $request->file('proof_files');
+                                $filesData = [];
+
+                                foreach ($files as $file) {
+                                    // Сохраняем во временное хранилище
+                                    $tempPath = $file->store('temp/task_proofs');
+
+                                    $filesData[] = [
+                                        'path' => $tempPath,
+                                        'original_name' => $file->getClientOriginalName(),
+                                        'mime' => $file->getMimeType(),
+                                        'size' => $file->getSize(),
+                                    ];
+                                }
+                            }
+                        } else {
+                            // Проверяем, это повторная отправка после отклонения
+                            $existingResponse = $task->responses()->where('user_id', $user->id)->first();
+                            $isResubmission = $existingResponse && $existingResponse->status === 'rejected';
+
+                            // Update or create response for current user only
+                            // При любом update очищаем поля верификации
+                            $taskResponse = $task->responses()->updateOrCreate(
+                                ['user_id' => $user->id],
+                                [
+                                    'status' => $status,
+                                    'responded_at' => TimeHelper::nowUtc(),
+                                    'shift_id' => $shiftId,
+                                    'completed_during_shift' => $completedDuringShift,
+                                    'verified_at' => null,
+                                    'verified_by' => null,
+                                    'rejection_reason' => null,
+                                    'submission_source' => $isResubmission ? 'resubmitted' : 'individual',
+                                    'uses_shared_proofs' => false,
+                                ]
+                            );
                         }
-                    }
+                        break;
                 }
-                break;
+            });
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Ошибка при обновлении статуса задачи: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        // Асинхронные операции выполняются ПОСЛЕ успешного коммита транзакции
+        // Это гарантирует, что Jobs будут работать с уже зафиксированными данными
+
+        // Загрузка shared proofs (для completeForAll)
+        if ($filesData !== null) {
+            $tempDir = Storage::path('temp/task_proofs');
+            if (is_dir($tempDir)) {
+                chmod($tempDir, 0775);
+            }
+
+            StoreTaskSharedProofsJob::dispatch(
+                $task->id,
+                $filesData,
+                $task->dealership_id
+            );
+        }
+
+        // Загрузка individual proofs
+        if ($taskResponse !== null && $request->hasFile('proof_files')) {
+            try {
+                $this->taskProofService->storeProofsAsync(
+                    $taskResponse,
+                    $request->file('proof_files'),
+                    $task->dealership_id
+                );
+
+                // Записываем в историю верификации
+                if ($isResubmission) {
+                    $this->taskVerificationService->recordResubmission($taskResponse, $user);
+                } else {
+                    $this->taskVerificationService->recordSubmission($taskResponse, $user);
+                }
+            } catch (InvalidArgumentException $e) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
         }
 
         return response()->json(
@@ -542,5 +575,46 @@ class TaskController extends Controller
                 'next' => $tasks->nextPageUrl(),
             ],
         ]);
+    }
+
+    /**
+     * Проверяет допустимость перехода между статусами TaskResponse.
+     *
+     * Матрица допустимых переходов:
+     * - pending -> acknowledged, pending_review, completed
+     * - acknowledged -> pending_review, completed, pending
+     * - pending_review -> completed, rejected, pending (через менеджера)
+     * - rejected -> pending_review (переотправка)
+     * - completed -> (финальный статус, менеджер может сбросить в pending)
+     *
+     * @param string $currentStatus Текущий статус
+     * @param string $newStatus Новый статус
+     * @param \App\Models\User $user Пользователь, инициирующий переход
+     * @return bool
+     */
+    private function isValidStatusTransition(string $currentStatus, string $newStatus, $user): bool
+    {
+        // Менеджеры и владельцы могут сбрасывать любой статус в pending
+        if ($newStatus === 'pending' && in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+            return true;
+        }
+
+        // Матрица допустимых переходов для обычных пользователей
+        $allowedTransitions = [
+            'pending' => ['acknowledged', 'pending_review', 'completed'],
+            'acknowledged' => ['pending_review', 'completed'],
+            'pending_review' => [], // Только через верификацию (approve/reject)
+            'rejected' => ['pending_review', 'completed'], // Переотправка (completed для задач без доказательств)
+            'completed' => [], // Финальный статус
+        ];
+
+        // Менеджеры могут делать дополнительные переходы
+        if (in_array($user->role, [Role::MANAGER, Role::OWNER])) {
+            $allowedTransitions['acknowledged'][] = 'pending';
+            $allowedTransitions['pending_review'][] = 'pending';
+            $allowedTransitions['pending_review'][] = 'completed'; // Approve без верификации
+        }
+
+        return in_array($newStatus, $allowedTransitions[$currentStatus] ?? []);
     }
 }

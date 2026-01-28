@@ -145,7 +145,13 @@ class ArchiveCompletedTasks extends Command
     }
 
     /**
-     * Archive completed tasks for a dealership
+     * Archive completed tasks for a dealership.
+     *
+     * Учитывает тип задачи:
+     * - individual: архивируется если есть хотя бы один completed response
+     * - group: архивируется только если ВСЕ назначенные пользователи выполнили
+     *
+     * Использует вычисляемый Task.status для корректной проверки.
      */
     private function archiveCompletedTasks(?int $dealershipId): int
     {
@@ -166,16 +172,29 @@ class ArchiveCompletedTasks extends Command
 
         $archivedCount = 0;
 
-        // Используем chunk() для предотвращения memory leak при большом количестве задач
-        $query->with('responses')->chunk(500, function ($tasks) use (&$archivedCount, $cutoffDate) {
+        // Загружаем responses И assignments для корректного вычисления Task.status
+        // (для групповых задач нужно проверить что ВСЕ назначенные выполнили)
+        $query->with(['responses', 'assignments'])->chunk(500, function ($tasks) use (&$archivedCount, $cutoffDate) {
             foreach ($tasks as $task) {
-                // Используем загруженную коллекцию вместо нового запроса (исправление N+1)
+                // Используем вычисляемый статус Task, который учитывает:
+                // - для individual: первый completed response
+                // - для group: все назначенные должны выполнить
+                $taskStatus = $task->status;
+
+                // Архивируем только если задача действительно завершена
+                if (! in_array($taskStatus, ['completed', 'completed_late'])) {
+                    continue;
+                }
+
+                // Находим последний completed response для проверки времени
+                // Используем created_at для обратной совместимости с тестами и существующими данными
+                // (responded_at имеет DEFAULT CURRENT_TIMESTAMP в БД, что может быть некорректно для старых записей)
                 $lastResponse = $task->responses
                     ->where('status', 'completed')
                     ->sortByDesc('created_at')
                     ->first();
 
-                // Only archive if completed more than 1 day ago
+                // Архивируем только если завершено более 1 дня назад
                 if ($lastResponse && Carbon::parse($lastResponse->created_at)->lt($cutoffDate)) {
                     $task->update([
                         'is_active' => false,
