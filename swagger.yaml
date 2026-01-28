@@ -26,7 +26,7 @@ info:
     - `data` — массив элементов
     - `meta` — информация о пагинации (current_page, last_page, per_page, total)
     - `links` — ссылки на страницы (first, last, prev, next)
-  version: 2.0.0
+  version: 1.2.0
   contact:
     name: TaskMate Support
 
@@ -2945,6 +2945,68 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  /v1/archived-tasks/statistics:
+    get:
+      summary: Статистика архивированных задач
+      description: |
+        Получить статистику по архивированным задачам.
+
+        **Доступ:** manager, owner
+
+        **curl пример:**
+        ```bash
+        curl -X GET "http://localhost:8007/api/v1/archived-tasks/statistics?dealership_id=1" \
+          -H "Authorization: Bearer YOUR_TOKEN"
+        ```
+      tags: [Archived Tasks]
+      parameters:
+        - name: dealership_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по автосалону
+        - name: archive_reason
+          in: query
+          schema:
+            type: string
+            enum: [completed, expired]
+          description: Фильтр по причине архивации
+      responses:
+        '200':
+          description: Статистика архивированных задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_archived:
+                    type: integer
+                    example: 150
+                  by_reason:
+                    type: object
+                    properties:
+                      completed:
+                        type: integer
+                        example: 120
+                      expired:
+                        type: integer
+                        example: 30
+                  by_dealership:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        dealership_id:
+                          type: integer
+                        dealership_name:
+                          type: string
+                        count:
+                          type: integer
+        '401':
+          description: Не авторизован
+        '403':
+          description: Недостаточно прав
 
   /v1/archived-tasks/{id}/restore:
     post:
