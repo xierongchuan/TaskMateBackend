@@ -96,6 +96,41 @@ trait Auditable
     }
 
     /**
+     * Проверяет, похожа ли строка на дату в формате Y-m-d H:i:s.
+     */
+    protected static function isDateString(string $value): bool
+    {
+        return preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value) === 1;
+    }
+
+    /**
+     * Recursively convert all datetime values in payload to ISO 8601 Zulu format.
+     *
+     * Обрабатывает:
+     * - DateTimeInterface объекты (редко, но на всякий случай)
+     * - Строки дат из toArray() в формате "Y-m-d H:i:s" (уже в UTC)
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    protected static function formatPayloadDates(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if ($value instanceof \DateTimeInterface) {
+                // Carbon объект
+                $payload[$key] = \Carbon\Carbon::instance($value)->setTimezone('UTC')->toIso8601ZuluString();
+            } elseif (is_string($value) && self::isDateString($value)) {
+                // Строка даты из toArray() — уже в UTC (Laravel хранит в UTC)
+                $payload[$key] = \Carbon\Carbon::parse($value, 'UTC')->toIso8601ZuluString();
+            } elseif (is_array($value)) {
+                $payload[$key] = self::formatPayloadDates($value);
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
      * Log an audit entry for the model.
      *
      * @param Model $model The model instance
@@ -111,7 +146,7 @@ trait Auditable
                 'actor_id' => auth()->id(),
                 'dealership_id' => self::extractDealershipId($model),
                 'action' => $action,
-                'payload' => $payload,
+                'payload' => self::formatPayloadDates($payload),
                 'created_at' => now(),
             ]);
         } catch (\Throwable $e) {
