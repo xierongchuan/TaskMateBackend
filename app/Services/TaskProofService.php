@@ -285,13 +285,23 @@ class TaskProofService
     /**
      * Удалить один общий файл задачи (shared_proof).
      *
+     * Поддерживает обратную совместимость: файлы могут быть на диске
+     * task_proofs (новая структура) или local (старая структура).
+     *
      * @param \App\Models\TaskSharedProof $proof Общий файл задачи
      */
     public function deleteSharedProof(\App\Models\TaskSharedProof $proof): void
     {
         $filePath = $proof->file_path;
         $proof->delete();
-        DeleteProofFileJob::dispatch($filePath, 'local');
+
+        // Определяем диск для удаления (новая структура или старая)
+        if (Storage::disk(self::STORAGE_DISK)->exists($filePath)) {
+            DeleteProofFileJob::dispatch($filePath, self::STORAGE_DISK);
+        } else {
+            // Обратная совместимость со старой структурой
+            DeleteProofFileJob::dispatch($filePath, 'local');
+        }
     }
 
     /**

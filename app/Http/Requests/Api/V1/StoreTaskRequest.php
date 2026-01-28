@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\V1;
 
 use App\Enums\Role;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -120,6 +121,29 @@ class StoreTaskRequest extends FormRequest
                     }
                 } catch (\Exception $e) {
                     // Некорректный формат даты - будет обработан базовой валидацией
+                }
+            }
+
+            // Валидация: нельзя назначить задачу самому себе
+            $user = $this->user();
+            if ($user && $assignmentCount > 0 && in_array($user->id, $assignments)) {
+                $validator->errors()->add(
+                    'assignments',
+                    'Вы не можете назначить задачу самому себе'
+                );
+            }
+
+            // Валидация: задачи можно назначать только сотрудникам (employees)
+            if ($assignmentCount > 0) {
+                $nonEmployees = User::whereIn('id', $assignments)
+                    ->where('role', '!=', Role::EMPLOYEE)
+                    ->count();
+
+                if ($nonEmployees > 0) {
+                    $validator->errors()->add(
+                        'assignments',
+                        'Задачи можно назначать только сотрудникам'
+                    );
                 }
             }
         });

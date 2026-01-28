@@ -154,10 +154,17 @@ class TaskProofController extends Controller
             ], 404);
         }
 
-        // Проверяем существование файла
-        $filePath = Storage::disk('local')->path($proof->file_path);
+        // Проверяем существование файла на диске task_proofs (новая структура)
+        // или на диске local (старая структура для обратной совместимости)
+        $filePath = null;
 
-        if (!file_exists($filePath)) {
+        if (Storage::disk('task_proofs')->exists($proof->file_path)) {
+            $filePath = Storage::disk('task_proofs')->path($proof->file_path);
+        } elseif (Storage::disk('local')->exists($proof->file_path)) {
+            $filePath = Storage::disk('local')->path($proof->file_path);
+        }
+
+        if (!$filePath || !file_exists($filePath)) {
             return response()->json([
                 'message' => 'Файл не найден на сервере'
             ], 404);

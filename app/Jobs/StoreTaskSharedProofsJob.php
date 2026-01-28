@@ -26,6 +26,11 @@ class StoreTaskSharedProofsJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
+     * Имя диска для хранения файлов (унифицировано с TaskProof).
+     */
+    private const STORAGE_DISK = 'task_proofs';
+
+    /**
      * Пресет валидации для доказательств задач.
      */
     private const VALIDATION_PRESET = 'task_proof';
@@ -104,7 +109,7 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         // Валидация MIME типа через FileValidator
         $fileValidator->validateMimeType($fileData['mime'], self::VALIDATION_PRESET);
 
-        // Перемещаем файл из temp в постоянное хранилище
+        // Генерация имени файла
         $extension = pathinfo($fileData['original_name'], PATHINFO_EXTENSION);
         $filename = sprintf(
             'shared_proof_%d_%d_%s.%s',
@@ -114,12 +119,24 @@ class StoreTaskSharedProofsJob implements ShouldQueue
             $extension
         );
 
-        $destinationPath = "task_proofs/{$this->dealershipId}/{$filename}";
+        // Многоуровневая структура директорий (унифицировано с TaskProof)
+        $date = date('Y/m/d');
+        $destinationPath = sprintf(
+            'dealerships/%d/tasks/%d/%s/%s',
+            $this->dealershipId,
+            $task->id,
+            $date,
+            $filename
+        );
 
-        // Копируем из temp
-        if (!Storage::move($fileData['path'], $destinationPath)) {
-            throw new \RuntimeException("Failed to move file: {$fileData['path']}");
+        // Получаем содержимое из temp и сохраняем на диск task_proofs
+        $content = Storage::get($fileData['path']);
+        if (!Storage::disk(self::STORAGE_DISK)->put($destinationPath, $content)) {
+            throw new \RuntimeException("Failed to store file: {$destinationPath}");
         }
+
+        // Удаляем temp файл
+        Storage::delete($fileData['path']);
 
         // Создаем запись
         TaskSharedProof::create([
@@ -139,7 +156,11 @@ class StoreTaskSharedProofsJob implements ShouldQueue
         $proofs = $task->sharedProofs()->get();
 
         foreach ($proofs as $proof) {
-            if (!Storage::exists($proof->file_path)) {
+            // Проверяем на обоих дисках для обратной совместимости
+            $existsOnTaskProofs = Storage::disk(self::STORAGE_DISK)->exists($proof->file_path);
+            $existsOnLocal = Storage::disk('local')->exists($proof->file_path);
+
+            if (!$existsOnTaskProofs && !$existsOnLocal) {
                 Log::warning('Removing ghost shared proof record', [
                     'proof_id' => $proof->id,
                     'task_id' => $task->id,

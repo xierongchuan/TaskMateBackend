@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 describe('Task Shared Proofs', function () {
     beforeEach(function () {
         Storage::fake('local');
+        Storage::fake('task_proofs');
         $this->dealership = AutoDealership::factory()->create();
         $this->manager = User::factory()->create([
             'role' => Role::MANAGER->value,
@@ -96,8 +97,8 @@ describe('Task Shared Proofs', function () {
         expect($proof->original_filename)->toBe('test.jpg');
         expect($proof->mime_type)->toBe('image/jpeg');
 
-        // Проверяем физическое существование файла
-        Storage::assertExists($proof->file_path);
+        // Проверяем физическое существование файла на диске task_proofs
+        Storage::disk('task_proofs')->assertExists($proof->file_path);
     });
 
     it('includes shared proofs in task API response', function () {
