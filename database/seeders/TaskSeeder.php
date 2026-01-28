@@ -28,6 +28,12 @@ class TaskSeeder extends Seeder
     public static int $historyDays = 30;
 
     /**
+     * Default timezone for demo data (местное время для ввода).
+     * Времена в генераторах указываются в этом timezone и конвертируются в UTC.
+     */
+    private const DEFAULT_LOCAL_TIMEZONE = '+05:00';
+
+    /**
      * Причины отклонения для задач с доказательствами.
      */
     private const REJECTION_REASONS = [
@@ -95,13 +101,15 @@ class TaskSeeder extends Seeder
 
     private function createTaskGeneratorsWithHistory($dealership, $manager, array $employees): void
     {
+        // Времена указаны в местном формате (DEFAULT_LOCAL_TIMEZONE)
+        // и будут автоматически конвертированы в UTC при создании
         $generators = [
             [
                 'title' => 'Ежедневная проверка автомобилей',
                 'description' => 'Проверить состояние всех автомобилей на площадке',
                 'recurrence' => 'daily',
-                'recurrence_time' => '09:00',
-                'deadline_time' => '12:00',
+                'recurrence_time' => '09:00', // 09:00 местное → 04:00 UTC
+                'deadline_time' => '12:00',   // 12:00 местное → 07:00 UTC
                 'task_type' => 'group',
                 'response_type' => 'completion',
                 'priority' => 'high',
@@ -166,14 +174,22 @@ class TaskSeeder extends Seeder
         foreach ($generators as $genData) {
             $startDate = Carbon::today()->subDays($genData['history_days']);
 
+            // Конвертируем местное время в UTC для хранения в БД
+            $recurrenceTimeUtc = Carbon::createFromFormat('H:i', $genData['recurrence_time'], self::DEFAULT_LOCAL_TIMEZONE)
+                ->setTimezone('UTC')
+                ->format('H:i:s');
+            $deadlineTimeUtc = Carbon::createFromFormat('H:i', $genData['deadline_time'], self::DEFAULT_LOCAL_TIMEZONE)
+                ->setTimezone('UTC')
+                ->format('H:i:s');
+
             $generator = TaskGenerator::create([
                 'title' => $genData['title'],
                 'description' => $genData['description'],
                 'creator_id' => $manager->id,
                 'dealership_id' => $dealership->id,
                 'recurrence' => $genData['recurrence'],
-                'recurrence_time' => $genData['recurrence_time'] . ':00',
-                'deadline_time' => $genData['deadline_time'] . ':00',
+                'recurrence_time' => $recurrenceTimeUtc,
+                'deadline_time' => $deadlineTimeUtc,
                 'recurrence_days_of_week' => $genData['recurrence_days_of_week'] ?? null,
                 'recurrence_days_of_month' => $genData['recurrence_days_of_month'] ?? null,
                 'start_date' => $startDate,
@@ -218,11 +234,13 @@ class TaskSeeder extends Seeder
     private function generateHistoricalTasks(TaskGenerator $generator, array $assignedEmployees, int $historyDays): int
     {
         $tasksCreated = 0;
-        $today = Carbon::today('Asia/Yekaterinburg');
+        // Работаем в UTC для корректного определения дней
+        $today = Carbon::today('UTC');
         $startDate = $today->copy()->subDays($historyDays);
 
-        $recurrenceTime = Carbon::createFromFormat('H:i:s', $generator->recurrence_time, 'Asia/Yekaterinburg');
-        $deadlineTime = Carbon::createFromFormat('H:i:s', $generator->deadline_time, 'Asia/Yekaterinburg');
+        // Время уже в UTC (конвертировано при создании генератора)
+        $recurrenceTime = Carbon::createFromFormat('H:i:s', $generator->recurrence_time, 'UTC');
+        $deadlineTime = Carbon::createFromFormat('H:i:s', $generator->deadline_time, 'UTC');
 
         $currentDate = $startDate->copy();
 
@@ -306,7 +324,7 @@ class TaskSeeder extends Seeder
 
     private function generateTaskResponses(Task $task, array $assignedEmployees, Carbon $deadline): void
     {
-        $now = Carbon::now('Asia/Yekaterinburg');
+        $now = Carbon::now('UTC');
         $isPast = $deadline->lt($now);
         $isRecent = $deadline->diffInDays($now) < 3;
 
