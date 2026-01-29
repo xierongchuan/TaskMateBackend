@@ -9,6 +9,7 @@ use App\Helpers\TimeHelper;
 use App\Models\Shift;
 use App\Models\Task;
 use App\Models\TaskGenerator;
+use App\Models\AutoDealership;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -61,6 +62,7 @@ class DashboardService
             'open_shifts' => count($activeShifts),
             'late_shifts_today' => $this->getLateShiftsCount($dealershipId),
             'active_shifts' => $activeShifts,
+            'dealership_shift_stats' => $this->getDealershipShiftStats($dealershipId),
             'recent_tasks' => $this->getRecentTasks($dealershipId),
             'active_generators' => $this->getGeneratorStats($dealershipId)['active'],
             'total_generators' => $this->getGeneratorStats($dealershipId)['total'],
@@ -162,6 +164,10 @@ class DashboardService
                     'id' => $shift->user->id,
                     'full_name' => $shift->user->full_name,
                 ],
+                'dealership' => $shift->dealership ? [
+                    'id' => $shift->dealership->id,
+                    'name' => $shift->dealership->name,
+                ] : null,
                 'replacement' => $shift->replacement ? [
                     'id' => $shift->replacement->replacingUser->id,
                     'full_name' => $shift->replacement->replacingUser->full_name,
@@ -174,6 +180,36 @@ class DashboardService
                 'is_late' => $shift->late_minutes > 0,
                 'late_minutes' => $shift->late_minutes,
             ]);
+    }
+
+    /**
+     * Получает статистику сотрудников на смене по автосалонам.
+     *
+     * @param int|null $dealershipId
+     * @return Collection
+     */
+    protected function getDealershipShiftStats(?int $dealershipId): Collection
+    {
+        return AutoDealership::query()
+            ->when($dealershipId, fn ($q) => $q->where('id', $dealershipId))
+            ->get()
+            ->map(function ($dealership) {
+                $totalEmployees = User::where('dealership_id', $dealership->id)
+                    ->where('role', 'employee')
+                    ->count();
+
+                $onShiftCount = Shift::where('dealership_id', $dealership->id)
+                    ->where('status', ShiftStatus::OPEN->value)
+                    ->whereNull('shift_end')
+                    ->count();
+
+                return [
+                    'dealership_id' => $dealership->id,
+                    'dealership_name' => $dealership->name,
+                    'total_employees' => $totalEmployees,
+                    'on_shift_count' => $onShiftCount,
+                ];
+            });
     }
 
     /**
