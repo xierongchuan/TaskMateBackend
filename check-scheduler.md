@@ -7,7 +7,7 @@
 cd /home/temur/LaravelProjects/TaskMate
 
 # Запустить все сервисы включая планировщик
-docker compose up -d
+podman compose up -d
 
 # Проверить статус контейнера планировщика
 docker ps | grep scheduler
